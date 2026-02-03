@@ -1,0 +1,101 @@
+# 日志级别：DEBUG < INFO < WARNING < ERROR < CRITICAL
+# pip install colorlog
+version: 1
+disable_existing_loggers: false
+
+# 自定义变量
+log_dir: "./logs"
+app_name: "i-memory"
+max_log_size: 10485760
+date_fmt: "%Y-%m-%d %H:%M:%S"
+
+# 日志格式化配置
+formatters:
+  # 控制台日志
+  console:
+    format: "%(log_color)s[%(asctime)s] [%(levelname)s] [%(name)s:%(lineno)d] %(message)s%(reset)s"
+    datefmt: "{date_fmt}"
+    class: "colorlog.ColoredFormatter"
+    log_colors:
+      DEBUG: "cyan"
+      INFO: "green"
+      WARNING: "yellow"
+      ERROR: "red"
+      CRITICAL: "bold_red"
+
+  # 文件日志
+  file:
+    format: "[%(asctime)s] [%(levelname)s] [%(name)s:%(lineno)d] %(message)s"
+    datefmt: "{date_fmt}"
+    class: "logging.Formatter"
+
+# 日志处理器配置
+handlers:
+  # 控制台输出
+  console_handler:
+    class: "logging.StreamHandler"
+    level: "DEBUG"
+    formatter: console
+    stream: "ext://sys.stdout"
+
+#  # 普通日志文件（按大小切割）
+#  file_handler:
+#    class: "logging.handlers.RotatingFileHandler"
+#    level: "INFO"
+#    formatter: file
+#    filename: "{log_dir}/{app_name}.log"
+#    maxBytes: "{max_log_size}"
+#    backupCount: 5
+#    encoding: "utf-8"
+
+#  # 错误日志文件（单独记录错误）
+#  error_handler:
+#    class: "logging.handlers.RotatingFileHandler"
+#    level: "ERROR"
+#    formatter: file
+#    filename: "{log_dir}/{app_name}_error.log"
+#    maxBytes: "{max_log_size}"
+#    backupCount: 5
+#    encoding: "utf-8"
+
+  # 普通日志文件（按天切割）
+  file_handler:
+    class: "logging.handlers.TimedRotatingFileHandler"
+    level: "INFO"
+    formatter: file
+    filename: "{log_dir}/{app_name}.log"
+    when: "midnight"
+    interval: 1
+    backupCount: 7
+    encoding: "utf-8"
+    utc: false
+
+  # 错误日志文件（按天切割）
+  error_handler:
+    class: "logging.handlers.TimedRotatingFileHandler"
+    level: "ERROR"
+    formatter: file
+    filename: "{log_dir}/{app_name}.log"
+    when: "midnight"
+    interval: 1
+    backupCount: 7
+    encoding: "utf-8"
+    utc: false
+
+# 日志器配置
+loggers:
+  # 匹配所有未明确命名的日志器（即自动生成的文件名日志器）
+  "":
+    level: "DEBUG"
+    handlers: [ console_handler, file_handler, error_handler ]
+    propagate: false  # 不向上级日志器传播
+
+  "py2neo.client":
+    level: "INFO"
+    handlers: [ console_handler, file_handler, error_handler ]  # 使用相同的处理器
+    propagate: false
+
+# 根日志器（可选，建议使用自定义日志器）
+root:
+  level: "DEBUG"
+  handlers: [ console_handler, file_handler, error_handler ]
