@@ -91,6 +91,17 @@ CREATE TABLE IF NOT EXISTS temporal_edges (
     FOREIGN KEY(target_id) REFERENCES temporal_facts(id)
 );
 
+CREATE TABLE IF NOT EXISTS segment (
+    id SERIAL PRIMARY KEY,
+    current_segment BIGINT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT INTO segment (current_segment)
+VALUES ((SELECT COALESCE(MAX(segment), 0) FROM memories))
+ON CONFLICT DO NOTHING;
+
 CREATE INDEX IF NOT EXISTS idx_memories_sector ON memories(primary_sector);
 CREATE INDEX IF NOT EXISTS idx_memories_ts ON memories(last_seen_at);
 CREATE INDEX IF NOT EXISTS idx_memories_user ON memories(user_id);

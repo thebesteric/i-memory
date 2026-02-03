@@ -1,23 +1,18 @@
 import json
 import math
-import pickle
 import re
 import time
 import uuid
 from typing import Optional, Any, Dict, List
 
-import numpy as np
-from langchain_openai import ChatOpenAI
-
+from src.ai.embed.base_embed_model import get_embed_model, BaseEmbedModel
 from src.core.config import env
-from src.core.constants import SECTOR_CONFIGS
 from src.core.db import db
 from src.core.dml_ops import dml_ops
+from src.core.sector_classify import SECTOR_CONFIGS, SectorClassifier
 from src.core.vector.base_vector_store import vector_store
 from src.memory.embed import embed_multi_sector, calc_mean_vec
 from src.memory.user_summary import update_user_summary
-from src.ai.embed.base_embed_model import get_embed_model, BaseEmbedModel
-
 from src.tools.chunking import chunk_text
 from src.tools.text import canonical_token_set
 from src.tools.vectors import vec_to_buf, buf_to_vec, cos_sim
@@ -93,55 +88,6 @@ def compute_hamming_distance(h1: str, h2: str) -> int:
         if x & 2: dist += 1
         if x & 1: dist += 1
     return dist
-
-
-def classify_content(content: str, metadata: Any = None) -> Dict[str, Any]:
-    """
-    自动判断一段内容属于哪个“记忆扇区”（如语义、情感、程序、事件、反思等），并给出主扇区、辅扇区和置信度
-    """
-    llm = ChatOpenAI(
-        model=env.OPENAI_MODEL,
-        temperature=0.0,
-        api_key=env.OPENAI_API_KEY,
-        base_url=env.OPENAI_BASE_URL
-    )
-
-
-    # 如果 metadata 参数中已经指定了 sector（且在配置中合法），直接返回该 sector 作为主扇区，置信度为 1.0，不再做内容分析
-    meta_sec = metadata.get("sector") if isinstance(metadata, dict) else None
-    if meta_sec and meta_sec in SECTOR_CONFIGS:
-        return {"primary": meta_sec, "additional": [], "confidence": 1.0}
-
-    # 正则打分
-    scores = {k: 0.0 for k in SECTOR_CONFIGS}
-    # 对每个 sector 的正则 pattern 统计匹配次数并加权（cfg["weight"]），得到每个 sector 的分数
-    for sec, cfg in SECTOR_CONFIGS.items():
-        score = 0
-        for pat in cfg["patterns"]:
-            matches = pat.findall(content)
-            if matches:
-                score += len(matches) * cfg["weight"]
-        scores[sec] = score
-
-    # 按分数从高到低排序
-    sorted_scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-    # 分数最高的 sector 作为主扇区（primary）
-    primary, p_score = sorted_scores[0]
-    # 设定阈值（主分数的 0.3 或 1.0，取较大者）
-    thresh = max(1.0, p_score * 0.3)
-    # 分数大于等于阈值的其他 sector 作为 additional（辅扇区）
-    additional = [s for s, sc in sorted_scores[1:] if sc > 0 and sc >= thresh]
-    # 取分数第二高的扇区分数（如果只有一个扇区则为 0）
-    second_score = sorted_scores[1][1] if len(sorted_scores) > 1 else 0
-    # 如果主扇区分数大于 0，则置信度最大不超过 1.0，否则置信度设置为 0.2
-    confidence = min(1.0, p_score / (p_score + second_score + 1)) if p_score > 0 else 0.2
-
-    return {
-        # 如果所有扇区的正则打分都为 0，说明内容无法被有效分类，这时用 "semantic" 作为兜底，避免返回无效或空的扇区
-        "primary": primary if p_score > 0 else "semantic",
-        "additional": additional,
-        "confidence": confidence
-    }
 
 
 def extract_essence(raw: str, sec: str, max_len: int) -> str:
@@ -380,27 +326,27 @@ async def add_hsg_memory(content: str, tags: Optional[str] = None, metadata: Any
     use_chunks = len(chunks) > 1
 
     # 文本分类：判断内容所属的主/辅 sector（语义、情感、程序、事件、反思等）
-    cls = classify_content(content, metadata)
-    all_secs = [cls["primary"]] + cls["additional"]
+    cls_ret = await SectorClassifier(content=content, metadata=metadata).classify()
+    all_secs = [cls_ret.primary] + cls_ret.additional
     try:
-        # 查询当前 segment（分区），如分区已满则切换到新 segment
-        max_seg_res = db.fetchone("SELECT coalesce(max(segment), 0) as max_seg FROM memories")
-        cur_seg = max_seg_res["max_seg"]
+        current_seg_result = db.fetchone("SELECT current_segment FROM segment FOR UPDATE")
+        cur_seg = current_seg_result["current_segment"] if current_seg_result else 0
         # 获取当前 segment 中的记忆总数量
         cnt_res = db.fetchone("SELECT count(*) as c FROM memories WHERE segment=%s", (cur_seg,))
         # 如果当前 SECTOR 记忆数达到上限，则切换到下一个 SECTOR
         if cnt_res["c"] >= env.SECTOR_SIZE:
             cur_seg += 1
-            logger.info(f"[HSG] Rotated to segment {cur_seg}")
+            db.execute("UPDATE segment SET current_segment=%s, updated_at=NOW()", (cur_seg,))
+            logger.info(f"[HSG] Rotated to segment [{cur_seg}]")
 
         # 调用 extract_essence，根据 sector 和配置，生成摘要
-        stored = extract_essence(content, cls["primary"], env.SUMMARY_MAX_LENGTH)
+        stored = extract_essence(content, cls_ret.primary, env.SUMMARY_MAX_LENGTH)
         # 获取主 sector 的配置
-        sec_cfg = SECTOR_CONFIGS[cls["primary"]]
+        sec_cfg = SECTOR_CONFIGS[cls_ret.primary]
         # 始化记忆的显著性（salience）分数
-        # 基础分为 0.4，每多一个辅扇区（cls["additional"]），显著性加 0.1
+        # 基础分为 0.4，每多一个辅扇区（cls_ret.additional），显著性加 0.1
         # 最终显著性限定在 0.0~1.0 之间，防止过高或为负
-        init_sal = max(0.0, min(1.0, 0.4 + 0.1 * len(cls["additional"])))
+        init_sal = max(0.0, min(1.0, 0.4 + 0.1 * len(cls_ret.additional)))
 
         # 调用 dml_ops.ins_mem，将记忆内容、摘要、sector、标签、元数据等插入数据库
         mid = str(uuid.uuid4())
@@ -409,14 +355,14 @@ async def add_hsg_memory(content: str, tags: Optional[str] = None, metadata: Any
             user_id=user_id or "anonymous",
             segment=cur_seg,
             content=stored,
-            primary_sector=cls["primary"],
+            primary_sector=cls_ret.primary,
             tags=tags,
             meta=json.dumps(metadata or {}),
             created_at=now,
             updated_at=now,
             last_seen_at=now,
             salience=init_sal,
-            decay_lambda=sec_cfg["decay_lambda"],
+            decay_lambda=sec_cfg.decay_lambda,
             version=1,
             mean_dim=None,
             mean_vec=None,
@@ -454,7 +400,7 @@ async def add_hsg_memory(content: str, tags: Optional[str] = None, metadata: Any
         return {
             "id": mid,
             "content": content,
-            "primary_sector": cls["primary"],
+            "primary_sector": cls_ret.primary,
             "sectors": all_secs,
             "chunks": len(chunks),
             "salience": init_sal

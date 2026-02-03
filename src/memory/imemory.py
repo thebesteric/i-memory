@@ -39,7 +39,7 @@ if __name__ == '__main__':
 
     async def test_memory():
         mem = IMemory(user="test_user")
-        contents = ["你是谁？"]
+        contents = ["你谁呀？"]
         for content in contents:
             res = await mem.add(content, cfg={"force_root": False}, meta={"source": "unit_test"}, tags=["test", "memory"])
             print("Memory added:", res)

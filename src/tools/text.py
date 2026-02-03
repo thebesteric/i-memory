@@ -1,3 +1,8 @@
+import warnings
+
+warnings.filterwarnings("ignore", category=UserWarning, module="jieba")
+warnings.filterwarnings("ignore", category=SyntaxWarning, module="jieba")
+
 import re
 from typing import List, Set, Dict
 import jieba
