@@ -74,7 +74,7 @@ if __name__ == '__main__':
             print("Memory added:", res)
 
 
-    asyncio.run(test_add_memory())
+    # asyncio.run(test_add_memory())
 
     async def test_search_memory():
         mem = IMemory(user="test_user")
@@ -83,4 +83,4 @@ if __name__ == '__main__':
         print("Search results:", results)
 
 
-    # asyncio.run(test_search_memory())
+    asyncio.run(test_search_memory())

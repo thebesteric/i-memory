@@ -13,6 +13,7 @@ logger = LogHelper.get_logger()
 
 @singleton
 class RedisVectorStore(BaseVectorStore):
+
     def __init__(self, url: str, prefix: str = "im:vec:"):
         self.url = url
         self.prefix = prefix
@@ -26,10 +27,10 @@ class RedisVectorStore(BaseVectorStore):
     def _key(self, id: str) -> str:
         return f"{self.prefix}{id}"
 
-    async def store_vector(self, _id: str, sector: str, vector: List[float], dim: int, user_id: Optional[str] = None):
+    async def store_vector(self, id: str, sector: str, vector: List[float], dim: int, user_id: Optional[str] = None):
         """
         存储向量
-        :param _id: 唯一标识
+        :param id: 唯一标识
         :param sector: 扇区名称
         :param vector: 向量列表
         :param dim: 向量维度
@@ -37,14 +38,14 @@ class RedisVectorStore(BaseVectorStore):
         :return:
         """
         client = await self._get_client()
-        key = self._key(_id)
+        key = self._key(id)
         vec_bytes = np.array(vector, dtype=np.float32).tobytes()
 
         original_user_id = await client.hget(key, "user_id")
         final_user_id = user_id if user_id is not None else (original_user_id or "")
 
         mapping = {
-            "id": _id,
+            "id": id,
             "sector": sector,
             "dim": dim,
             "v": vec_bytes,
@@ -52,14 +53,14 @@ class RedisVectorStore(BaseVectorStore):
         }
         await client.hset(key, mapping=mapping)
 
-    async def get_vectors_by_id(self, _id: str) -> List[VectorRow]:
+    async def get_vectors_by_id(self, id: str) -> List[VectorRow]:
         """
         根据 ID 获取所有相关向量
-        :param _id: 唯一标识
+        :param id: 唯一标识
         :return:
         """
         client = await self._get_client()
-        key = self._key(_id)
+        key = self._key(id)
         data = await client.hgetall(key)
         if not data: return []
 
@@ -75,27 +76,27 @@ class RedisVectorStore(BaseVectorStore):
             int(dec(data.get(b'dim') or data.get('dim')))
         )]
 
-    async def get_vector(self, _id: str, sector: str) -> Optional[VectorRow]:
+    async def get_vector(self, id: str, sector: str) -> Optional[VectorRow]:
         """
         根据 ID 和 sector 获取单个向量
-        :param _id: 唯一标识
+        :param id: 唯一标识
         :param sector: 扇区名称
         :return:
         """
-        rows = await self.get_vectors_by_id(_id)
+        rows = await self.get_vectors_by_id(id)
         for r in rows:
             if r.sector == sector:
                 return r
         return None
 
-    async def delete_vectors(self, _id: str):
+    async def delete_vectors(self, id: str):
         """
         删除指定 ID 的所有向量
-        :param _id: 唯一标识
+        :param id: 唯一标识
         :return:
         """
         client = await self._get_client()
-        await client.delete(self._key(_id))
+        await client.delete(self._key(id))
 
     async def search(self, vector: List[float], sector: str, k: int, filters: MemoryFilters = None) -> List[VectorSearch]:
         """

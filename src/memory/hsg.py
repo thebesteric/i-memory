@@ -72,7 +72,7 @@ def compress_vec_for_storage(vec: List[float], target_dim: int) -> List[float]:
     return comp
 
 
-async def add_hsg_memory(content: str, tags: Optional[str] = None, metadata: Any = None, user_id: Optional[str] = None) -> Dict[str, Any]:
+async def add_hsg_memory(content: str, tags: List[str] = None, metadata: Any = None, user_id: Optional[str] = None) -> Dict[str, Any]:
     """
     添加一条 Hierarchical Semantic Graph 记忆（数据库 + 向量存储、按扇区（sectors）分层组织记忆）
     :param content: 记忆内容
@@ -183,8 +183,8 @@ async def add_hsg_memory(content: str, tags: Optional[str] = None, metadata: Any
             segment=cur_seg,
             content=essence,
             primary_sector=cls_ret.primary,
-            sectors=json.dumps(all_secs),
-            tags=tags,
+            sectors=json.dumps(all_secs or []),
+            tags=json.dumps(tags or []),
             meta=json.dumps(metadata or {}),
             created_at=now,
             updated_at=now,

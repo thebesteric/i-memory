@@ -55,10 +55,10 @@ class PostgresVectorStore(BaseVectorStore):
 
         return self.pool
 
-    async def store_vector(self, _id: str, sector: str, vector: List[float], dim: int, user_id: Optional[str] = None):
+    async def store_vector(self, id: str, sector: str, vector: List[float], dim: int, user_id: Optional[str] = None):
         """
         存储向量到 PostgreSQL 数据库
-        :param _id: 唯一标识
+        :param id: 唯一标识
         :param sector: 扇区
         :param vector: 向量
         :param dim: 维度
@@ -77,25 +77,25 @@ class PostgresVectorStore(BaseVectorStore):
         """
         async with pool.acquire() as conn:
             try:
-                await conn.execute(sql, _id, sector, user_id, vec_str, dim)
+                await conn.execute(sql, id, sector, user_id, vec_str, dim)
             except InvalidColumnReferenceError as ex:
                 # This typically means there's no unique constraint on `id` for ON CONFLICT to reference.
                 # Create a unique index on id and retry once. If there are duplicate ids in the table, creating
                 # the unique index will fail, and we should let that error surface.
                 logger.warning("ON CONFLICT failed because no unique constraint on id; creating unique index and retrying")
-                await conn.execute(f"CREATE UNIQUE INDEX IF NOT EXISTS {self.vector_table_name}_id_idx ON {self.vector_table_name} (_id)")
-                await conn.execute(sql, _id, sector, user_id, vec_str, dim)
+                await conn.execute(f"CREATE UNIQUE INDEX IF NOT EXISTS {self.vector_table_name}_id_idx ON {self.vector_table_name} (id)")
+                await conn.execute(sql, id, sector, user_id, vec_str, dim)
 
-    async def get_vectors_by_id(self, _id: str) -> List[VectorRow]:
+    async def get_vectors_by_id(self, id: str) -> List[VectorRow]:
         """
         获取指定 ID 的所有向量
-        :param _id: 唯一标识
+        :param id: 唯一标识
         :return:
         """
         pool = await self._get_pool()
         sql = f"SELECT id, sector, v::text as v_txt, dim FROM {self.vector_table_name} WHERE id=$1"
         async with pool.acquire() as conn:
-            rows = await conn.fetch(sql, _id)
+            rows = await conn.fetch(sql, id)
 
         res = []
         for r in rows:
@@ -103,17 +103,17 @@ class PostgresVectorStore(BaseVectorStore):
             res.append(VectorRow(r["id"], r["sector"], vec, r["dim"]))
         return res
 
-    async def get_vector(self, _id: str, sector: str) -> Optional[VectorRow]:
+    async def get_vector(self, id: str, sector: str) -> Optional[VectorRow]:
         """
         获取指定 ID 和 sector 的向量
-        :param _id: 唯一标识
+        :param id: 唯一标识
         :param sector: 扇区
         :return:
         """
         pool = await self._get_pool()
         sql = f"SELECT id, sector, v::text as v_txt, dim FROM {self.vector_table_name} WHERE id=$1 AND sector=$2"
         async with pool.acquire() as conn:
-            r = await conn.fetchrow(sql, _id, sector)
+            r = await conn.fetchrow(sql, id, sector)
 
         if not r:
             return None

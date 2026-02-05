@@ -87,7 +87,7 @@ async def mk_child(txt: str, idx: int, tot: int, rid: str, meta: Dict = None, us
     return r["id"]
 
 
-async def ingest_document(*, content_type: str, data: Any, meta: Dict = None, cfg: Dict = None, user_id: str = None, tags: list = None) -> Dict[str, Any]:
+async def ingest_document(*, content_type: str, data: Any, meta: Dict = None, cfg: Dict = None, user_id: str = None, tags: list[str] = None) -> Dict[str, Any]:
     # 长语句阈值
     large_token_thresh = cfg.get("lg_thresh", LARGE_TOKEN_THRESH) if cfg else LARGE_TOKEN_THRESH
     # 文本分段大小阈值
@@ -102,7 +102,6 @@ async def ingest_document(*, content_type: str, data: Any, meta: Dict = None, cf
     # 决定是否使用 root-child 结构，force_root 表示强制使用
     # 否则就根据估计的 token 数量决定
     use_rc = (cfg and cfg.get("force_root")) or est_tok > large_token_thresh
-    tags_json = json.dumps(tags or [])
 
     # single 存储模式
     if not use_rc:
@@ -111,7 +110,7 @@ async def ingest_document(*, content_type: str, data: Any, meta: Dict = None, cf
         m.update(ex_meta)
         m.update({"ingestion_strategy": "single", "ingested_at": int(time.time() * 1000)})
         # 将记忆写入数据库
-        r = await add_hsg_memory(text, tags_json, m, user_id)
+        r = await add_hsg_memory(text, tags, m, user_id)
         return {
             "root_memory_id": r["id"],
             "child_count": 0,
