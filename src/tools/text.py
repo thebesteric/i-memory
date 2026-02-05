@@ -22,10 +22,6 @@ SYN_GRPS = [
     ["issue", "problem", "bug"],
     ["document", "doc", "file"],
     ["question", "query", "ask"],
-    # 可扩展中文同义词组，例如：
-    ["用户", "人", "客户"],
-    ["任务", "工作", "事项"],
-    ["问题", "故障", "bug"],
 ]
 
 CMAP: Dict[str, str] = {}
@@ -72,6 +68,7 @@ def stem(tok: str) -> str:
     # 仅对英文做词干化
     if len(tok) <= 3 or not EN_PAT.fullmatch(tok):
         return tok
+    # 处理复数、时态等变化
     for pat, rep in STEM_RULES:
         if re.search(pat, tok):
             st = re.sub(pat, rep, tok)
@@ -83,14 +80,22 @@ def stem(tok: str) -> str:
 def canonicalize_token(tok: str) -> str:
     if not tok:
         return ""
+    # 英文单词转小写，非英文保持原样
     low = tok.lower() if EN_PAT.fullmatch(tok) else tok
+    # 检查规范化后的词汇是否存在于同义词映射表 CMAP 中，仅英文生效
     if low in CMAP:
         return CMAP[low]
+    # 词干提取后再映射
     st = stem(low) if EN_PAT.fullmatch(tok) else low
     return CMAP.get(st, st)
 
 
 def canonical_tokens_from_text(text: str) -> List[str]:
+    """
+    获取文本的标准化 token 列表（含重复的 token）
+    :param text: 输入文本
+    :return:
+    """
     res = []
     for tok in tokenize(text):
         can = canonicalize_token(tok)
@@ -125,8 +130,8 @@ def build_fts_query(text: str) -> str:
 
 def canonical_token_set(text: str) -> Set[str]:
     """
-    获取文本的标准化 token 集合。
-    :param text:
+    获取文本的标准化 token 集合（不含重复的 token）
+    :param text: 输入文本
     :return:
     """
     return set(canonical_tokens_from_text(text))

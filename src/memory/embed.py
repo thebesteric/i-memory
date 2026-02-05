@@ -7,7 +7,12 @@ from src.ai.embed.base_embed_model import get_embed_model
 from src.core.dml_ops import dml_ops
 
 
-async def emb_dispatch(txt: str) -> List[float]:
+async def embed(txt: str, sector: Optional[str] = None) -> List[float]:
+    """
+    根据配置的嵌入提供者生成文本 txt 的向量
+    @param txt: 待嵌入的文本
+    @return: 生成的向量列表
+    """
     return await get_embed_model().embed(txt)
 
 
@@ -27,8 +32,8 @@ async def embed_multi_sector(uid: str, txt: str, secs: List[str], chunks: Option
     try:
         # 遍历传入的 sector 列表
         for s in secs:
-            # 调用 embed_for_sector，用指定 sector 的配置对文本 txt 生成向量
-            v = await emb_dispatch(txt)
+            # 调用 embed 对文本 txt 生成向量
+            v = await embed(txt)
             # 将 sector 名称、生成的向量和向量维度加入结果列表
             res.append({"sector": s, "vector": v, "dim": len(v)})
 

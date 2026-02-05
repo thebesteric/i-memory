@@ -4,8 +4,9 @@ import uuid
 from typing import Dict, Any
 
 from src.core.constants import MemoryConstants
-from src.core.db import db
+from src.core.db import get_db
 from src.core.dml_ops import dml_ops
+from src.core.waypoints import Waypoints
 from src.memory.hsg import add_hsg_memory
 from src.ops.extract import extract_text
 from src.utils.log_helper import LogHelper
@@ -14,6 +15,7 @@ LARGE_TOKEN_THRESH = MemoryConstants.LARGE_TOKEN_THRESH
 SECTION_SIZE = MemoryConstants.SECTION_SIZE
 
 logger = LogHelper.get_logger()
+db = get_db()
 
 
 def split_text(t: str, sz: int) -> list[str]:
@@ -85,13 +87,6 @@ async def mk_child(txt: str, idx: int, tot: int, rid: str, meta: Dict = None, us
     return r["id"]
 
 
-async def link(rid: str, cid: str, idx: int, user_id: str = None):
-    ts = int(time.time() * 1000)
-    db.execute("INSERT INTO waypoints(src_id,dst_id,user_id,weight,created_at,updated_at) VALUES (%s,%s,%s,%s,%s,%s)",
-               (rid, cid, user_id or "anonymous", 1.0, ts, ts))
-    db.commit()
-
-
 async def ingest_document(*, content_type: str, data: Any, meta: Dict = None, cfg: Dict = None, user_id: str = None, tags: list = None) -> Dict[str, Any]:
     # 长语句阈值
     large_token_thresh = cfg.get("lg_thresh", LARGE_TOKEN_THRESH) if cfg else LARGE_TOKEN_THRESH
@@ -132,10 +127,11 @@ async def ingest_document(*, content_type: str, data: Any, meta: Dict = None, cf
     cids = []
     try:
         rid_val = await mk_root(text, ex_dict, meta, user_id)
+        waypoints = Waypoints()
         for i, s in enumerate(secs):
             cid = await mk_child(s, i, len(secs), rid_val, meta, user_id)
             cids.append(cid)
-            await link(rid_val, cid, i, user_id)
+            await waypoints.link(rid_val, cid, i, user_id)
 
         return {
             "root_memory_id": rid_val,

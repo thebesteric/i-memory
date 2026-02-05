@@ -17,8 +17,8 @@ logger = LogHelper.get_logger()
 
 
 def _get_caller_info(skip_modules: Tuple[str, ...] = ("src.core.db",)) -> str:
-    """Return a short string describing the first non-db caller in the stack.
-
+    """
+    Return a short string describing the first non-db caller in the stack.
     Format: module:function:lineno
     """
     try:
@@ -223,6 +223,12 @@ def transaction():
     db_instance: DB = DB().get(DB)
     return db_instance.conn
 
-# 全局唯一实例
-db = DB()
 
+# 全局唯一实例
+def get_db() -> DB:
+    """
+    获取数据库实例
+    :return:
+    """
+    db = DB()
+    return db

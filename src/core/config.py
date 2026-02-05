@@ -46,11 +46,17 @@ class EnvConfig:
         # 向量嵌入提供商
         self.EMB_KIND = os.getenv("IM_EMBED_KIND", "openai")
 
-        # 向量维度（minilm 为 384）
+        # 向量维度
         self.VEC_DIM = os.getenv("IM_VEC_DIM", 1536)
+        # 最大向量维度
+        self.MAX_VEC_DIM = os.getenv("IM_MAX_VEC_DIM", 1536)
+        # 最小向量维度
+        self.MIN_VEC_DIM = os.getenv("IM_MIN_VEC_DIM", 64)
 
         # 摘要最大长度
         self.SUMMARY_MAX_LENGTH = os.getenv("IM_SUMMARY_MAX_LENGTH", 1000)
+        # 摘要层数
+        self.SUMMARY_LAYERS = os.getenv("IM_SUMMARY_LAYERS", 3)
 
         # 扇区大小
         self.SECTOR_SIZE = os.getenv("IM_SECTOR_SIZE", 10000)
@@ -63,6 +69,12 @@ class EnvConfig:
 
         # 文本相似度阈值（用于记忆激活）
         self.SIMILARITY_THRESHOLD = os.getenv("IM_SIMILARITY_THRESHOLD", 0.95)
+
+        # ================ 衰减相关配置 ================
+        # 衰减线程数
+        self.DECAY_THREADS = os.getenv("IM_DECAY_THREADS", 3)
+        # 衰减冷阈值
+        self.DECAY_COLD_THRESHOLD = os.getenv("IM_DECAY_COLD_THRESHOLD", 0.25)
 
 
 env = EnvConfig()

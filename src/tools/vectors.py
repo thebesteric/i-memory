@@ -14,8 +14,10 @@ def rid() -> str:
     return str(uuid.uuid4())
 
 def cos_sim(a: Union[List[float], np.ndarray], b: Union[List[float], np.ndarray]) -> float:
-    if isinstance(a, list): a = np.array(a, dtype=np.float32)
-    if isinstance(b, list): b = np.array(b, dtype=np.float32)
+    if isinstance(a, list):
+        a = np.array(a, dtype=np.float32)
+    if isinstance(b, list):
+        b = np.array(b, dtype=np.float32)
 
     dot = float(np.dot(a, b))
     na = float(np.linalg.norm(a))

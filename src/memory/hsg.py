@@ -1,219 +1,46 @@
 import json
 import math
-import re
 import time
 import uuid
-from typing import Optional, Any, Dict, List
+from typing import Optional, Any, Dict, List, Set
+
+import numpy as np
 
 from src.ai.embed.base_embed_model import get_embed_model, BaseEmbedModel
+from src.core.cache.memory_cache import MemoryCache
 from src.core.config import env
-from src.core.db import db
+from src.core.constants import SECTOR_RELATIONSHIPS, HYBRID_PARAMS, CACHE_TTL_SECONDS, CACHE_SIZE
+from src.core.db import get_db
 from src.core.dml_ops import dml_ops
-from src.core.sector_classify import SECTOR_CONFIGS, SectorClassifier
-from src.core.vector.base_vector_store import vector_store
-from src.memory.embed import embed_multi_sector, calc_mean_vec
+from src.core.extract_essence import ExtractEssence
+from src.core.score import compute_tag_match_score, compute_hybrid_score
+from src.core.sector_classify import SECTOR_CONFIGS, SectorClassifier, ClassifyResult
+from src.core.vector.base_vector_store import vector_store, VectorSearch
+from src.core.waypoints import Waypoints, Expansion
+from src.memory.decay import Decay
+from src.memory.embed import embed_multi_sector, calc_mean_vec, embed
+from src.memory.memory_filters import MemoryFilters
 from src.memory.user_summary import update_user_summary
+from src.ops.dynamic_memory import calculate_cross_sector_resonance_score, apply_retrieval_trace_reinforcement_to_memory, \
+    propagate_associative_reinforcement_to_linked_nodes
 from src.tools.chunking import chunk_text
+from src.tools.keyword import compute_keyword_overlap, compute_token_overlap
 from src.tools.text import canonical_token_set
 from src.tools.vectors import vec_to_buf, buf_to_vec, cos_sim
 from src.utils.log_helper import LogHelper
+from src.utils.time_unit import TimeUnit
 
 logger = LogHelper.get_logger()
+waypoints = Waypoints()
+db = get_db()
+decay = Decay(reinforce_on_query=True, regeneration_enabled=True)
 
 
-def compute_simhash(text: str) -> str:
-    """
-    为一段文本生成 simhash 指纹，用于内容去重和相似性检测。
-    """
-
-    # 标准化文本，得到 token 集合
-    tokens = canonical_token_set(text)
-    # 存储每个 token 的哈希值
-    hashes = []
-
-    # 对每个 token 计算哈希（两次循环，确保分布均匀）
-    for t in tokens:
-        h = 0
-        for c in t:
-            h = (h << 5) - h + ord(c)
-            h = h & 0xffffffff
-        h = 0
-        for c in t:
-            val = (h << 5) - h + ord(c)
-            val = val & 0xffffffff
-            if val & 0x80000000: val = -((val ^ 0xffffffff) + 1)
-            h = val
-        hashes.append(h)
-
-    # 64 维向量
-    vec = [0] * 64
-
-    # 64 维向量累加：每个 token 的哈希在每一位上为 1 则加 1，否则减 1
-    for h in hashes:
-        for i in range(64):
-            bit = 1 << (i % 32)
-            if h & bit:
-                vec[i] += 1
-            else:
-                vec[i] -= 1
-
-    # 生成 simhash
-    res_hash = ""
-
-    # 每 4 位合成一个十六进制数，拼成 16 位字符串
-    for i in range(0, 64, 4):
-        nibble = 0
-        if vec[i] > 0: nibble += 8
-        if vec[i + 1] > 0: nibble += 4
-        if vec[i + 2] > 0: nibble += 2
-        if vec[i + 3] > 0: nibble += 1
-        res_hash += format(nibble, 'x')
-
-    # 返回最终的 simhash 字符串
-    return res_hash
-
-
-def compute_hamming_distance(h1: str, h2: str) -> int:
-    """
-    计算两个 simhash 指纹之间的汉明距离
-    :param h1: 第一个 simhash 字符串
-    :param h2: 第二个 simhash 字符串
-    :return: 汉明距离（整数）
-    """
-    dist = 0
-    for i in range(len(h1)):
-        x = int(h1[i], 16) ^ int(h2[i], 16)
-        if x & 8: dist += 1
-        if x & 4: dist += 1
-        if x & 2: dist += 1
-        if x & 1: dist += 1
-    return dist
-
-
-def extract_essence(raw: str, sec: str, max_len: int) -> str:
-    """
-    从一段文本中提取精华内容，优先保留重要句子和信息密集的部分，以适应记忆存储的长度限制。
-    @param raw: 原始文本内容
-    @param sec: 记忆扇区（如语义、情感、程序、事件、反思等），可用于调整提取策略
-    @param max_len: 提取内容的最大长度限制
-    """
-
-    # 如果环境变量 env.USE_SUMMARY_ONLY 为假，或原文长度不超过 max_len，直接返回原文，不做摘要
-    if not env.USE_SUMMARY_ONLY or len(raw) <= max_len:
-        return raw
-
-    # 用正则将原文按句号、问号、感叹号等分割成句子，并去除过短的句子（小于10个字符）
-    sents = [s.strip() for s in re.split(r"(?<=[.!?])\s+", raw) if len(s.strip()) > 10]
-
-    # 如果没有有效句子，返回原文的前 max_len 个字符
-    if not sents: return raw[:max_len]
-
-    scored = []
-    # 遍历每个句子，按多种启发式规则累加分数
-    for idx, s in enumerate(sents):
-        sc = 0
-        # 首句（加10分）
-        if idx == 0: sc += 10
-        # 次句（加5分）
-        if idx == 1: sc += 5
-        # if re.match(r"^#+\s", s) or re.match(r"^[A-Z][A-Z\s]+:", s): sc += 8
-        # 是否为“人名:内容”格式（加6分）
-        if re.match(r"^[A-Z][a-z]+:", s): sc += 6
-        # 包含 yyyy-MM-dd 格式（加7分）
-        if re.search(r"\d{4}-\d{2}-\d{2}", s): sc += 7
-        # 包含月份（加5分）
-        if re.search(r"\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d+", s, re.I): sc += 5
-        # 包含日期、金额、年、月、公里等（加4分）
-        if re.search(r"\$\d+|\d+\s*(miles|dollars|years|months|km)", s): sc += 4
-        # 包含人名、地名、机构名等信息密集的短语（加3分）
-        if re.search(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+", s): sc += 3
-        # 包含动词（加4分）
-        if re.search(
-                r"\b(bought|purchased|serviced|visited|went|got|received|paid|earned|learned|discovered|found|saw|met|completed|finished|fixed|implemented|created|updated|added|removed|resolved)\b",
-                s, re.I): sc += 4
-        # 包含疑问词（加2分）
-        if re.search(r"\b(who|what|when|where|why|how)\b", s, re.I): sc += 2
-        # 短句（少于80字符，加2分）
-        if len(s) < 80: sc += 2
-        # 包含第一人称（加1分）
-        if re.search(r"\b(I|my|me)\b", s): sc += 1
-        scored.append({"text": s, "score": sc, "idx": idx})
-
-    # 按得分从高到低排序
-    scored.sort(key=lambda x: x["score"], reverse=True)
-
-    selected = []
-    curr_len = 0
-    # 优先选首句（如果长度合适），再依次选高分句，直到总长度接近 max_len
-    first = next((x for x in scored if x["idx"] == 0), None)
-    if first and len(first["text"]) < max_len:
-        selected.append(first)
-        curr_len += len(first["text"])
-
-    # 选其他句子
-    for item in scored:
-        if item["idx"] == 0: continue
-        if curr_len + len(item["text"]) + 2 <= max_len:
-            selected.append(item)
-            curr_len += len(item["text"]) + 2
-
-    # 按原文顺序排序选中的句子
-    selected.sort(key=lambda x: x["idx"])
-    # 按原文顺序拼接选中的句子，作为最终摘要返回
-    return " ".join(x["text"] for x in selected)
-
-
-async def create_single_waypoint(new_id: str, new_mean: List[float], ts: int, user_id: str = "anonymous"):
-    """
-    用于为新记忆（new_id）在所有记忆中寻找最相似的“均值向量”，并在数据库中建立 waypoint（路标）关联
-    该函数会遍历当前用户的所有记忆，计算每个记忆的均值向量与新记忆均值向量的余弦相似度，
-    找到相似度最高的记忆，并在数据库中插入一条 waypoint 记录，表示新记忆指向该最相似记忆。
-    如果没有找到任何相似记忆，则创建一条自指向的 waypoint 记录。
-    该函数最终会提交数据库事务以保存更改。
-
-    @param new_id: 新记忆的唯一标识符
-    @param new_mean: 新记忆的均值向量（浮点数列表）
-    @param ts: 当前时间戳（毫秒）
-    @param user_id: 用户标识符（可选，默认为 "anonymous"）
-    """
-    # 获取当前用户的所有记忆
-    memories = dml_ops.all_mem_by_user(user_id, 1000, 0) if user_id else dml_ops.all_mem(1000, 0)
-    best = None
-    best_sim = -1.0
-
-    import numpy as np
-    # 将新记忆的均值向量转换为 numpy 数组
-    nm = np.array(new_mean, dtype=np.float32)
-
-    # 遍历所有记忆，计算与新记忆均值向量的余弦相似度
-    for mem in memories:
-        # 跳过自身或没有均值向量的记忆
-        if mem["id"] == new_id or not mem["mean_vec"]: continue
-        # 将现有记忆的均值向量转换为 numpy 数组
-        ex_mean = np.array(buf_to_vec(mem["mean_vec"]), dtype=np.float32)
-        # 计算余弦相似度
-        sim = cos_sim(nm, ex_mean)
-        # 如果相似度超过当前最佳相似度，更新最佳记忆 ID 和相似度
-        if sim > best_sim:
-            best_sim = sim
-            best = mem["id"]
-
-    # 如果找到最佳匹配，创建 waypoint 关联
-    # Use Postgres UPSERT syntax (ON CONFLICT) — waypoints has PRIMARY KEY (src_id, dst_id)
-    insert_sql = (
-        """
-        INSERT INTO waypoints(src_id, dst_id, user_id, weight, created_at, updated_at)
-        VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT (src_id,dst_id) DO
-        UPDATE SET
-            user_id = EXCLUDED.user_id, weight = EXCLUDED.weight, created_at = EXCLUDED.created_at, updated_at = EXCLUDED.updated_at
-        """
-    )
-    if best:
-        db.execute(insert_sql, (new_id, best, user_id, float(best_sim), ts, ts))
-    # 否则创建自指向的 waypoint
-    else:
-        db.execute(insert_sql, (new_id, new_id, user_id, 1.0, ts, ts))
-    db.commit()
+async def embed_query_for_all_sectors(query: str, sectors: List[str]) -> Dict[str, List[float]]:
+    res = {}
+    for s in sectors:
+        res[s] = await embed(query, s)
+    return res
 
 
 def compress_vec_for_storage(vec: List[float], target_dim: int) -> List[float]:
@@ -276,14 +103,14 @@ async def add_hsg_memory(content: str, tags: Optional[str] = None, metadata: Any
             v_list_json = json.loads(user_memory["v"])
             v = [float(s) for s in v_list_json]
             similarity = embed_model.similarity(vec, v)
-            # 找到最小的汉明距离
+            # 找到相似度最高的记忆
             if not best_sim_mem_similarity or similarity > best_sim_mem_similarity[0]:
                 best_sim_mem_similarity = (similarity, user_memory)
 
     if best_sim_mem_similarity:
-        content = best_sim_mem_similarity[1]["content"]
-        content = content if len(content) <= 20 else content[:20] + "..."
-        logger.debug(f"[HSG] Best similar memory: Sim: {best_sim_mem_similarity[0]}, Content: {content}")
+        best_sim_content = best_sim_mem_similarity[1]["content"]
+        best_sim_content = best_sim_content if len(best_sim_content) <= 20 else best_sim_content[:20] + "..."
+        logger.debug(f"[HSG] Maybe best similar memory: Sim: {best_sim_mem_similarity[0]}, Content: {best_sim_content}")
 
     # 当前时间戳（毫秒）
     now = int(time.time() * 1000)
@@ -339,8 +166,8 @@ async def add_hsg_memory(content: str, tags: Optional[str] = None, metadata: Any
             db.execute("UPDATE segment SET current_segment=%s, updated_at=NOW()", (cur_seg,))
             logger.info(f"[HSG] Rotated to segment [{cur_seg}]")
 
-        # 调用 extract_essence，根据 sector 和配置，生成摘要
-        stored = extract_essence(content, cls_ret.primary, env.SUMMARY_MAX_LENGTH)
+        # 调用 extract_essence，生成摘要
+        essence = await ExtractEssence(content=content, max_len=env.SUMMARY_MAX_LENGTH).extract()
         # 获取主 sector 的配置
         sec_cfg = SECTOR_CONFIGS[cls_ret.primary]
         # 始化记忆的显著性（salience）分数
@@ -354,8 +181,9 @@ async def add_hsg_memory(content: str, tags: Optional[str] = None, metadata: Any
             id=mid,
             user_id=user_id or "anonymous",
             segment=cur_seg,
-            content=stored,
+            content=essence,
             primary_sector=cls_ret.primary,
+            sectors=json.dumps(all_secs),
             tags=tags,
             meta=json.dumps(metadata or {}),
             created_at=now,
@@ -391,7 +219,7 @@ async def add_hsg_memory(content: str, tags: Optional[str] = None, metadata: Any
             db.execute("UPDATE memories SET compressed_vec=%s WHERE id=%s", (vec_to_buf(comp), mid))
 
         # 建立 Waypoint 关联，为新记忆建立与其他记忆的关联
-        await create_single_waypoint(mid, mean_vec, now, user_id)
+        await waypoints.create_single_waypoint(mid, mean_vec, now, user_id)
         if user_id:
             # 更新用户摘要
             await update_user_summary(user_id)
@@ -407,3 +235,267 @@ async def add_hsg_memory(content: str, tags: Optional[str] = None, metadata: Any
         }
     except Exception as e:
         raise e
+
+
+async def calc_multi_vec_fusion_score(mid: str, qe: Dict[str, List[float]], w: Dict[str, float]) -> float:
+    """
+    计算多向量融合相似度评分
+    通过对记忆的各扇区向量与查询向量进行余弦相似度计算，并根据权重进行加权平均，得到最终的融合相似度评分
+    该评分反映了记忆在多个维度（扇区）上与查询的相关性
+    :param mid: 记忆 ID
+    :param qe: 查询向量字典，键为扇区名称，值为对应的向量列表
+    :param w: 权重字典，键为权重名称，值为对应的权重值
+    :return: 融合相似度评分，浮点数
+    """
+
+    # 获取记忆的所有向量
+    vecs = await vector_store.get_vectors_by_id(mid)
+    # 加权相似度总和（分子）
+    s = 0.0
+    # 有效权重总和（分母），用于归一化
+    tot = 0.0
+    # 权重映射，将权重名称映射到对应的扇区名称
+    weight_mapping = {
+        "semantic": w.get("semantic_dimension_weight", 0),
+        "emotional": w.get("emotional_dimension_weight", 0),
+        "procedural": w.get("procedural_dimension_weight", 0),
+        "episodic": w.get("temporal_dimension_weight", 0),
+        "reflective": w.get("reflective_dimension_weight", 0),
+    }
+
+    for v in vecs:
+        # 获取记忆在该扇区的向量
+        qv = qe.get(v.sector)
+        if not qv:
+            continue
+        # 计算记忆向量与查询向量的余弦相似度
+        sim = cos_sim(v.vector, qv)
+        # 获取该扇区的权重，默认为 0.5
+        wgt = weight_mapping.get(v.sector, 0.5)
+        # 加权累加相似度
+        s += sim * wgt
+        # 累加权重
+        tot += wgt
+
+    # 返回归一化的融合相似度评分
+    return s / tot if tot > 0 else 0.0
+
+
+# 查询缓存
+CACHE = MemoryCache(maxsize=CACHE_SIZE, default_ttl=CACHE_TTL_SECONDS, time_unit=TimeUnit.SECONDS)
+
+
+async def hsg_query(query: str, top_k: int = 10, filters: MemoryFilters = None) -> List[Dict[str, Any]]:
+    """
+    基于混合评分机制（内容相似度、关键词重叠、路标关联、时间衰减等）进行记忆检索
+    @param query: 查询文本
+    @param top_k: 返回的记忆数量
+    @param filters: 过滤和调节参数
+    @return: 返回符合查询条件的记忆列表
+    """
+    start_q = time.time()
+    decay.inc_q()
+    try:
+        # 检查 60 秒内的查询缓存，命中则直接返回
+        cache_key = f"{query}:{top_k}:{filters.model_dump_json() if filters else '{}'}"
+        entry = CACHE.get(cache_key)
+        if entry:
+            return entry
+
+        # 判断查询属于哪个扇区
+        query_classify: ClassifyResult = await SectorClassifier(content=query).classify()
+        # 提取查询关键词 token 集合
+        query_tokens = canonical_token_set(query)
+        # 确定检索扇区范围
+        sectors = (filters.sectors if filters and filters.sectors else None) or list(SECTOR_CONFIGS.keys())
+        if not sectors:
+            sectors = ["semantic"]
+        # 为各扇区生成嵌入向量
+        query_embed = await embed_query_for_all_sectors(query, sectors)
+
+        # 动态权重调
+        primary_classify = query_classify.primary
+        weight = {
+            "semantic_dimension_weight": 1.2 if primary_classify == "semantic" else 0.8,
+            "emotional_dimension_weight": 1.5 if primary_classify == "emotional" else 0.6,
+            "procedural_dimension_weight": 1.3 if primary_classify == "procedural" else 0.7,
+            "temporal_dimension_weight": 1.4 if primary_classify == "episodic" else 0.7,
+            "reflective_dimension_weight": 1.1 if primary_classify == "reflective" else 0.5,
+        }
+
+        # 存储各扇区检索结果
+        sector_result = {}
+        for sector in sectors:
+            # 获取该扇区的查询向量
+            query_vector = query_embed[sector]
+            # 每个扇区返回 top_k × 3 个候选
+            res: List[VectorSearch] = await vector_store.search(query_vector, sector, top_k * 3, filters)
+            sector_result[sector] = res
+
+        # 收集所有候选的相似度
+        all_sims = []
+        # 候选记忆 ID 集合
+        ids = set()
+        for sector, result in sector_result.items():
+            for vector_search in result:
+                all_sims.append(vector_search.similarity)
+                ids.add(vector_search.id)
+
+        # 计算平均相似度，判断检索质量
+        avg_sim = sum(all_sims) / len(all_sims) if all_sims else 0
+        # 自适应扩展规模，平均相似度越低，扩展规模越大，以提高召回率
+        adapt_exp = math.ceil(0.3 * top_k * (1 - avg_sim))
+        # 实际的的查询数量：最终检索规模
+        effective_k = top_k + adapt_exp
+        # 是否置信度高
+        high_conf = avg_sim >= 0.55
+
+        # 若平均相似度 < 0.55（低置信），触发图遍历扩展
+        expansion: List[Expansion] = []
+        if not high_conf:
+            # 通过 waypoint 关系扩展
+            expansion = await waypoints.expand_via_waypoints(list(ids), effective_k * 2)
+            # 加入候选集
+            for e in expansion:
+                ids.add(e["id"])
+
+        # 获取候选记忆内容
+        memories = dml_ops.find_mem(ids)
+
+        # 提前计算每个候选的关键词重叠分数
+        res_list = []
+        kw_scores = {}
+        for mem in memories:
+            overlap = compute_keyword_overlap(query_tokens, mem["content"])
+            kw_scores[mem["id"]] = overlap * 0.15
+
+        # 数据准备与过滤
+        for mem in memories:
+            # 记忆 ID
+            mid = mem["id"]
+            # 显著性 < 过滤阈值，跳过
+            if filters and filters.min_salience and mem["salience"] < filters.min_salience:
+                continue
+            # 用户 ID 不匹配，跳过
+            if filters and filters.user_id and mem["user_id"] != filters.user_id:
+                continue
+
+            # 多向量融合相似度
+            mvf = await calc_multi_vec_fusion_score(mid, query_embed, weight)
+            # 跨扇区共振分数
+            csr = await calculate_cross_sector_resonance_score(mem["primary_sector"], query_classify.primary, mvf)
+
+            # 取最高相似度
+            best_sim = csr
+            for s, rlist in sector_result.items():
+                for vector_search in rlist:
+                    if vector_search.id == mem and vector_search.similarity > best_sim:
+                        best_sim = vector_search.similarity
+
+            # 记忆的扇区
+            mem_sec = mem["primary_sector"]
+            # 实际文本分类扇区
+            query_sec = query_classify.primary
+            # 惩罚值
+            penalty = 1.0
+            # 扇区不匹配，应用惩罚
+            if mem_sec != query_sec:
+                penalty = SECTOR_RELATIONSHIPS.get(query_sec, {}).get(mem_sec, 0.3)
+
+            # 相似度惩罚调整
+            adjust = best_sim * penalty
+            # 扩展的记忆项
+            expansion_mem = next((e for e in expansion if e.id == mid), None)
+            # waypoint 权重
+            waypoint_weight = min(1.0, max(0.0, expansion_mem.weight if expansion_mem else 0.0))
+
+            # 计算最后一次访问距今的天数
+            days = (time.time() * 1000 - mem["last_seen_at"]) / 86400000.0
+            # 计算记忆衰减后的显著性（艾宾浩斯遗忘曲线）
+            salience = decay.calc_decay(mem["primary_sector"], mem["salience"], days)
+            # 标准化文本内容 token 集合
+            memory_tokens = canonical_token_set(mem["content"])
+            # 关键词重叠
+            token_overlap = compute_token_overlap(query_tokens, memory_tokens)
+            # 时效性分数
+            rec_sc = decay.calc_recency_score_decay(mem["last_seen_at"])
+            # 标签匹配得分
+            tag_match_score = await compute_tag_match_score(mem, query_tokens)
+
+            # 组合权重: 相似度(35%) × 扇区惩罚，关键词重叠(20%)，Waypoint权重(15%)，时效性(10%)，标签匹配(20%)
+            final_score = compute_hybrid_score(sim=adjust,
+                                               tok_ov=token_overlap,
+                                               wp_wt=waypoint_weight,
+                                               rec_sc=rec_sc,
+                                               kw_score=kw_scores.get(mid, 0),
+                                               tag_match=tag_match_score)
+            # 构建结果项
+            item = {
+                "id": mid,
+                "content": mem["content"],
+                "score": final_score,
+                "primary_sector": mem["primary_sector"],
+                "path": expansion_mem.path if expansion_mem else [mid],
+                "salience": salience,
+                "last_seen_at": mem["last_seen_at"],
+                "tags": json.loads(mem["tags"] or "[]"),
+                "metadata": json.loads(mem["meta"] or "{}")
+            }
+            # 调试信息
+            if filters and filters.debug:
+                item["_debug"] = {
+                    "sim_adj": adjust,
+                    "tok_ov": token_overlap,
+                    "recency": rec_sc,
+                    "waypoint": waypoint_weight,
+                    "tag": tag_match_score,
+                    "penalty": penalty
+                }
+            # 加入结果列表
+            res_list.append(item)
+
+        # 按分数降序
+        res_list.sort(key=lambda x: x["score"], reverse=True)
+        # 取 effective_k 条记录
+        effective_k_list = res_list[:effective_k]
+
+        # 命中记忆强化
+        for _item in effective_k_list:
+            # 应用检索迹强化：提升成功检索到的记忆节点的显著性
+            reinforcement_sal = await apply_retrieval_trace_reinforcement_to_memory(_item["id"], _item["salience"])
+            now = int(time.time() * 1000)
+            db.execute("UPDATE memories SET salience=%s, last_seen_at=%s WHERE id=%s", (reinforcement_sal, now, _item["id"]))
+
+            # 有图遍历路径时
+            if len(_item["path"]) > 1:
+                wps_rows = db.fetchall("SELECT dst_id, weight FROM waypoints WHERE src_id=%s", (_item["id"],))
+                wps = [{"target_id": row["dst_id"], "weight": row["weight"]} for row in wps_rows]
+
+                # 向关联节点传播（得到关联节点新的显著性）
+                pru = await propagate_associative_reinforcement_to_linked_nodes(_item["id"], reinforcement_sal, wps)
+                for u in pru:
+                    # 获取关联记忆
+                    linked_mem = dml_ops.get_mem(u["node_id"])
+                    if linked_mem:
+                        # “当前时间”与“关联记忆最后访问时间”的间隔天数
+                        time_diff = (now - linked_mem["last_seen_at"]) / 86400000.0
+                        # 自然指数函数 math.exp 生成一个衰减系数 decay_fact（衰减因子），核心作用是将「关联记忆最后访问时间与当前时间的间隔天数」转化为 0~1 之间的权重值
+                        # 时间间隔越久，衰减因子越小，对应记忆的权重 / 影响力越低
+                        decay_fact = math.exp(-0.02 * time_diff)
+                        # 上下文增强系数：基于记忆显著性差异和时间衰减的得分调整项，用于精细化修正基础匹配得分，放大优质记忆的优势、降低低质记忆的权重
+                        ctx_boost = HYBRID_PARAMS["gamma"] * (reinforcement_sal - (linked_mem["salience"] or 0)) * decay_fact
+                        # 更新关联记忆的显著性
+                        new_sal = max(0.0, min(1.0, (linked_mem["salience"] or 0) + ctx_boost))
+                        # 更新关联记忆的显著性和最后访问时间
+                        db.execute("UPDATE memories SET salience=?, last_seen_at=? WHERE id=?", (new_sal, now, u["node_id"]))
+
+            # 记录查询命中事件并触发动态更新
+            await decay.on_query_hit(_item["id"], _item["primary_sector"], lambda t: embed(t, _item["primary_sector"]))
+
+        # 存入查询缓存
+        CACHE.set(cache_key, effective_k_list)
+        logger.info(
+            f"[HSG] Query processed in {time.time() - start_q:.3f} seconds. Query: '{query}' Expected: {effective_k}, Actual: {len(effective_k_list)} returned.")
+        return effective_k_list
+    finally:
+        decay.dec_q()

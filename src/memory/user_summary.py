@@ -4,10 +4,12 @@ import asyncio
 from typing import Dict, List
 
 from src.core.config import env
-from src.core.db import db
+from src.core.db import get_db
 from src.utils.log_helper import LogHelper
 
 logger = LogHelper.get_logger()
+
+db = get_db()
 
 def gen_user_summary(memories: List[Dict]) -> str:
     if not memories:

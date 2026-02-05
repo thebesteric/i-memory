@@ -60,7 +60,6 @@ CREATE TABLE IF NOT EXISTS embed_logs (
 CREATE TABLE IF NOT EXISTS waypoints (
     src_id TEXT,
     dst_id TEXT,
-    dst_sector TEXT,
     user_id TEXT,
     weight DOUBLE PRECISION,
     created_at BIGINT,
