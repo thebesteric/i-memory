@@ -1,3 +1,4 @@
+import datetime
 import time
 from typing import List
 
@@ -36,9 +37,9 @@ class Waypoints:
         :param user_id: 用户 ID，标识该路标所属的用户
         :return: None
         """
-        ts = int(time.time() * 1000)
+        now = datetime.datetime.now()
         self.db.execute("INSERT INTO waypoints(src_id, dst_id, user_id, weight, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s)",
-                        (rid, cid, user_id or "anonymous", 1.0, ts, ts))
+                        (rid, cid, user_id or "anonymous", 1.0, now, now))
         self.db.commit()
 
     async def expand_via_waypoints(self, ids: List[str], max_expansion: int = 10) -> List[Expansion]:
@@ -82,7 +83,7 @@ class Waypoints:
         # 返回扩展结果
         return expansion
 
-    async def create_single_waypoint(self, new_id: str, new_mean: List[float], ts: int, user_id: str = "anonymous"):
+    async def create_single_waypoint(self, new_id: str, new_mean: List[float], dt: datetime.datetime, user_id: str = "anonymous"):
         """
         用于为新记忆（new_id）在所有记忆中寻找最相似的“均值向量”，并在数据库中建立 waypoint（路标）关联
         该函数会遍历当前用户的所有记忆，计算每个记忆的均值向量与新记忆均值向量的余弦相似度，
@@ -132,9 +133,9 @@ class Waypoints:
 
         # 如果找到了最佳相似记忆，创建指向该记忆的 waypoint
         if best:
-            self.db.execute(insert_sql, (new_id, best, user_id, float(best_sim), ts, ts))
+            self.db.execute(insert_sql, (new_id, best, user_id, float(best_sim), dt, dt))
         # 否则创建自指向的 waypoint
         else:
-            self.db.execute(insert_sql, (new_id, new_id, user_id, 1.0, ts, ts))
+            self.db.execute(insert_sql, (new_id, new_id, user_id, 1.0, dt, dt))
         # 提交事务
         self.db.commit()

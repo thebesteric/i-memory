@@ -1,3 +1,4 @@
+import datetime
 import math
 import time
 from typing import Optional
@@ -95,15 +96,18 @@ class Decay:
         return max(0.0, min(1.0, decayed + reinforce))
 
     @staticmethod
-    def calc_recency_score_decay(last_seen: int) -> float:
+    def calc_recency_score_decay(last_seen: datetime.datetime) -> float:
         """
         计算最近的分数：距离最近一次访问的时间越久（hours 越大），得分越低；时间越近（hours 越小），得分越高
         :param last_seen: 最近一次访问时间
         :return:
         """
-        now = int(time.time() * 1000)
-        dt = max(0, now - last_seen)
-        hours = dt / 3600000.0
+        if not last_seen:
+            return 0.0
+        now = datetime.datetime.now()
+        time_diff = now - last_seen
+        dt = max(0.0, time_diff.total_seconds())
+        hours = dt / 3600.0
         # 单调递减指数函数，时间越久分数越低
         return math.exp(-0.05 * hours)
 
@@ -139,7 +143,7 @@ class Decay:
         if self.cfg.reinforce_on_query:
             # 计算新的显著性，增加 0.15，最大不超过 1.0
             new_sal = min(1.0, (m["salience"] or 0.5) + 0.15)
-            self.db.execute("UPDATE memories SET salience = %s, last_seen_at = %s WHERE id = %s", (new_sal, int(time.time() * 1000), mem_id))
+            self.db.execute("UPDATE memories SET salience = %s, last_seen_at = %s WHERE id = %s", (new_sal, datetime.datetime.now(), mem_id))
             self.db.commit()
             updated = True
 

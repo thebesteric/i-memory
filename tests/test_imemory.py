@@ -19,22 +19,29 @@ class TestIMemory(unittest.TestCase):
     # @unittest.skip("Skipping test_add_memory")
     def test_add_memory(self):
         contents = [
-            "今天我去了公园，看到很多美丽的花朵和快乐的人们。",
-            "我家的猫是一只非常可爱的波斯猫，它有着长长的毛发和温柔的性格。",
+            # "今天我去了公园，看到很多美丽的花朵和快乐的人们。",
+            # "我家的猫是一只非常可爱的波斯猫，它有着长长的毛发和温柔的性格。",
             # "最近我在学习编程，发现Python是一门非常有趣且强大的语言。",
             # "昨天晚上我看了一部电影，剧情非常精彩，让我印象深刻。",
             # "我喜欢旅行，探索不同的文化和风景，这让我感到非常充实。",
         ]
-        for content in contents:
-            res = asyncio.run(
-                self.mem.add(
+
+        async def batch_add_memories():
+            results = []
+            for content in contents:
+                res = await self.mem.add(
                     content,
                     cfg=IMemoryConfig(force_root=False),
                     meta={"source": "unit_test"},
                     tags=["test", "memory"]
                 )
-            )
-            print("Memory added:", res)
+                results.append(res)
+                print("Memory added:", res)
+            return results
+
+        all_results = asyncio.run(batch_add_memories())
+        for r in all_results:
+            print(r)
 
     def test_add_long_memory(self):
         content = """
@@ -54,7 +61,7 @@ class TestIMemory(unittest.TestCase):
 
     # @unittest.skip("Skipping test_search_memory")
     def test_search_memory(self):
-        query = "我家的猫是什么品种？"
+        query = "我去哪里开会了？"
         results = asyncio.run(self.mem.search(query, limit=5))
         print("Search results:", results)
 

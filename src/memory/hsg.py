@@ -416,7 +416,10 @@ async def hsg_query(query: str, top_k: int = 10, filters: IMemoryFilters = None)
             waypoint_weight = min(1.0, max(0.0, expansion_mem.weight if expansion_mem else 0.0))
 
             # 计算最后一次访问距今的天数
-            days = (time.time() * 1000 - mem["last_seen_at"]) / 86400000.0
+            last_seen_at = mem["last_seen_at"]
+            now = datetime.datetime.now()
+            time_diff = now - last_seen_at
+            days = time_diff.total_seconds() / 86400.0
             # 计算记忆衰减后的显著性（艾宾浩斯遗忘曲线）
             salience = decay.calc_decay(mem["primary_sector"], mem["salience"], days)
             # 标准化文本内容 token 集合
@@ -424,7 +427,7 @@ async def hsg_query(query: str, top_k: int = 10, filters: IMemoryFilters = None)
             # 关键词重叠
             token_overlap = compute_token_overlap(query_tokens, memory_tokens)
             # 时效性分数
-            rec_sc = decay.calc_recency_score_decay(mem["last_seen_at"])
+            rec_sc = decay.calc_recency_score_decay(last_seen_at)
             # 标签匹配得分
             tag_match_score = await compute_tag_match_score(mem, query_tokens)
 
@@ -469,8 +472,8 @@ async def hsg_query(query: str, top_k: int = 10, filters: IMemoryFilters = None)
         for _item in effective_k_list:
             # 应用检索迹强化：提升成功检索到的记忆节点的显著性
             reinforcement_sal = await apply_retrieval_trace_reinforcement_to_memory(_item["id"], _item["salience"])
-            now = int(time.time() * 1000)
-            db.execute("UPDATE memories SET salience=%s, last_seen_at=%s WHERE id=%s", (reinforcement_sal, now, _item["id"]))
+            now = datetime.datetime.now()
+            db.execute("UPDATE memories SET salience=%s, last_seen_at = %s WHERE id = %s", (reinforcement_sal, now, _item["id"]))
 
             # 有图遍历路径时
             if len(_item["path"]) > 1:
@@ -484,7 +487,7 @@ async def hsg_query(query: str, top_k: int = 10, filters: IMemoryFilters = None)
                     linked_mem = dml_ops.get_mem(u["node_id"])
                     if linked_mem:
                         # “当前时间”与“关联记忆最后访问时间”的间隔天数
-                        time_diff = (now - linked_mem["last_seen_at"]) / 86400000.0
+                        time_diff = (now - linked_mem["last_seen_at"]) / 86400.0
                         # 自然指数函数 math.exp 生成一个衰减系数 decay_fact（衰减因子），核心作用是将「关联记忆最后访问时间与当前时间的间隔天数」转化为 0~1 之间的权重值
                         # 时间间隔越久，衰减因子越小，对应记忆的权重 / 影响力越低
                         decay_fact = math.exp(-0.02 * time_diff)
@@ -493,7 +496,7 @@ async def hsg_query(query: str, top_k: int = 10, filters: IMemoryFilters = None)
                         # 更新关联记忆的显著性
                         new_sal = max(0.0, min(1.0, (linked_mem["salience"] or 0) + ctx_boost))
                         # 更新关联记忆的显著性和最后访问时间
-                        db.execute("UPDATE memories SET salience=?, last_seen_at=? WHERE id=?", (new_sal, now, u["node_id"]))
+                        db.execute("UPDATE memories SET salience = %s, last_seen_at = %s WHERE id = %s", (new_sal, now, u["node_id"]))
 
             # 记录查询命中事件并触发动态更新
             await decay.on_query_hit(_item["id"], _item["primary_sector"], lambda t: embed(t, _item["primary_sector"]))

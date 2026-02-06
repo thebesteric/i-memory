@@ -148,7 +148,7 @@ async def mk_root(txt: str, cfg: IMemoryConfig, ex_dict: Dict, sec_count: int, m
         full_meta.update({
             "is_root": True,
             "ingestion_strategy": "root-child",
-            "ingested_at": now
+            "ingested_at": now.strftime("%Y-%m-%d %H:%M:%S")
         })
 
         dml_ops.ins_mem(
@@ -218,10 +218,11 @@ async def ingest_document(*,
 
     # Single 存储模式
     if not use_rc:
+        now = datetime.datetime.now()
         m = meta or {}
         # 合并元数据
         m.update(ex_meta)
-        m.update({"ingestion_strategy": "single", "ingested_at": int(time.time() * 1000)})
+        m.update({"ingestion_strategy": "single", "ingested_at": now.strftime("%Y-%m-%d %H:%M:%S")})
         # 将记忆写入数据库
         r = await add_hsg_memory(text, tags, m, user_id)
         return {
