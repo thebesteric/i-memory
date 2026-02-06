@@ -1,14 +1,14 @@
+import datetime
 import json
 import struct
-import time
 import uuid
 from typing import List, Union, Any
 
 import numpy as np
 
 
-def now() -> int:
-    return int(time.time() * 1000)
+def now():
+    return datetime.datetime.now()
 
 def rid() -> str:
     return str(uuid.uuid4())

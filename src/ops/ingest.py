@@ -1,3 +1,4 @@
+import datetime
 import json
 import re
 import time
@@ -139,7 +140,7 @@ async def mk_root(txt: str, cfg: IMemoryConfig, ex_dict: Dict, sec_count: int, m
     content = f"[Document: {ctype}]\n\n{summary}\n\n[Full content split across {sec_count} sections]"
 
     mid = str(uuid.uuid4())
-    ts = int(time.time() * 1000)
+    now = datetime.datetime.now()
 
     try:
         full_meta = meta or {}
@@ -147,7 +148,7 @@ async def mk_root(txt: str, cfg: IMemoryConfig, ex_dict: Dict, sec_count: int, m
         full_meta.update({
             "is_root": True,
             "ingestion_strategy": "root-child",
-            "ingested_at": ts
+            "ingested_at": now
         })
 
         dml_ops.ins_mem(
@@ -157,9 +158,9 @@ async def mk_root(txt: str, cfg: IMemoryConfig, ex_dict: Dict, sec_count: int, m
             sectors=json.dumps([]),
             tags=json.dumps([]),
             meta=json.dumps(full_meta, default=str),
-            created_at=ts,
-            updated_at=ts,
-            last_seen_at=ts,
+            created_at=now,
+            updated_at=now,
+            last_seen_at=now,
             salience=1.0,
             decay_lambda=0.1,
             segment=1,

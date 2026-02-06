@@ -13,9 +13,9 @@ CREATE TABLE IF NOT EXISTS memories
     meta           TEXT,
     user_id        TEXT,
     segment        INTEGER DEFAULT 0,
-    created_at     BIGINT,
-    updated_at     BIGINT,
-    last_seen_at   BIGINT,
+    created_at     TIMESTAMP,
+    updated_at     TIMESTAMP,
+    last_seen_at   TIMESTAMP,
     salience       DOUBLE PRECISION,
     decay_lambda   DOUBLE PRECISION,
     version        INTEGER,
@@ -41,8 +41,8 @@ CREATE TABLE IF NOT EXISTS users
     user_id          TEXT PRIMARY KEY,
     summary          TEXT,
     reflection_count INTEGER,
-    created_at       BIGINT,
-    updated_at       BIGINT
+    created_at       TIMESTAMP,
+    updated_at       TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS stats
@@ -69,8 +69,8 @@ CREATE TABLE IF NOT EXISTS waypoints
     dst_id     TEXT,
     user_id    TEXT,
     weight     DOUBLE PRECISION,
-    created_at BIGINT,
-    updated_at BIGINT,
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
     PRIMARY KEY (src_id, dst_id),
     CONSTRAINT fk_waypoints_src_id_memories_id
         FOREIGN KEY (src_id) REFERENCES memories (id),

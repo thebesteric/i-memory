@@ -1,3 +1,4 @@
+import datetime
 import json
 import math
 import time
@@ -111,8 +112,8 @@ async def add_hsg_memory(content: str, tags: List[str] = None, metadata: Any = N
         best_sim_content = best_sim_content if len(best_sim_content) <= 20 else best_sim_content[:20] + "..."
         logger.debug(f"[HSG] Maybe best similar memory: Sim: {best_sim_mem_similarity[0]}, Content: {best_sim_content}")
 
-    # 当前时间戳（毫秒）
-    now = int(time.time() * 1000)
+    # 当前时间
+    now = datetime.datetime.now()
 
     # 存在相似记忆 && 相似度 >= 0.9
     if best_sim_mem_similarity and best_sim_mem_similarity[0] >= env.SIMILARITY_THRESHOLD:
