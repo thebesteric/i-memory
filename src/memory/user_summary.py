@@ -1,3 +1,4 @@
+import datetime
 import time
 import json
 import asyncio
@@ -58,7 +59,7 @@ def gen_user_summary(memories: List[Dict]) -> str:
     # 取第一条记忆的时间戳，格式化为日期时间字符串
     created_at = memories[0]["created_at"]
     # 格式化最后活跃时间
-    last_active = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(created_at / 1000)) if created_at else "Recently"
+    last_active = created_at.strftime("%Y-%m-%d %H:%M:%S") if created_at else "Recently"
 
     # 生成概要字符串：Active in 项目名 using 语言. Focused on 文件. (N memories, M saves). Last active: 时间.
     return f"Active in {proj_str} using {lang_str}. Focused on {recent_files}. ({len(memories)} memories, {saves} saves). Last active: {last_active}."
@@ -68,7 +69,7 @@ async def gen_user_summary_async(user_id: str) -> str:
     """
     异步获取该用户最近 100 条记忆并生成概要字符串
     """
-    rows = db.fetchall("SELECT * FROM memories WHERE user_id=%s ORDER BY created_at DESC LIMIT 100 OFFSET 0", (user_id,))
+    rows = db.fetchall("SELECT * FROM memories WHERE user_id = %s ORDER BY created_at DESC LIMIT 100 OFFSET 0", (user_id,))
     return gen_user_summary(rows)
 
 
@@ -80,17 +81,17 @@ async def update_user_summary(user_id: str):
         # 生成用户概要
         # 格式为：Active in 项目名 using 语言. Focused on 文件. (N memories, M saves). Last active: 时间.
         summary = await gen_user_summary_async(user_id)
-        now = int(time.time() * 1000)
+        now = datetime.datetime.now()
 
         # 获取用户
-        existing = db.fetchone("SELECT * FROM users WHERE user_id=%s", (user_id,))
+        existing = db.fetchone("SELECT * FROM users WHERE user_id = %s", (user_id,))
         if not existing:
             # 插入新用户记录并设置概要
-            db.execute("INSERT INTO users(user_id,summary,reflection_count,created_at,updated_at) VALUES (%s,%s,%s,%s,%s)",
+            db.execute("INSERT INTO users(user_id, summary, reflection_count, created_at, updated_at) VALUES (%s, %s, %s, %s, %s)",
                        (user_id, summary, 0, now, now))
         else:
             # 更新用户概要
-            db.execute("UPDATE users SET summary=%s, updated_at=%s WHERE user_id=%s", (summary, now, user_id))
+            db.execute("UPDATE users SET summary = %s, updated_at = %s WHERE user_id = %s", (summary, now, user_id))
         db.commit()
     except Exception as e:
         logger.error(f"[USER_SUMMARY] Error for {user_id}: {e}")
