@@ -12,7 +12,7 @@ class Chunk(TypedDict):
     tokens: int
 
 
-def chunk_text(txt: str, target_token: int = 128, overlap: float = 0.1) -> List[Chunk]:
+def chunk_text(txt: str, target_token: int = 128, overlap: float = 0.1) -> tuple[List[Chunk], int]:
     """
     将长文本智能分块为较小的片段，以适应目标令牌数。
     @param txt: 要分块的输入文本。
@@ -34,7 +34,7 @@ def chunk_text(txt: str, target_token: int = 128, overlap: float = 0.1) -> List[
 
     # 如果总令牌数小于等于目标令牌数，返回整个文本作为一个块
     if total_token <= target_token:
-        return [Chunk(text=txt, start=0, end=len(txt), tokens=total_token)]
+        return [Chunk(text=txt, start=0, end=len(txt), tokens=total_token)], total_token
 
     # 动态估算每 token 平均字符数
     sample = txt[:min(1000, len(txt))]
@@ -76,7 +76,8 @@ def chunk_text(txt: str, target_token: int = 128, overlap: float = 0.1) -> List[
 
     if len(cur_chunk) > 0:
         chunks.append(Chunk(text=cur_chunk, start=cur_start, end=cur_start + len(cur_chunk), tokens=estimate_tokens(cur_chunk)))
-    return chunks
+    # 返回分块列表和总令牌数
+    return chunks, total_token
 
 
 def agg_vec(vecs: List[List[float]]) -> List[float]:

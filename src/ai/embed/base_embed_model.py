@@ -14,21 +14,28 @@ class BaseEmbedModel(BaseModel, ABC):
     model_config = ConfigDict(arbitrary_types_allowed=True, extra="allow")
 
     @abstractmethod
-    async def embed(self, text: str, model: str = None) -> List[float]:
+    def __init__(self, /, **data):
+        super().__init__(**data)
+        self.dim = env.VEC_DIM or 1536
+
+    @abstractmethod
+    async def embed(self, text: str, model: str = None, dim: int = None) -> List[float]:
         """
         生成单个向量
         :param text: 文本
         :param model: 模型名称
+        :param dim: 向量维度
         :return: 嵌入向量
         """
         pass
 
     @abstractmethod
-    async def embed_batch(self, texts: List[str], model: str = None) -> List[List[float]]:
+    async def embed_batch(self, texts: List[str], model: str = None, dim: int = None) -> List[List[float]]:
         """
         批量生成向量
         :param texts: 文本列表
         :param model: 模型名称
+        :param dim: 向量维度
         :return: 嵌入向量列表
         """
         pass
@@ -60,27 +67,3 @@ class BaseEmbedModel(BaseModel, ABC):
 
         sim = dot_product / (norm1 * norm2)
         return float(max(min(sim, 1.0), -1.0))
-
-
-def get_embed_model() -> BaseEmbedModel:
-    """
-    根据配置获取嵌入模型实例
-    :return:
-    """
-    embed_model_kind = env.EMB_KIND or "openai"
-    if embed_model_kind == "openai":
-        from src.ai.embed.openai_embed import OpenAIEmbed
-        _embed_model = OpenAIEmbed()
-        logger.info(f"Using OpenAI embedding model: {_embed_model.model}")
-        return _embed_model
-    if embed_model_kind == "gemini":
-        from src.ai.embed.gemini_embed import GeminiEmbed
-        _embed_model = GeminiEmbed()
-        logger.info(f"Using Gemini embedding model: {_embed_model.model}")
-        return _embed_model
-
-    raise ValueError(f"Unsupported embed model: {embed_model_kind}")
-
-
-# 全局向量存储实例
-embed_model: BaseEmbedModel = get_embed_model()

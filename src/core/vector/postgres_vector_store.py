@@ -1,12 +1,12 @@
 import json
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 
 import asyncpg
 from asyncpg import InvalidColumnReferenceError
 
 from src.core.config import env
 from src.core.vector.base_vector_store import BaseVectorStore, VectorRow, VectorSearch
-from src.memory.memory_filters import MemoryFilters
+from src.memory.models.memory_filters import IMemoryFilters
 from src.utils.log_helper import LogHelper
 from src.utils.singleton import singleton
 
@@ -130,7 +130,7 @@ class PostgresVectorStore(BaseVectorStore):
         async with pool.acquire() as conn:
             await conn.execute(f"DELETE FROM {self.vector_table_name} WHERE id=$1", id)
 
-    async def search(self, vector: List[float], sector: str, k: int, filters: MemoryFilters = None) -> List[VectorSearch]:
+    async def search(self, vector: List[float], sector: str, k: int, filters: IMemoryFilters = None) -> List[VectorSearch]:
         """
         相似度搜索
         :param vector: 向量

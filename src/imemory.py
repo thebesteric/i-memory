@@ -1,20 +1,27 @@
+import math
 from typing import Dict, Any, List
 
 from src.ai.client.openai_registrar import OpenAIRegistrar
 from src.core.db import get_db
+from src.core.dml_ops import dml_ops
 from src.memory.hsg import hsg_query
-from src.memory.memory_filters import MemoryFilters
+from src.memory.models.memory_cfg import IMemoryConfig
+from src.memory.models.memory_filters import IMemoryFilters
 from src.ops.ingest import ingest_document
 from src.utils.log_helper import LogHelper
+from src.utils.paging import PagingResponse
+from src.utils.singleton import singleton
 
 logger = LogHelper.get_logger()
 db = get_db()
 
 
+@singleton
 class IMemory:
 
     def __init__(self, user: str = None):
         self.default_user = user
+        self.dml_ops = dml_ops
         db.connect()
         self._openai = OpenAIRegistrar(self)
 
@@ -22,12 +29,14 @@ class IMemory:
     def openai(self):
         return self._openai
 
-    async def add(self, content: str, user_id: str = None, **kwargs) -> Dict[str, Any]:
+    async def add(self, content: str, user_id: str = None, cfg: IMemoryConfig = None, tags: List[str] = None, meta: Dict[str, Any] = None) -> Dict[str, Any]:
         """
         添加记忆内容
         :param content: 记忆内容文本
         :param user_id: 用户标识
-        :param kwargs: 其他参数
+        :param cfg: 记忆配置
+        :param tags: 标签列表
+        :param meta: 其他元数据
         :return: 添加结果
         """
         uid = user_id or self.default_user
@@ -35,14 +44,14 @@ class IMemory:
         res = await ingest_document(content_type="text",
                                     user_id=uid,
                                     data=content,
-                                    cfg=kwargs.get("cfg"),
-                                    meta=kwargs.get("meta"),
-                                    tags=kwargs.get("tags"))
+                                    cfg=cfg,
+                                    meta=meta,
+                                    tags=tags)
         if "root_memory_id" in res:
             res["id"] = res["root_memory_id"]
         return res
 
-    async def search(self, query: str, user_id: str = None, limit: int = 10, filters: MemoryFilters = None) -> List[Dict[str, Any]]:
+    async def search(self, query: str, user_id: str = None, limit: int = 10, filters: IMemoryFilters = None) -> List[Dict[str, Any]]:
         """
         搜索记忆内容
         :param query: 查询文本
@@ -54,33 +63,52 @@ class IMemory:
         uid = user_id or self.default_user
         # 创建 MemoryFilters 对象
         if not filters:
-            filters = MemoryFilters(user_id=uid)
+            filters = IMemoryFilters(user_id=uid)
 
         return await hsg_query(query, limit, filters)
 
+    async def get(self, memory_id: str):
+        """
+        获取记忆内容
+        :param memory_id: 记忆标识
+        :return: 记忆内容
+        """
+        return self.dml_ops.get_mem(memory_id)
 
-if __name__ == '__main__':
-    import asyncio
+    async def delete(self, memory_id: str):
+        """
+        删除记忆内容
+        :param memory_id: 记忆标识
+        :return: 删除结果
+        """
+        self.dml_ops.del_mem(memory_id)
 
+    async def clear(self, user_id: str = None):
+        """
+        清除用户所有记忆内容
+        :param user_id: 用户标识
+        :return:
+        """
+        uid = user_id or self.default_user
+        if not uid:
+            raise ValueError("user_id is required for clearing all memories.")
+        self.dml_ops.del_mem_by_user(uid)
 
-    async def test_add_memory():
-        mem = IMemory(user="test_user")
-        contents = [
-            "昨天我带着我的猫去宠物医院做了例行检查，医生说它的健康状况很好，没有任何问题。",
-            "我喜欢给我的猫买各种玩具，尤其是那些可以动的玩具，它总是玩得不亦乐乎。",
-        ]
-        for content in contents:
-            res = await mem.add(content, cfg={"force_root": False}, meta={"source": "unit_test"}, tags=["test", "memory"])
-            print("Memory added:", res)
-
-
-    # asyncio.run(test_add_memory())
-
-    async def test_search_memory():
-        mem = IMemory(user="test_user")
-        query = "我家的猫是什么品种？"
-        results = await mem.search(query, limit=5)
-        print("Search results:", results)
-
-
-    asyncio.run(test_search_memory())
+    def history(self, user_id: str = None, current: int = 1, size: int = 10) -> PagingResponse:
+        """
+        获取用户记忆历史
+        :param user_id: 用户标识
+        :param current: 当前页码
+        :param size: 每页大小
+        :return: 记忆历史列表
+        """
+        uid = user_id or self.default_user
+        total = self.dml_ops.count_mem_by_user(user_id)
+        offset = (current - 1) * size
+        rows = self.dml_ops.all_mem_by_user(uid, size, offset)
+        return PagingResponse(
+            records=[dict(r) for r in rows],
+            total=total,
+            current=current,
+            size=size
+        )

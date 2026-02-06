@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import List, Optional
 
 from src.core.config import env
-from src.memory.memory_filters import MemoryFilters
+from src.memory.models.memory_filters import IMemoryFilters
 from src.utils.log_helper import LogHelper
 
 logger = LogHelper.get_logger()
@@ -67,7 +67,7 @@ class BaseVectorStore(ABC):
         pass
 
     @abstractmethod
-    async def search(self, vector: List[float], sector: str, k: int, filters: MemoryFilters = None) -> List[VectorSearch]:
+    async def search(self, vector: List[float], sector: str, k: int, filters: IMemoryFilters = None) -> List[VectorSearch]:
         """
         相似度搜索
         :param vector: 向量列表

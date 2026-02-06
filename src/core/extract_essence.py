@@ -2,6 +2,7 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 
+from src.ai.model_provider import get_chat_model
 from src.core.config import env
 from src.utils.log_helper import LogHelper
 
@@ -10,11 +11,11 @@ logger = LogHelper.get_logger()
 
 class ExtractEssence:
     """
-    使用大模型 + 提示词从文本中提取精华内容的类
+    从文本中提取摘要内容
     """
 
     EXTRACT_ESSENCE_PROMPT = """
-你是一个内容精华提取专家。你的任务是从给定的文本中提取最重要和最有价值的信息，生成一个简洁的摘要。
+你是一个内容摘要提取专家。你的任务是从给定的文本中提取最重要和最有价值的信息，生成一个简洁的摘要。
 
 提取时请遵循以下优先级规则：
 1. 事件信息：日期、时间、地点、人物、具体发生的事情
@@ -55,12 +56,7 @@ class ExtractEssence:
             }
         )
         # 构建语言模型
-        llm = ChatOpenAI(
-            model=env.OPENAI_MODEL,
-            temperature=0.0,
-            api_key=env.OPENAI_API_KEY,
-            base_url=env.OPENAI_BASE_URL
-        )
+        llm = get_chat_model()
         # 构建执行链
         return prompt_template | llm | output_parser
 

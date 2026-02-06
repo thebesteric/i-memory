@@ -3,7 +3,7 @@ from typing import TypedDict
 from pydantic import BaseModel, Field, ConfigDict
 
 
-class MemoryFilters(BaseModel):
+class IMemoryFilters(BaseModel):
     """
     记忆查询过滤器
     """

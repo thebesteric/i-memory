@@ -228,7 +228,7 @@ async def extract_text(content_type: str, data: Union[str, bytes]) -> Dict[str, 
     if "markdown" in ctype or "md" in ctype or "txt" in ctype or "text" in ctype:
         plain_text = data.decode("utf-8") if isinstance(data, bytes) else data
         return {
-            "text": plain_text,
+            "text": plain_text.strip(),
             "metadata": {
                 "content_type": ctype,
                 "char_count": len(plain_text),

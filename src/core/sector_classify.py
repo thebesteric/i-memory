@@ -7,6 +7,7 @@ from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field, ConfigDict
 
+from src.ai.model_provider import get_chat_model
 from src.core.config import env
 
 
@@ -142,7 +143,6 @@ SEC_DESCRIPTIONS = {k: v.description for k, v in SECTOR_CONFIGS.items()}
 
 
 class SectorClassifier:
-
     # 分类提示词模板
     CLASSIFY_PROMPT = """
 你是一个记忆分类专家。请分析以下内容，判断它属于哪个记忆类型，并为每个类型打分（0-100分）。
@@ -186,20 +186,13 @@ begin!!
             }
         )
         # 构建语言模型
-        llm = ChatOpenAI(
-            model=env.OPENAI_MODEL,
-            temperature=0.0,
-            api_key=env.OPENAI_API_KEY,
-            base_url=env.OPENAI_BASE_URL
-        )
+        llm = get_chat_model()
         # 构建执行链
         return prompt_template | llm | output_parser
 
     async def classify(self) -> ClassifyResult:
         """
         根据文本内容分类记忆领域
-        :param content: 文本内容
-        :param metadata: 元数据，可包含预设的 sector
         :return: 包含 primary（主扇区）、additional（辅扇区）、confidence（置信度）、scores（各扇区分数）的字典
         """
 

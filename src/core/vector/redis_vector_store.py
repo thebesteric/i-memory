@@ -1,10 +1,10 @@
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 
 import numpy as np
 import redis
 
 from src.core.vector.base_vector_store import BaseVectorStore, VectorRow, VectorSearch
-from src.memory.memory_filters import MemoryFilters
+from src.memory.models.memory_filters import IMemoryFilters
 from src.utils.log_helper import LogHelper
 from src.utils.singleton import singleton
 
@@ -98,7 +98,7 @@ class RedisVectorStore(BaseVectorStore):
         client = await self._get_client()
         await client.delete(self._key(id))
 
-    async def search(self, vector: List[float], sector: str, k: int, filters: MemoryFilters = None) -> List[VectorSearch]:
+    async def search(self, vector: List[float], sector: str, k: int, filters: IMemoryFilters = None) -> List[VectorSearch]:
         """
         相似度搜索
         :param vector: 向量

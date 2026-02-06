@@ -24,7 +24,6 @@ async def test_async_extract():
 
     extractor = ExtractEssence(
         content=TEST_CONTENT,
-        sector="semantic",
         max_len=200
     )
 
@@ -47,7 +46,6 @@ def test_sync_extract():
 
     extractor = ExtractEssence(
         content=TEST_CONTENT,
-        sector="event",
         max_len=200
     )
 
@@ -71,7 +69,6 @@ def test_short_content():
     short_text = "这是一个很短的文本"
     extractor = ExtractEssence(
         content=short_text,
-        sector="semantic",
         max_len=500
     )
 

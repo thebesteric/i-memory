@@ -46,7 +46,7 @@ class MonitorData(BaseModel):
 
 def singleton(cls):
     """
-    单例装饰器，用于确保一个类只有一个实例。
+    单例装饰器，用于确保一个类只有一个实例，支持继承。
     :return:
     """
     # 类的实例缓存
@@ -57,36 +57,44 @@ def singleton(cls):
     # 监控数据：键为类，值为{创建时间、创建线程、调用次数}
     _monitor = dict[type, MonitorData]()
 
-    def wrapper(*args, **kwargs):
-        # 检查类是否已创建实例，未创建则初始化并缓存
-        if cls not in _instances:
-            with _lock:
-                # 双重检查，加锁后再次验证，防止多线程同时等待锁后重复创建
-                if cls not in _instances:
-                    _instances[cls] = cls(*args, **kwargs)
-                    logger.debug(f"[{cls.__name__}] singleton instance created.")
-                    # 初始化监控数据
-                    _monitor[cls] = MonitorData.create()
+    # 创建一个新类来包装原始类
+    class SingletonWrapper(cls):
+        def __new__(cls, *args, **kwargs):
+            # 检查类是否已创建实例，未创建则初始化并缓存
+            if cls not in _instances:
+                with _lock:
+                    # 双重检查，加锁后再次验证，防止多线程同时等待锁后重复创建
+                    if cls not in _instances:
+                        _instances[cls] = super(SingletonWrapper, cls).__new__(cls)
+                        # 手动调用 __init__，因为 __new__ 返回的实例不会自动调用
+                        _instances[cls].__init__(*args, **kwargs)
+                        logger.debug(f"[{cls.__name__}] singleton instance created.")
+                        # 初始化监控数据
+                        _monitor[cls] = MonitorData.create()
 
-        # 每次调用都增加调用计数
-        _monitor[cls].incr_call_count()
-        # 返回缓存的唯一实例
-        return _instances[cls]
+            # 每次调用都增加调用计数
+            if cls in _monitor:
+                _monitor[cls].incr_call_count()
+            # 返回缓存的唯一实例
+            return _instances[cls]
 
     # 暴露监控数据，支持外部查询
     def monitor_info() -> dict[str, Any]:
         """获取单例的监控信息"""
-        if cls not in _monitor:
-            return {}
-        return {
-            "class_name": cls.__name__,
-            **_monitor[cls].model_dump()
-        }
+        if cls in _monitor:
+            return {
+                "class_name": cls.__name__,
+                **_monitor[cls].model_dump()
+            }
+        # 如果当前类没有监控数据，尝试查找原始类的监控数据
+        if cls.__name__ != "SingletonWrapper" and hasattr(cls, "__orig_class__"):
+            return monitor_info.__get__(None, cls.__orig_class__)()
+        return {}
 
     def destroy():
         """
         销毁单例实例，释放持有的资源
-        为装饰器添加显式销毁方法，挂载在 wrapper上（可通过装饰后的类调用）
+        为装饰器添加显式销毁方法，挂载在 SingletonWrapper 类上
         """
         if cls in _instances:
             # 若实例有 __del__ 方法，先执行资源释放逻辑
@@ -100,9 +108,15 @@ def singleton(cls):
         if cls in _monitor:
             del _monitor[cls]
 
-    # 绑定销毁方法到装饰器外层函数
-    wrapper.destroy = destroy
-    # 绑定监控信息获取方法到装饰器外层函数
-    wrapper.monitor_info = monitor_info
+    # 绑定方法到 SingletonWrapper 类
+    SingletonWrapper.monitor_info = monitor_info
+    SingletonWrapper.destroy = destroy
 
-    return wrapper
+    # 复制原始类的属性
+    SingletonWrapper.__name__ = cls.__name__
+    SingletonWrapper.__doc__ = cls.__doc__
+    SingletonWrapper.__module__ = cls.__module__
+    # 保存原始类的引用
+    SingletonWrapper.__orig_class__ = cls
+
+    return SingletonWrapper

@@ -2,11 +2,10 @@ import json
 import math
 import time
 import uuid
-from typing import Optional, Any, Dict, List, Set
+from typing import Optional, Any, Dict, List
 
-import numpy as np
-
-from src.ai.embed.base_embed_model import get_embed_model, BaseEmbedModel
+from src.ai.embed.base_embed_model import BaseEmbedModel
+from src.ai.model_provider import get_embed_model
 from src.core.cache.memory_cache import MemoryCache
 from src.core.config import env
 from src.core.constants import SECTOR_RELATIONSHIPS, HYBRID_PARAMS, CACHE_TTL_SECONDS, CACHE_SIZE
@@ -19,14 +18,14 @@ from src.core.vector.base_vector_store import vector_store, VectorSearch
 from src.core.waypoints import Waypoints, Expansion
 from src.memory.decay import Decay
 from src.memory.embed import embed_multi_sector, calc_mean_vec, embed
-from src.memory.memory_filters import MemoryFilters
+from src.memory.models.memory_filters import IMemoryFilters
 from src.memory.user_summary import update_user_summary
 from src.ops.dynamic_memory import calculate_cross_sector_resonance_score, apply_retrieval_trace_reinforcement_to_memory, \
     propagate_associative_reinforcement_to_linked_nodes
 from src.tools.chunking import chunk_text
 from src.tools.keyword import compute_keyword_overlap, compute_token_overlap
 from src.tools.text import canonical_token_set
-from src.tools.vectors import vec_to_buf, buf_to_vec, cos_sim
+from src.tools.vectors import vec_to_buf, cos_sim
 from src.utils.log_helper import LogHelper
 from src.utils.time_unit import TimeUnit
 
@@ -149,8 +148,14 @@ async def add_hsg_memory(content: str, tags: List[str] = None, metadata: Any = N
             db.commit()
 
     # 对内容分段，判断是否需要分块存储
-    chunks = chunk_text(content)
+    chunks, total_token = chunk_text(content)
     use_chunks = len(chunks) > 1
+
+    # 更新字符数和估计的令牌数
+    metadata.update({
+        "char_count": len(content),
+        "estimated_tokens": total_token,
+    })
 
     # 文本分类：判断内容所属的主/辅 sector（语义、情感、程序、事件、反思等）
     cls_ret = await SectorClassifier(content=content, metadata=metadata).classify()
@@ -285,7 +290,7 @@ async def calc_multi_vec_fusion_score(mid: str, qe: Dict[str, List[float]], w: D
 CACHE = MemoryCache(maxsize=CACHE_SIZE, default_ttl=CACHE_TTL_SECONDS, time_unit=TimeUnit.SECONDS)
 
 
-async def hsg_query(query: str, top_k: int = 10, filters: MemoryFilters = None) -> List[Dict[str, Any]]:
+async def hsg_query(query: str, top_k: int = 10, filters: IMemoryFilters = None) -> List[Dict[str, Any]]:
     """
     基于混合评分机制（内容相似度、关键词重叠、路标关联、时间衰减等）进行记忆检索
     @param query: 查询文本

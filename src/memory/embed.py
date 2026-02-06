@@ -3,7 +3,7 @@ from typing import List, Dict, Optional, Any
 
 import numpy as np
 
-from src.ai.embed.base_embed_model import get_embed_model
+from src.ai.model_provider import get_embed_model
 from src.core.dml_ops import dml_ops
 
 

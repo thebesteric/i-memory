@@ -17,10 +17,10 @@ class GeminiEmbed(BaseEmbedModel):
         self.base_url = env.GEMINI_BASE_URL
         self.model = env.GEMINI_EMBEDDING_MODEL
 
-    async def embed(self, text: str, model: str = None) -> List[float]:
+    async def embed(self, text: str, model: str = None, dim: int = None) -> List[float]:
         return (await self.embed_batch([text], model))[0]
 
-    async def embed_batch(self, texts: List[str], model: str = None) -> List[List[float]]:
+    async def embed_batch(self, texts: List[str], model: str = None, dim: int = None) -> List[List[float]]:
         if not self.api_key: raise ValueError("Gemini key missing")
         self.model = model or self.model
         if "models/" not in self.model:
@@ -31,7 +31,8 @@ class GeminiEmbed(BaseEmbedModel):
             reqs.append({
                 "model": self.model,
                 "content": {"parts": [{"text": t}]},
-                "taskType": "SEMANTIC_SIMILARITY"
+                "taskType": "SEMANTIC_SIMILARITY",
+                "outputDimensionality": dim or self.dim
             })
 
         async with httpx.AsyncClient() as client:
@@ -39,5 +40,6 @@ class GeminiEmbed(BaseEmbedModel):
             if res.status_code != 200:
                 raise Exception(f"Gemini: {res.text}")
             data = res.json()
-            if "embeddings" not in data: return []
+            if "embeddings" not in data:
+                return []
             return [e["values"] for e in data["embeddings"]]

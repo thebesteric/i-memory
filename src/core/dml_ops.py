@@ -67,21 +67,29 @@ class DMLOps:
     def all_mem_by_user(self, user_id: str, limit=10, offset=0):
         return self.db.fetchall("SELECT * FROM memories WHERE user_id = %s ORDER BY created_at DESC LIMIT %s OFFSET %s", (user_id, limit, offset))
 
+    def count_mem_by_user(self, user_id: str) -> int:
+        row = self.db.fetchone("SELECT COUNT(*) as cnt FROM memories WHERE user_id = %s", (user_id,))
+        return row["cnt"] if row else 0
+
     def get_waypoints_by_src(self, src_id: str):
         return self.db.fetchall("SELECT * FROM waypoints WHERE src_id = %s", (src_id,))
 
     def del_mem(self, mid: str):
-        self.db.execute("DELETE FROM memories WHERE id = %s", (mid,))
         self.db.execute("DELETE FROM vectors WHERE id = %s", (mid,))
         self.db.execute("DELETE FROM waypoints WHERE src_id = %s OR dst_id = %s", (mid, mid))
+        self.db.execute("DELETE FROM embed_logs WHERE id = %s", (mid,))
+        self.db.execute("DELETE FROM memories WHERE id = %s", (mid,))
         self.db.commit()
 
     def del_mem_by_user(self, uid: str):
-        self.db.execute("DELETE FROM vectors WHERE id IN (SELECT id FROM memories WHERE user_id = %s)", (uid,))
-        self.db.execute(
-            "DELETE FROM waypoints WHERE src_id IN (SELECT id FROM memories WHERE user_id = %s) OR dst_id IN (SELECT id FROM memories WHERE user_id = %s)",
-            (uid, uid))
-        self.db.execute("DELETE FROM memories WHERE user_id = %s", (uid,))
+        memory_ids = self.db.fetchall("SELECT id FROM memories WHERE user_id = %s", (uid,))
+        if not memory_ids:
+            return
+        ids = tuple(row["id"] for row in memory_ids)
+        self.db.execute("DELETE FROM vectors WHERE id IN %s", (ids,))
+        self.db.execute("DELETE FROM waypoints WHERE src_id IN %s OR dst_id IN %s", (ids, ids))
+        self.db.execute("DELETE FROM embed_logs WHERE id IN %s", (ids,))
+        self.db.execute("DELETE FROM memories WHERE id IN %s", (ids,))
         self.db.commit()
 
 

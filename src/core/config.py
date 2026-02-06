@@ -39,12 +39,14 @@ class EnvConfig:
         self.GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gpt-4o-mini")
         self.GEMINI_EMBEDDING_MODEL = os.getenv("GEMINI_EMBEDDING_MODEL", "text-embedding-004")
 
+        # DashScope 配置
+        self.DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY")
+        self.DASHSCOPE_BASE_URL = os.getenv("DASHSCOPE_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
+        self.DASHSCOPE_MODEL = os.getenv("DASHSCOPE_MODEL", "qwen-plus")
+        self.DASHSCOPE_EMBEDDING_MODEL = os.getenv("DASHSCOPE_EMBEDDING_MODEL", "text-embedding-v4")
 
-        # MiniLM 模型（相似度判断、意图解析）
-        self.MINI_LM_MODEL = os.getenv("IM_MINI_LM_MODEL", "all-MiniLM-L12-v2")
-
-        # 向量嵌入提供商
-        self.EMB_KIND = os.getenv("IM_EMBED_KIND", "openai")
+        # 模型提供商（包含向量和记忆相关识别模型）
+        self.MODEL_PROVIDER = os.getenv("IM_MODEL_PROVIDER", "dashscope")
 
         # 向量维度
         self.VEC_DIM = os.getenv("IM_VEC_DIM", 1536)
