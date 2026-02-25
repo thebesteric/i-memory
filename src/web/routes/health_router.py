@@ -2,9 +2,9 @@ from fastapi import APIRouter
 
 from src.utils.common_result import R
 
-router = APIRouter()
+router = APIRouter(prefix="/health", tags=["health"])
 
 
-@router.get("/health")
+@router.get("/", summary="健康检查")
 async def health_check() -> R:
     return R.success()

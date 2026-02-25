@@ -9,7 +9,7 @@ from src.ai.embed.base_embed_model import BaseEmbedModel
 from src.ai.model_provider import get_embed_model
 from src.core.cache.memory_cache import MemoryCache
 from src.core.config import env
-from src.core.constants import SECTOR_RELATIONSHIPS, HYBRID_PARAMS, CACHE_TTL_SECONDS, CACHE_SIZE
+from src.core.constants import SECTOR_RELATIONSHIPS, HYBRID_PARAMS, CACHE_TTL, CACHE_SIZE, CACHE_TTL_TIME_UNIT
 from src.core.db import get_db
 from src.core.dml_ops import dml_ops
 from src.core.extract_essence import ExtractEssence
@@ -288,7 +288,7 @@ async def calc_multi_vec_fusion_score(mid: str, qe: Dict[str, List[float]], w: D
 
 
 # 查询缓存
-CACHE = MemoryCache(maxsize=CACHE_SIZE, default_ttl=CACHE_TTL_SECONDS, time_unit=TimeUnit.SECONDS)
+CACHE = MemoryCache(maxsize=CACHE_SIZE, default_ttl=CACHE_TTL, time_unit=CACHE_TTL_TIME_UNIT)
 
 
 async def hsg_query(query: str, top_k: int = 10, filters: IMemoryFilters = None) -> List[Dict[str, Any]]:
@@ -362,8 +362,8 @@ async def hsg_query(query: str, top_k: int = 10, filters: IMemoryFilters = None)
             # 通过 waypoint 关系扩展
             expansion = await waypoints.expand_via_waypoints(list(ids), effective_k * 2)
             # 加入候选集
-            for e in expansion:
-                ids.add(e["id"])
+            for exp in expansion:
+                ids.add(exp.id)
 
         # 获取候选记忆内容
         memories = dml_ops.find_mem(ids)

@@ -1,5 +1,12 @@
 # 记忆缓存时间，单位秒
-CACHE_TTL_SECONDS = 60
+from enum import Enum
+
+from src.utils.time_unit import TimeUnit
+
+# 记忆缓存时间
+CACHE_TTL = 60
+# 记忆缓存时间单位
+CACHE_TTL_TIME_UNIT = TimeUnit.SECONDS
 # 记忆缓存大小
 CACHE_SIZE = 2000
 
@@ -24,3 +31,12 @@ HYBRID_PARAMS = {
     "tau_hours": 1.0,  # 衰减时间单位（小时）
     "epsilon": 1e-8,  # 防止除零的极小值
 }
+
+
+class ModelProvider(Enum):
+    """
+    模型提供商枚举
+    """
+    OPENAI = "openai"
+    GEMINI = "gemini"
+    DASHSCOPE = "dashscope"

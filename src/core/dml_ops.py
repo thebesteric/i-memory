@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Any, Dict, List
 
 from src.core.db import DB, get_db
 
@@ -13,7 +13,7 @@ class DMLOps:
     def __init__(self):
         self.db: DB = db
 
-    def ins_mem(self, **k):
+    def ins_mem(self, **k) -> int:
         sql = """
               INSERT INTO memories(id, user_id, segment, content, primary_sector, sectors, tags, meta, created_at, updated_at, last_seen_at, salience,
                                    decay_lambda, version, mean_dim, mean_vec, compressed_vec, feedback_score)
@@ -42,55 +42,62 @@ class DMLOps:
             k.get("last_seen_at"), k.get("salience", 1.0), k.get("decay_lambda", 0.02), k.get("version", 1),
             k.get("mean_dim"), k.get("mean_vec"), k.get("compressed_vec"), k.get("feedback_score", 0)
         )
-        self.db.execute(sql, vals)
+        affected_rows = self.db.execute(sql, vals)
         self.db.commit()
+        return affected_rows
 
-    def find_mem(self, mids: list[str]):
+    def find_mem(self, mids: list[str]) -> List[Dict[str, Any]]:
+        if not mids:
+            return []
         format_strings = ','.join(['%s'] * len(mids))
         query = f"SELECT * FROM memories WHERE id IN ({format_strings})"
         return self.db.fetchall(query, tuple(mids))
 
-    def get_mem(self, mid: str):
+    def get_mem(self, mid: str) -> Dict[str, Any] | None:
         return self.db.fetchone("SELECT * FROM memories WHERE id = %s", (mid,))
 
-    def all_mem(self, limit=10, offset=0):
+    def all_mem(self, limit=10, offset=0) -> List[Dict[str, Any]]:
         return self.db.fetchall("SELECT * FROM memories ORDER BY created_at DESC LIMIT %s OFFSET %s", (limit, offset))
 
-    def ins_log(self, id: str, model: str, status: str, ts: int, err: Optional[str] = None):
-        self.db.execute("INSERT INTO embed_logs(id, model, status, ts, err) VALUES (%s, %s, %s, %s, %s)", (id, model, status, ts, err))
+    def ins_log(self, id: str, model: str, status: str, ts: int, err: Optional[str] = None) -> int:
+        affected_rows = self.db.execute("INSERT INTO embed_logs(id, model, status, ts, err) VALUES (%s, %s, %s, %s, %s)", (id, model, status, ts, err))
         self.db.commit()
+        return affected_rows
 
-    def upd_log(self, id: str, status: str, err: Optional[str] = None):
-        self.db.execute("UPDATE embed_logs SET status = %s, err = %s WHERE id = %s", (status, err, id))
+    def upd_log(self, id: str, status: str, err: Optional[str] = None) -> int:
+        affected_rows = self.db.execute("UPDATE embed_logs SET status = %s, err = %s WHERE id = %s", (status, err, id))
         self.db.commit()
+        return affected_rows
 
-    def all_mem_by_user(self, user_id: str, limit=10, offset=0):
+    def all_mem_by_user(self, user_id: str, limit=10, offset=0) -> List[Dict[str, Any]]:
         return self.db.fetchall("SELECT * FROM memories WHERE user_id = %s ORDER BY created_at DESC LIMIT %s OFFSET %s", (user_id, limit, offset))
 
     def count_mem_by_user(self, user_id: str) -> int:
         row = self.db.fetchone("SELECT COUNT(*) as cnt FROM memories WHERE user_id = %s", (user_id,))
         return row["cnt"] if row else 0
 
-    def get_waypoints_by_src(self, src_id: str):
+    def get_waypoints_by_src(self, src_id: str) -> List[Dict[str, Any]]:
         return self.db.fetchall("SELECT * FROM waypoints WHERE src_id = %s", (src_id,))
 
-    def del_mem(self, mid: str):
+    def del_mem(self, mid: str) -> int:
         self.db.execute("DELETE FROM vectors WHERE id = %s", (mid,))
         self.db.execute("DELETE FROM waypoints WHERE src_id = %s OR dst_id = %s", (mid, mid))
         self.db.execute("DELETE FROM embed_logs WHERE id = %s", (mid,))
-        self.db.execute("DELETE FROM memories WHERE id = %s", (mid,))
+        affected_rows = self.db.execute("DELETE FROM memories WHERE id = %s", (mid,))
         self.db.commit()
+        return affected_rows
 
-    def del_mem_by_user(self, uid: str):
+    def del_mem_by_user(self, uid: str) -> int:
         memory_ids = self.db.fetchall("SELECT id FROM memories WHERE user_id = %s", (uid,))
         if not memory_ids:
-            return
+            return 0
         ids = tuple(row["id"] for row in memory_ids)
         self.db.execute("DELETE FROM vectors WHERE id IN %s", (ids,))
         self.db.execute("DELETE FROM waypoints WHERE src_id IN %s OR dst_id IN %s", (ids, ids))
         self.db.execute("DELETE FROM embed_logs WHERE id IN %s", (ids,))
-        self.db.execute("DELETE FROM memories WHERE id IN %s", (ids,))
+        affected_rows = self.db.execute("DELETE FROM memories WHERE id IN %s", (ids,))
         self.db.commit()
+        return affected_rows
 
 
 dml_ops = DMLOps()

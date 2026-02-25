@@ -5,6 +5,7 @@ import dotenv
 import pyrootutils
 from injector import inject
 
+from src.core.constants import ModelProvider
 from src.utils.singleton import singleton
 
 
@@ -14,6 +15,9 @@ class EnvConfig:
     def __init__(self, env_file_path: str = f"{pyrootutils.find_root()}/.env"):
         # 加载环境变量文件
         dotenv.load_dotenv(dotenv_path=env_file_path, override=True)
+
+        self.WEB_HOST = os.getenv("WEB_HOST", "127.0.0.1")
+        self.WEB_PORT = os.getenv("WEB_PORT", 5432)
 
         # 数据库配置
         self.POSTGRES_DB_HOST = os.getenv("DB_HOST", "localhost")
@@ -46,7 +50,7 @@ class EnvConfig:
         self.DASHSCOPE_EMBEDDING_MODEL = os.getenv("DASHSCOPE_EMBEDDING_MODEL", "text-embedding-v4")
 
         # 模型提供商（包含向量和记忆相关识别模型）
-        self.MODEL_PROVIDER = os.getenv("IM_MODEL_PROVIDER", "dashscope")
+        self.MODEL_PROVIDER = os.getenv("IM_MODEL_PROVIDER", ModelProvider.DASHSCOPE)
 
         # 向量维度
         self.VEC_DIM = os.getenv("IM_VEC_DIM", 1536)

@@ -5,25 +5,27 @@ from src.imemory import IMemory
 from src.memory.models.memory_cfg import IMemoryConfig
 
 
-# @unittest.skip("Skipping TestIMemory")
-class TestIMemory(unittest.TestCase):
+# @unittest.skip
+class TestIMemoryAdd(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.mem = IMemory(user="test_user")
+        cls.user_id: str = "test_user"
+        cls.mem = IMemory(user_id=cls.user_id)
 
     @classmethod
     def tearDownClass(cls):
+        # asyncio.run(cls.mem.clear(user_id=cls.user_id))
         pass
 
-    # @unittest.skip("Skipping test_add_memory")
+    # @unittest.skip
     def test_add_memory(self):
         contents = [
-            # "今天我去了公园，看到很多美丽的花朵和快乐的人们。",
-            # "我家的猫是一只非常可爱的波斯猫，它有着长长的毛发和温柔的性格。",
-            # "最近我在学习编程，发现Python是一门非常有趣且强大的语言。",
-            # "昨天晚上我看了一部电影，剧情非常精彩，让我印象深刻。",
-            # "我喜欢旅行，探索不同的文化和风景，这让我感到非常充实。",
+            "今天我去了公园，看到很多美丽的花朵和快乐的人们。",
+            "我家的猫是一只非常可爱的波斯猫，它有着长长的毛发和温柔的性格。",
+            "最近我在学习编程，发现Python是一门非常有趣且强大的语言。",
+            "昨天晚上我看了一部电影，剧情非常精彩，让我印象深刻。",
+            "我喜欢旅行，探索不同的文化和风景，这让我感到非常充实。",
         ]
 
         async def batch_add_memories():
@@ -43,6 +45,7 @@ class TestIMemory(unittest.TestCase):
         for r in all_results:
             print(r)
 
+    @unittest.skip
     def test_add_long_memory(self):
         content = """
 带着项目推进的期许，奔赴北京与项目组汇合，一场深耕细节、凝聚共识的线下对接，就此展开。不同于线上的远程沟通，面对面的交流更能碰撞出思维的火花，也更能精准捕捉每一个需求的核心，高效破解前期推进中的疑点与难点。
@@ -58,37 +61,6 @@ class TestIMemory(unittest.TestCase):
                                        meta={"source": "unit_test"},
                                        tags=["test", "memory"]))
         print("Memory added:", res)
-
-    # @unittest.skip("Skipping test_search_memory")
-    def test_search_memory(self):
-        query = "我去哪里开会了？"
-        results = asyncio.run(self.mem.search(query, limit=5))
-        print("Search results:", results)
-
-    def test_get_memory(self):
-        memory_id = "507ecc2a-8f07-458f-a178-3e3e886a27db"
-        result = asyncio.run(self.mem.get(memory_id))
-        print("Get memory result:", result)
-
-    def test_delete_memory(self):
-        memory_ids = [
-            "cead287a-26cb-4f41-a4b1-fd7df776cf2c",
-            "12b63067-28c8-4d34-98b3-67776bf9edec",
-            "004c599d-aef8-4d57-83ba-8e839d4b0eac",
-            "51f6778e-e32d-42d0-bd5e-0115a1cd1fa4",
-            "ac972727-e95d-4696-9ca4-eac03a1e552b",
-        ]
-        for memory_id in memory_ids:
-            asyncio.run(self.mem.delete(memory_id))
-            print(f"Memory {memory_id} deleted.")
-
-    def test_clear_memory(self):
-        asyncio.run(self.mem.clear(user_id="test_user"))
-        print("All memories for the user cleared.")
-
-    def test_history_memory(self):
-        response = self.mem.history(user_id="test_user", current=1, size=2)
-        print("Memory history:", response.model_dump())
 
 
 if __name__ == '__main__':

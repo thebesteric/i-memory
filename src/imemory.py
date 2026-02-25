@@ -19,8 +19,8 @@ db = get_db()
 @singleton
 class IMemory:
 
-    def __init__(self, user: str = None):
-        self.default_user = user
+    def __init__(self, user_id: str = None):
+        self.default_user = user_id
         self.dml_ops = dml_ops
         db.connect()
         self._openai = OpenAIRegistrar(self)
@@ -51,12 +51,12 @@ class IMemory:
             res["id"] = res["root_memory_id"]
         return res
 
-    async def search(self, query: str, user_id: str = None, limit: int = 10, filters: IMemoryFilters = None) -> List[Dict[str, Any]]:
+    async def search(self, query: str, *, user_id: str = None, limit: int = 10, filters: IMemoryFilters = None) -> List[Dict[str, Any]]:
         """
         搜索记忆内容
         :param query: 查询文本
         :param user_id: 用户标识
-        :param limit: 返回结果数量限制
+        :param limit: 至少要返回的结果数量
         :param filters: 过滤条件
         :return: 搜索结果列表
         """
@@ -64,10 +64,12 @@ class IMemory:
         # 创建 MemoryFilters 对象
         if not filters:
             filters = IMemoryFilters(user_id=uid)
+        else:
+            filters.user_id = uid
 
         return await hsg_query(query, limit, filters)
 
-    async def get(self, memory_id: str):
+    async def get(self, memory_id: str) -> Dict[str, Any] | None:
         """
         获取记忆内容
         :param memory_id: 记忆标识
@@ -75,15 +77,15 @@ class IMemory:
         """
         return self.dml_ops.get_mem(memory_id)
 
-    async def delete(self, memory_id: str):
+    async def delete(self, memory_id: str) -> int:
         """
         删除记忆内容
         :param memory_id: 记忆标识
         :return: 删除结果
         """
-        self.dml_ops.del_mem(memory_id)
+        return self.dml_ops.del_mem(memory_id)
 
-    async def clear(self, user_id: str = None):
+    async def clear(self, user_id: str = None) -> int:
         """
         清除用户所有记忆内容
         :param user_id: 用户标识
@@ -92,9 +94,9 @@ class IMemory:
         uid = user_id or self.default_user
         if not uid:
             raise ValueError("user_id is required for clearing all memories.")
-        self.dml_ops.del_mem_by_user(uid)
+        return self.dml_ops.del_mem_by_user(uid)
 
-    def history(self, user_id: str = None, current: int = 1, size: int = 10) -> PagingResponse:
+    async def history(self, *, user_id: str = None, current: int = 1, size: int = 10) -> PagingResponse:
         """
         获取用户记忆历史
         :param user_id: 用户标识
