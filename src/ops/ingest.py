@@ -164,7 +164,7 @@ async def mk_root(txt: str, cfg: IMemoryConfig, ex_dict: Dict, sec_count: int, m
             salience=1.0,
             decay_lambda=0.1,
             segment=1,
-            user_id=user_id or "anonymous",
+            user_id=user_id,
             feedback_score=0
         )
         return mid

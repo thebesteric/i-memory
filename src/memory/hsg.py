@@ -185,7 +185,7 @@ async def add_hsg_memory(content: str, tags: List[str] = None, metadata: Any = N
         mid = str(uuid.uuid4())
         dml_ops.ins_mem(
             id=mid,
-            user_id=user_id or "anonymous",
+            user_id=user_id,
             segment=cur_seg,
             content=essence,
             primary_sector=cls_ret.primary,
@@ -208,7 +208,7 @@ async def add_hsg_memory(content: str, tags: List[str] = None, metadata: Any = N
         emb_res = await embed_multi_sector(mid, content, all_secs, chunks if use_chunks else None)
         for r in emb_res:
             # 存储每个 sector 的向量到向量库
-            await vector_store.store_vector(mid, r["sector"], r["vector"], r["dim"], user_id or "anonymous")
+            await vector_store.store_vector(mid, r["sector"], r["vector"], r["dim"], user_id)
 
         # 计算所有 sector 的均值向量
         mean_vec = calc_mean_vec(emb_res, all_secs)

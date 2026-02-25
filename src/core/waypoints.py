@@ -39,7 +39,7 @@ class Waypoints:
         """
         now = datetime.datetime.now()
         self.db.execute("INSERT INTO waypoints(src_id, dst_id, user_id, weight, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s)",
-                        (rid, cid, user_id or "anonymous", 1.0, now, now))
+                        (rid, cid, user_id, 1.0, now, now))
         self.db.commit()
 
     async def expand_via_waypoints(self, ids: List[str], max_expansion: int = 10) -> List[Expansion]:
@@ -83,7 +83,7 @@ class Waypoints:
         # 返回扩展结果
         return expansion
 
-    async def create_single_waypoint(self, new_id: str, new_mean: List[float], dt: datetime.datetime, user_id: str = "anonymous"):
+    async def create_single_waypoint(self, new_id: str, new_mean: List[float], dt: datetime.datetime, user_id: str):
         """
         用于为新记忆（new_id）在所有记忆中寻找最相似的“均值向量”，并在数据库中建立 waypoint（路标）关联
         该函数会遍历当前用户的所有记忆，计算每个记忆的均值向量与新记忆均值向量的余弦相似度，
@@ -94,7 +94,7 @@ class Waypoints:
         @param new_id: 新记忆的唯一标识符
         @param new_mean: 新记忆的均值向量（浮点数列表）
         @param ts: 当前时间戳（毫秒）
-        @param user_id: 用户标识符（可选，默认为 "anonymous"）
+        @param user_id: 用户标识符
         """
         # 获取当前用户的所有记忆
         memories = dml_ops.all_mem_by_user(user_id, 1000, 0) if user_id else dml_ops.all_mem(1000, 0)

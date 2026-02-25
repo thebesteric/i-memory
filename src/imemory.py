@@ -20,7 +20,7 @@ db = get_db()
 class IMemory:
 
     def __init__(self, user_id: str = None):
-        self.default_user = user_id
+        self.default_user = user_id or "anonymous"
         self.dml_ops = dml_ops
         db.connect()
         self._openai = OpenAIRegistrar(self)
