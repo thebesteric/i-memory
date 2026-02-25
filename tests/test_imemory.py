@@ -87,8 +87,8 @@ class TestIMemory(unittest.TestCase):
         print("All memories for the user cleared.")
 
     def test_history_memory(self):
-        history = self.mem.history(user_id="test_user", current=1, size=2)
-        print("Memory history:", history.model_dump())
+        response = self.mem.history(user_id="test_user", current=1, size=2)
+        print("Memory history:", response.model_dump())
 
 
 if __name__ == '__main__':

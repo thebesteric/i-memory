@@ -1,7 +1,9 @@
-1. 修复提取用户本地记忆的 BUG
-> `src.memory.hsg.add_hsg_memory`
-
-2. 优化对中文语义的分词
-> `src.ops.extract.estimate_tokens`
-
-3. 优化对中文相似性的判断
+- [x] 修复提取用户本地记忆的 BUG
+- [x] 优化对中文语义的分词
+- [x] 优化对中文相似性的判断
+- [ ] P1: 增加时间的判断：如：昨天我说了什么，记忆系统只会提取昨天的记忆
+- [ ] P2: memories 增加 tenet_id 字段，作为记忆的区分
+- [ ] P1: 提供 FastAPI 接口能力
+- [ ] P2: 提供 MCP 能力
+- [ ] P3: 提供 LangChain Middleware 组件
+- [ ] P2: 提供视觉记忆能力（embedding + image desc）

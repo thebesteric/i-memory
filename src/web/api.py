@@ -3,14 +3,12 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 import time
-from .routes import memory, health, sources
-from ..core.config import EnvConfig
-from ..module import app_injector
-from ..utils.log_helper import LogHelper
+
+from src.core.config import env
+from src.web.routes import health, memory, sources
+from src.utils.log_helper import LogHelper
 
 logger = LogHelper.get_logger()
-
-env: EnvConfig = app_injector.get(EnvConfig)
 
 
 def create_app() -> FastAPI:
