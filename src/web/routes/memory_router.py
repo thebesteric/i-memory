@@ -1,7 +1,7 @@
 import json
 from typing import Dict, List, Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Query
 from fastapi.params import Path, Body
 
 from src.imemory import IMemory

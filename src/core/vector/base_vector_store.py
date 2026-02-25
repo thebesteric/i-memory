@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import List, Optional
 
 from src.core.config import env
-from src.memory.models.memory_filters import IMemoryFilters
+from src.memory.models.memory_models import IMemoryFilters
 from src.utils.log_helper import LogHelper
 
 logger = LogHelper.get_logger()

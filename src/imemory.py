@@ -5,8 +5,7 @@ from src.ai.client.openai_registrar import OpenAIRegistrar
 from src.core.db import get_db
 from src.core.dml_ops import dml_ops
 from src.memory.hsg import hsg_query
-from src.memory.models.memory_cfg import IMemoryConfig
-from src.memory.models.memory_filters import IMemoryFilters
+from src.memory.models.memory_models import IMemoryConfig, IMemoryFilters
 from src.ops.ingest import ingest_document
 from src.utils.log_helper import LogHelper
 from src.utils.paging import PagingResponse

@@ -6,7 +6,7 @@ from asyncpg import InvalidColumnReferenceError
 
 from src.core.config import env
 from src.core.vector.base_vector_store import BaseVectorStore, VectorRow, VectorSearch
-from src.memory.models.memory_filters import IMemoryFilters
+from src.memory.models.memory_models import IMemoryFilters
 from src.utils.log_helper import LogHelper
 from src.utils.singleton import singleton
 

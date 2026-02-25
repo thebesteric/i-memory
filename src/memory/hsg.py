@@ -19,7 +19,7 @@ from src.core.vector.base_vector_store import vector_store, VectorSearch
 from src.core.waypoints import Waypoints, Expansion
 from src.memory.decay import Decay
 from src.memory.embed import embed_multi_sector, calc_mean_vec, embed
-from src.memory.models.memory_filters import IMemoryFilters
+from src.memory.models.memory_models import IMemoryFilters
 from src.memory.user_summary import update_user_summary
 from src.ops.dynamic_memory import calculate_cross_sector_resonance_score, apply_retrieval_trace_reinforcement_to_memory, \
     propagate_associative_reinforcement_to_linked_nodes
