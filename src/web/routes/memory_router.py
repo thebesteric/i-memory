@@ -5,6 +5,7 @@ from fastapi import APIRouter, Query
 from fastapi.params import Path, Body
 
 from src.imemory import IMemory
+from src.memory.models.memory_models import IMemoryItemInfo, IMemoryUserIdentity
 from src.utils.paging import PagingResponse
 from src.web.models.web_models import AddMemoryRequest, SearchMemoryRequest, HistoryMemoryRequest
 from src.utils.common_result import R
@@ -24,7 +25,7 @@ async def add(req: AddMemoryRequest):
     meta = req.metadata or {}
     if req.tags:
         meta["tags"] = req.tags
-    result = await mem.add(req.content, user_id=req.user_id, meta=meta)
+    result = await mem.add(req.content, user_identity=req.user_identity, meta=meta)
     return R.success(data=result)
 
 
@@ -35,7 +36,7 @@ async def search(req: SearchMemoryRequest):
     :param req: 搜索记忆请求模型
     :return: 搜索结果列表
     """
-    results = await mem.search(query=req.query, user_id=req.user_id, limit=req.limit, filters=req.filters)
+    results: List[IMemoryItemInfo] = await mem.search(query=req.query, limit=req.limit, filters=req.filters)
     return R.success(data=results)
 
 
@@ -46,7 +47,7 @@ async def history(req: HistoryMemoryRequest):
     :param req: 历史记忆请求模型
     :return: 历史记忆列表
     """
-    results: PagingResponse = await mem.history(user_id=req.user_id, current=req.current, size=req.size)
+    results: PagingResponse = await mem.history(user_identity=req.user_identity, current=req.current, size=req.size)
     results.records = _handle_memories(results.records if results.records else [])
     return R.success(data=results)
 
@@ -76,14 +77,14 @@ async def delete_memory(memory_ids: list[str] = Body(..., description="记忆 ID
     return R.success(data={"affected_rows": affected_rows})
 
 
-@router.get("/clear", summary="清空用户的所有记忆内容")
-async def clear_memory(user_id: str = Query(..., description="用户 ID")):
+@router.post("/clear", summary="清空用户的所有记忆内容")
+async def clear_memory(user_identity: IMemoryUserIdentity):
     """
     清空用户的所有记忆内容
-    :param user_id: 用户 ID
+    :param user_identity: 用户身份
     :return: 删除结果
     """
-    affected_rows = await mem.clear(user_id=user_id)
+    affected_rows = await mem.clear(user_identity=user_identity)
     return R.success(data={"affected_rows": affected_rows})
 
 

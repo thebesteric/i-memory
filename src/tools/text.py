@@ -6,6 +6,7 @@ warnings.filterwarnings("ignore", category=SyntaxWarning, module="jieba")
 import re
 from typing import List, Set, Dict
 import jieba
+import jieba.posseg as pseg
 
 # 定义同义词组
 SYN_GRPS = [
@@ -45,6 +46,19 @@ STEM_RULES = [
 EN_PAT = re.compile(r"[a-zA-Z0-9]+")
 ZH_PAT = re.compile(r"[\u4e00-\u9fff]+")
 
+STOP_FLAGS = {
+    # 核心虚词
+    "p", "c", "u", "uj", "um", "uv", "uz",
+    # 副词/语气词/状态词/符号
+    "d", "dg", "df", "y", "z", "x", "xx",
+    # 无实义动词
+    "v", "vd", "vshi", "vyou", "vf", "vx", "vg", "vi", "vl",
+    # 无实义形容词
+    "ag", "al",
+    # 代词
+    "rr", "rz", "rt"
+}
+
 
 def tokenize(text: str) -> List[str]:
     tokens = []
@@ -61,6 +75,24 @@ def tokenize(text: str) -> List[str]:
             tokens.append(seg)
         # 其他（符号、混合等）
         # 可根据需要处理
+    return tokens
+
+
+def _use_pseg(text: str) -> bool:
+    return ZH_PAT.search(text) is not None
+
+
+def _tokens_with_pseg(text: str) -> List[str]:
+    tokens = []
+    for word, flag in pseg.cut(text):
+        word = word.strip()
+        if not word:
+            continue
+        if EN_PAT.fullmatch(word):
+            tokens.append(word.lower())
+            continue
+        if (ZH_PAT.fullmatch(word) and flag not in STOP_FLAGS) or len(word) > 1:
+            tokens.append(word)
     return tokens
 
 
@@ -97,10 +129,15 @@ def canonical_tokens_from_text(text: str) -> List[str]:
     :return:
     """
     res = []
-    for tok in tokenize(text):
+    tokens = _tokens_with_pseg(text) if _use_pseg(text) else tokenize(text)
+    for tok in tokens:
         can = canonicalize_token(tok)
-        if can and len(can) > 1:
-            res.append(can)
+        if not can:
+            continue
+        # 英文单字仍过滤，中文保留单字
+        if EN_PAT.fullmatch(can) and len(can) <= 1:
+            continue
+        res.append(can)
     return res
 
 
@@ -110,9 +147,9 @@ def synonyms_for(tok: str) -> Set[str]:
 
 
 def build_search_doc(text: str) -> str:
-    can = canonical_tokens_from_text(text)
+    cans = canonical_tokens_from_text(text)
     exp = set()
-    for tok in can:
+    for tok in cans:
         exp.add(tok)
         syns = SLOOK.get(tok)
         if syns:
@@ -124,7 +161,7 @@ def build_fts_query(text: str) -> str:
     can = canonical_tokens_from_text(text)
     if not can:
         return ""
-    uniq = sorted(list(set(t for t in can if len(t) > 1)))
+    uniq = sorted(list(set(t for t in can if not (EN_PAT.fullmatch(t) and len(t) <= 1))))
     return " OR ".join(f'"{t}"' for t in uniq)
 
 

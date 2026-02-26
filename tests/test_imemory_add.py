@@ -1,8 +1,9 @@
 import asyncio
 import unittest
+from typing import Any
 
 from src.imemory import IMemory
-from src.memory.models.memory_cfg import IMemoryConfig
+from src.memory.models.memory_models import IMemoryConfig, IMemoryUserIdentity
 
 
 # @unittest.skip
@@ -10,12 +11,18 @@ class TestIMemoryAdd(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.user_id: str = "test_user"
-        cls.mem = IMemory(user_id=cls.user_id)
+        cls.user_identity: IMemoryUserIdentity = IMemoryUserIdentity(
+            user_id="test_user",
+            tenant_id="test_tenant",
+            project_id="test_project"
+        )
+        cls.mem = IMemory(user_identity=cls.user_identity)
+        cls.meta = {"source": "unit_test"}
+        cls.tags = ["test", "memory"]
 
     @classmethod
     def tearDownClass(cls):
-        # asyncio.run(cls.mem.clear(user_id=cls.user_id))
+        # asyncio.run(cls.mem.clear(user_identity=cls.user_identity))
         pass
 
     # @unittest.skip
@@ -34,8 +41,8 @@ class TestIMemoryAdd(unittest.TestCase):
                 res = await self.mem.add(
                     content,
                     cfg=IMemoryConfig(force_root=False),
-                    meta={"source": "unit_test"},
-                    tags=["test", "memory"]
+                    meta=self.meta,
+                    tags=self.tags
                 )
                 results.append(res)
                 print("Memory added:", res)
@@ -58,8 +65,8 @@ class TestIMemoryAdd(unittest.TestCase):
         """
         res = asyncio.run(self.mem.add(content,
                                        cfg=IMemoryConfig(force_root=False),
-                                       meta={"source": "unit_test"},
-                                       tags=["test", "memory"]))
+                                       meta=self.meta,
+                                       tags=self.tags))
         print("Memory added:", res)
 
 

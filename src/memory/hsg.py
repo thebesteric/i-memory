@@ -17,9 +17,10 @@ from src.core.score import compute_tag_match_score, compute_hybrid_score
 from src.core.sector_classify import SECTOR_CONFIGS, SectorClassifier, ClassifyResult
 from src.core.vector.base_vector_store import vector_store, VectorSearch
 from src.core.waypoints import Waypoints, Expansion
+from src.memory import user_ops
 from src.memory.decay import Decay
 from src.memory.embed import embed_multi_sector, calc_mean_vec, embed
-from src.memory.models.memory_models import IMemoryFilters
+from src.memory.models.memory_models import IMemoryFilters, IMemoryItemDebugInfo, IMemoryItemInfo, IMemoryUserIdentity, IMemoryUser
 from src.memory.user_summary import update_user_summary
 from src.ops.dynamic_memory import calculate_cross_sector_resonance_score, apply_retrieval_trace_reinforcement_to_memory, \
     propagate_associative_reinforcement_to_linked_nodes
@@ -72,13 +73,13 @@ def compress_vec_for_storage(vec: List[float], target_dim: int) -> List[float]:
     return comp
 
 
-async def add_hsg_memory(content: str, tags: List[str] = None, metadata: Any = None, user_id: Optional[str] = None) -> Dict[str, Any]:
+async def add_hsg_memory(content: str, tags: List[str] = None, metadata: Any = None, user_identity: IMemoryUserIdentity = None) -> Dict[str, Any]:
     """
     添加一条 Hierarchical Semantic Graph 记忆（数据库 + 向量存储、按扇区（sectors）分层组织记忆）
     :param content: 记忆内容
     :param tags: 标签
     :param metadata: 元数据
-    :param user_id: 用户标识符
+    :param user_identity: 用户身份
     :return:
     """
     # 获取嵌入模型
@@ -86,16 +87,41 @@ async def add_hsg_memory(content: str, tags: List[str] = None, metadata: Any = N
     # 生成内容的嵌入向量
     vec = await embed_model.embed(content)
 
+    # 构建 SQL 查询，查询该用户的记忆，包含租户和项目过滤（如果提供了租户和项目信息），并且只查询有向量的记忆
+    sql_parts = [
+        """
+        SELECT *
+        FROM memories t
+                 LEFT JOIN vectors v on t.id = v.id
+        WHERE t.user_id = %s
+          AND v.v IS NOT NULL
+        """,
+    ]
+
+    user_id = user_identity.user_id
+    tenant_id = user_identity.tenant_id
+    project_id = user_identity.project_id
+
+    # 查询参数列表，初始包含 user_id
+    params = [user_id]
+
+    # 判断租户是否存在
+    if tenant_id:
+        sql_parts.append("AND t.tenant_id = %s")
+        params.append(tenant_id)
+
+    # 判断项目是否存在
+    if project_id:
+        sql_parts.append("AND t.project_id = %s")
+        params.append(project_id)
+
+    # 拼接排序和分页
+    sql_parts.append("ORDER BY t.salience DESC, t.last_seen_at DESC LIMIT 100")
+    final_sql = " ".join(sql_parts)
+
     # 找到该用户最相似的已有记忆
-    user_memories = db.fetchall("""
-                                SELECT *
-                                FROM memories t
-                                         LEFT JOIN vectors v on t.id = v.id
-                                WHERE t.user_id = %s
-                                  AND v.v IS NOT NULL
-                                ORDER BY t.salience DESC, t.last_seen_at DESC LIMIT 100
-                                """,
-                                (user_id,))
+    user_memories = db.fetchall(final_sql, tuple(params))
+
     # 初始化最佳相似记忆（相似度，记忆记录）
     best_sim_mem_similarity = tuple()
     if user_memories:
@@ -139,14 +165,10 @@ async def add_hsg_memory(content: str, tags: List[str] = None, metadata: Any = N
 
     # 判断是否有用户
     if user_id:
-        user = db.fetchone("SELECT * FROM users WHERE user_id=%s", (user_id,))
+        user: IMemoryUser = await user_ops.get_user(user_identity=user_identity)
         # 没有该用户则创建一条新用户记录
         if not user:
-            db.execute(
-                "INSERT INTO users(user_id,summary,reflection_count,created_at,updated_at) VALUES (%s,%s,%s,%s,%s) ON CONFLICT (user_id) DO NOTHING",
-                (user_id, "User profile initializing...", 0, now, now)
-            )
-            db.commit()
+            await user_ops.add_user(user_identity=user_identity)
 
     # 对内容分段，判断是否需要分块存储
     chunks, total_token = chunk_text(content)
@@ -186,6 +208,8 @@ async def add_hsg_memory(content: str, tags: List[str] = None, metadata: Any = N
         dml_ops.ins_mem(
             id=mid,
             user_id=user_id,
+            tenant_id=tenant_id or None,
+            project_id=project_id or None,
             segment=cur_seg,
             content=essence,
             primary_sector=cls_ret.primary,
@@ -208,7 +232,7 @@ async def add_hsg_memory(content: str, tags: List[str] = None, metadata: Any = N
         emb_res = await embed_multi_sector(mid, content, all_secs, chunks if use_chunks else None)
         for r in emb_res:
             # 存储每个 sector 的向量到向量库
-            await vector_store.store_vector(mid, r["sector"], r["vector"], r["dim"], user_id)
+            await vector_store.store_vector(mid, r["sector"], r["vector"], r["dim"], user_identity)
 
         # 计算所有 sector 的均值向量
         mean_vec = calc_mean_vec(emb_res, all_secs)
@@ -225,10 +249,10 @@ async def add_hsg_memory(content: str, tags: List[str] = None, metadata: Any = N
             db.execute("UPDATE memories SET compressed_vec=%s WHERE id=%s", (vec_to_buf(comp), mid))
 
         # 建立 Waypoint 关联，为新记忆建立与其他记忆的关联
-        await waypoints.create_single_waypoint(mid, mean_vec, now, user_id)
+        await waypoints.create_single_waypoint(mid, mean_vec, now, user_identity)
         if user_id:
             # 更新用户摘要
-            await update_user_summary(user_id)
+            await update_user_summary(user_identity)
 
         # 返回新记忆的 id、内容、sector、分段数、salience 等信息
         return {
@@ -291,7 +315,7 @@ async def calc_multi_vec_fusion_score(mid: str, qe: Dict[str, List[float]], w: D
 CACHE = MemoryCache(maxsize=CACHE_SIZE, default_ttl=CACHE_TTL, time_unit=CACHE_TTL_TIME_UNIT)
 
 
-async def hsg_query(query: str, top_k: int = 10, filters: IMemoryFilters = None) -> List[Dict[str, Any]]:
+async def hsg_query(query: str, top_k: int = 10, filters: IMemoryFilters = None) -> List[IMemoryItemInfo]:
     """
     基于混合评分机制（内容相似度、关键词重叠、路标关联、时间衰减等）进行记忆检索
     @param query: 查询文本
@@ -301,6 +325,7 @@ async def hsg_query(query: str, top_k: int = 10, filters: IMemoryFilters = None)
     """
     start_q = time.time()
     decay.inc_q()
+    filters = filters or IMemoryFilters(user_identity=IMemoryUserIdentity())
     try:
         # 检查 60 秒内的查询缓存，命中则直接返回
         cache_key = f"{query}:{top_k}:{filters.model_dump_json() if filters else '{}'}"
@@ -369,7 +394,7 @@ async def hsg_query(query: str, top_k: int = 10, filters: IMemoryFilters = None)
         memories = dml_ops.find_mem(ids)
 
         # 提前计算每个候选的关键词重叠分数
-        res_list = []
+        res_list: List[IMemoryItemInfo] = []
         kw_scores = {}
         for mem in memories:
             overlap = compute_keyword_overlap(query_tokens, mem["content"])
@@ -380,10 +405,17 @@ async def hsg_query(query: str, top_k: int = 10, filters: IMemoryFilters = None)
             # 记忆 ID
             mid = mem["id"]
             # 显著性 < 过滤阈值，跳过
-            if filters and filters.min_salience and mem["salience"] < filters.min_salience:
+            if filters.min_salience and mem["salience"] < filters.min_salience:
                 continue
-            # 用户 ID 不匹配，跳过
-            if filters and filters.user_id and mem["user_id"] != filters.user_id:
+
+            # 用户信息不匹配，跳过
+            user_identity = filters.user_identity
+            user_id = user_identity.user_id
+            tenant_id = user_identity.tenant_id
+            project_id = user_identity.project_id
+            # 如果记忆的用户 ID 与查询用户 ID 不匹配，则跳过该记忆
+            # 或者（如果提供了租户 ID）记忆的租户 ID 与查询租户 ID 不匹配，或者（如果提供了项目 ID）记忆的项目 ID 与查询项目 ID 不匹配，则跳过该记忆
+            if mem["user_id"] != user_id or (tenant_id and mem["tenant_id"] != tenant_id) or (project_id and mem["project_id"] != project_id):
                 continue
 
             # 多向量融合相似度
@@ -409,7 +441,7 @@ async def hsg_query(query: str, top_k: int = 10, filters: IMemoryFilters = None)
                 penalty = SECTOR_RELATIONSHIPS.get(query_sec, {}).get(mem_sec, 0.3)
 
             # 相似度惩罚调整
-            adjust = best_sim * penalty
+            sim_adjust = best_sim * penalty
             # 扩展的记忆项
             expansion_mem = next((e for e in expansion if e.id == mid), None)
             # waypoint 权重
@@ -420,6 +452,7 @@ async def hsg_query(query: str, top_k: int = 10, filters: IMemoryFilters = None)
             now = datetime.datetime.now()
             time_diff = now - last_seen_at
             days = time_diff.total_seconds() / 86400.0
+
             # 计算记忆衰减后的显著性（艾宾浩斯遗忘曲线）
             salience = decay.calc_decay(mem["primary_sector"], mem["salience"], days)
             # 标准化文本内容 token 集合
@@ -431,57 +464,57 @@ async def hsg_query(query: str, top_k: int = 10, filters: IMemoryFilters = None)
             # 标签匹配得分
             tag_match_score = await compute_tag_match_score(mem, query_tokens)
 
-            # 组合权重: 相似度(35%) × 扇区惩罚，关键词重叠(20%)，Waypoint权重(15%)，时效性(10%)，标签匹配(20%)
-            final_score = compute_hybrid_score(sim=adjust,
+            # 组合权重最终得分: 相似度(35%) × 扇区惩罚，关键词重叠(20%)，Waypoint权重(15%)，时效性(10%)，标签匹配(20%)
+            final_score = compute_hybrid_score(sim=sim_adjust,
                                                tok_ov=token_overlap,
                                                wp_wt=waypoint_weight,
                                                rec_sc=rec_sc,
                                                kw_score=kw_scores.get(mid, 0),
                                                tag_match=tag_match_score)
             # 构建结果项
-            item = {
-                "id": mid,
-                "content": mem["content"],
-                "score": final_score,
-                "primary_sector": mem["primary_sector"],
-                "path": expansion_mem.path if expansion_mem else [mid],
-                "salience": salience,
-                "last_seen_at": mem["last_seen_at"],
-                "tags": json.loads(mem["tags"] or "[]"),
-                "metadata": json.loads(mem["meta"] or "{}")
-            }
+            item = IMemoryItemInfo(
+                id=mid,
+                content=mem["content"],
+                score=final_score,
+                primary_sector=mem["primary_sector"],
+                path=expansion_mem.path if expansion_mem else [mid],
+                salience=salience,
+                last_seen_at=mem["last_seen_at"],
+                tags=json.loads(mem["tags"] or "[]"),
+                metadata=json.loads(mem["meta"] or {})
+            )
             # 调试信息
             if filters and filters.debug:
-                item["_debug"] = {
-                    "sim_adj": adjust,
-                    "tok_ov": token_overlap,
-                    "recency": rec_sc,
-                    "waypoint": waypoint_weight,
-                    "tag": tag_match_score,
-                    "penalty": penalty
-                }
+                item.debug = IMemoryItemDebugInfo(
+                    sim_adjust=sim_adjust,
+                    token_overlap=token_overlap,
+                    recency_score=rec_sc,
+                    waypoint_weight=waypoint_weight,
+                    tag_match_score=tag_match_score,
+                    penalty_score=penalty
+                )
             # 加入结果列表
             res_list.append(item)
 
         # 按分数降序
-        res_list.sort(key=lambda x: x["score"], reverse=True)
+        res_list.sort(key=lambda x: x.score, reverse=True)
         # 取 effective_k 条记录
-        effective_k_list = res_list[:effective_k]
+        effective_k_list: List[IMemoryItemInfo] = res_list[:effective_k]
 
         # 命中记忆强化
         for _item in effective_k_list:
             # 应用检索迹强化：提升成功检索到的记忆节点的显著性
-            reinforcement_sal = await apply_retrieval_trace_reinforcement_to_memory(_item["id"], _item["salience"])
+            reinforcement_sal = await apply_retrieval_trace_reinforcement_to_memory(_item.id, _item.salience)
             now = datetime.datetime.now()
-            db.execute("UPDATE memories SET salience=%s, last_seen_at = %s WHERE id = %s", (reinforcement_sal, now, _item["id"]))
+            db.execute("UPDATE memories SET salience=%s, last_seen_at = %s WHERE id = %s", (reinforcement_sal, now, _item.id))
 
             # 有图遍历路径时
-            if len(_item["path"]) > 1:
-                wps_rows = db.fetchall("SELECT dst_id, weight FROM waypoints WHERE src_id=%s", (_item["id"],))
+            if len(_item.path) > 1:
+                wps_rows = db.fetchall("SELECT dst_id, weight FROM waypoints WHERE src_id=%s", (_item.id,))
                 wps = [{"target_id": row["dst_id"], "weight": row["weight"]} for row in wps_rows]
 
                 # 向关联节点传播（得到关联节点新的显著性）
-                pru = await propagate_associative_reinforcement_to_linked_nodes(_item["id"], reinforcement_sal, wps)
+                pru = await propagate_associative_reinforcement_to_linked_nodes(_item.id, reinforcement_sal, wps)
                 for u in pru:
                     # 获取关联记忆
                     linked_mem = dml_ops.get_mem(u["node_id"])
@@ -499,7 +532,7 @@ async def hsg_query(query: str, top_k: int = 10, filters: IMemoryFilters = None)
                         db.execute("UPDATE memories SET salience = %s, last_seen_at = %s WHERE id = %s", (new_sal, now, u["node_id"]))
 
             # 记录查询命中事件并触发动态更新
-            await decay.on_query_hit(_item["id"], _item["primary_sector"], lambda t: embed(t, _item["primary_sector"]))
+            await decay.on_query_hit(_item.id, _item.primary_sector, lambda t: embed(t, _item.primary_sector))
 
         # 存入查询缓存
         CACHE.set(cache_key, effective_k_list)

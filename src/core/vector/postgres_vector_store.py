@@ -6,7 +6,7 @@ from asyncpg import InvalidColumnReferenceError
 
 from src.core.config import env
 from src.core.vector.base_vector_store import BaseVectorStore, VectorRow, VectorSearch
-from src.memory.models.memory_models import IMemoryFilters
+from src.memory.models.memory_models import IMemoryFilters, IMemoryUserIdentity
 from src.utils.log_helper import LogHelper
 from src.utils.singleton import singleton
 
@@ -17,7 +17,7 @@ logger = LogHelper.get_logger()
 class PostgresVectorStore(BaseVectorStore):
     def __init__(self, dsn: str, vector_table_name: str = "vectors"):
         self.dsn = dsn
-        self.vector_table_name = vector_table_name
+        self.vector_table_name = vector_table_name or "vectors"
         self.pool = None
 
     async def _get_pool(self):
@@ -39,6 +39,8 @@ class PostgresVectorStore(BaseVectorStore):
                         id TEXT,
                         sector TEXT NOT NULL,
                         user_id TEXT,
+                        tenant_id TEXT,
+                        project_id TEXT,
                         v vector({env.VEC_DIM}),
                         dim INTEGER,
                         created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -55,36 +57,40 @@ class PostgresVectorStore(BaseVectorStore):
 
         return self.pool
 
-    async def store_vector(self, id: str, sector: str, vector: List[float], dim: int, user_id: Optional[str] = None):
+    async def store_vector(self, id: str, sector: str, vector: List[float], dim: int, user_identity: IMemoryUserIdentity = None):
         """
         存储向量到 PostgreSQL 数据库
         :param id: 唯一标识
         :param sector: 扇区
         :param vector: 向量
         :param dim: 维度
-        :param user_id: 用户标识
+        :param user_identity: 用户身份
         :return:
         """
         pool = await self._get_pool()
         vec_str = str(vector)
 
+        user_id = user_identity.user_id if user_identity else None
+        tenant_id = user_identity.tenant_id if user_identity else None
+        project_id = user_identity.project_id if user_identity else None
+
         sql = f"""
-            INSERT INTO {self.vector_table_name} (id, sector, user_id, v, dim)
-            VALUES ($1, $2, $3, $4::vector, $5)
+            INSERT INTO {self.vector_table_name} (id, sector, user_id, tenant_id, project_id, v, dim)
+            VALUES ($1, $2, $3, $4, $5, $6::vector, $7)
             ON CONFLICT (id, sector) DO UPDATE SET
                 user_id = COALESCE(EXCLUDED.user_id, {self.vector_table_name}.user_id),
                 v = EXCLUDED.v
         """
         async with pool.acquire() as conn:
             try:
-                await conn.execute(sql, id, sector, user_id, vec_str, dim)
+                await conn.execute(sql, id, sector, user_id, tenant_id, project_id, vec_str, dim)
             except InvalidColumnReferenceError as ex:
                 # This typically means there's no unique constraint on `id` for ON CONFLICT to reference.
                 # Create a unique index on id and retry once. If there are duplicate ids in the table, creating
                 # the unique index will fail, and we should let that error surface.
                 logger.warning("ON CONFLICT failed because no unique constraint on id; creating unique index and retrying")
                 await conn.execute(f"CREATE UNIQUE INDEX IF NOT EXISTS {self.vector_table_name}_id_idx ON {self.vector_table_name} (id)")
-                await conn.execute(sql, id, sector, user_id, vec_str, dim)
+                await conn.execute(sql, id, sector, user_id, tenant_id, project_id, vec_str, dim)
 
     async def get_vectors_by_id(self, id: str) -> List[VectorRow]:
         """
@@ -146,10 +152,20 @@ class PostgresVectorStore(BaseVectorStore):
         args = [vec_str, sector]
         arg_idx = 3
 
-        if filters and filters.user_id:
-            filter_sql += f" AND user_id=${arg_idx}"
-            args.append(filters.user_id)
-            arg_idx += 1
+        if filters and filters.user_identity:
+            user_identity = filters.user_identity
+            if user_identity.user_id:
+                filter_sql += f" AND user_id=${arg_idx}"
+                args.append(user_identity.user_id)
+                arg_idx += 1
+            if user_identity.tenant_id:
+                filter_sql += f" AND tenant_id=${arg_idx}"
+                args.append(user_identity.tenant_id)
+                arg_idx += 1
+            if user_identity.project_id:
+                filter_sql += f" AND project_id=${arg_idx}"
+                args.append(user_identity.project_id)
+                arg_idx += 1
         sql = f"""
             SELECT id, 1 - (v <=> $1::vector) as similarity
             FROM {self.vector_table_name}

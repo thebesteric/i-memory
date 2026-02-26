@@ -1,6 +1,7 @@
 from typing import Optional, Any, Dict, List
 
 from src.core.db import DB, get_db
+from src.memory.models.memory_models import IMemoryUserIdentity
 
 from src.utils.singleton import singleton
 
@@ -15,10 +16,12 @@ class DMLOps:
 
     def ins_mem(self, **k) -> int:
         sql = """
-              INSERT INTO memories(id, user_id, segment, content, primary_sector, sectors, tags, meta, created_at, updated_at, last_seen_at, salience,
-                                   decay_lambda, version, mean_dim, mean_vec, compressed_vec, feedback_score)
-              VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+              INSERT INTO memories(id, user_id, tenant_id, project_id, segment, content, primary_sector, sectors, tags, meta, created_at, updated_at,
+                                   last_seen_at, salience, decay_lambda, version, mean_dim, mean_vec, compressed_vec, feedback_score)
+              VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
               ON CONFLICT (id) DO UPDATE SET user_id=EXCLUDED.user_id,
+                                             tenant_id=EXCLUDED.tenant_id,
+                                             project_id=EXCLUDED.project_id,
                                              segment=EXCLUDED.segment,
                                              content=EXCLUDED.content,
                                              primary_sector=EXCLUDED.primary_sector,
@@ -37,7 +40,7 @@ class DMLOps:
                                              feedback_score=EXCLUDED.feedback_score
               """
         vals = (
-            k.get("id"), k.get("user_id"), k.get("segment", 0), k.get("content"),
+            k.get("id"), k.get("user_id"), k.get("tenant_id"), k.get("project_id"), k.get("segment", 0), k.get("content"),
             k.get("primary_sector"), k.get("sectors"), k.get("tags"), k.get("meta"), k.get("created_at"), k.get("updated_at"),
             k.get("last_seen_at"), k.get("salience", 1.0), k.get("decay_lambda", 0.02), k.get("version", 1),
             k.get("mean_dim"), k.get("mean_vec"), k.get("compressed_vec"), k.get("feedback_score", 0)
@@ -69,11 +72,51 @@ class DMLOps:
         self.db.commit()
         return affected_rows
 
-    def all_mem_by_user(self, user_id: str, limit=10, offset=0) -> List[Dict[str, Any]]:
-        return self.db.fetchall("SELECT * FROM memories WHERE user_id = %s ORDER BY created_at DESC LIMIT %s OFFSET %s", (user_id, limit, offset))
+    def all_mem_by_user(self, user_identity: IMemoryUserIdentity, limit=10, offset=0) -> List[Dict[str, Any]]:
+        user_id = user_identity.user_id
+        tenant_id = user_identity.tenant_id
+        project_id = user_identity.project_id
 
-    def count_mem_by_user(self, user_id: str) -> int:
-        row = self.db.fetchone("SELECT COUNT(*) as cnt FROM memories WHERE user_id = %s", (user_id,))
+        sql_parts = [
+            "SELECT * FROM memories WHERE user_id = %s"
+        ]
+        params = [user_id]
+
+        if tenant_id:
+            sql_parts.append("AND tenant_id = %s")
+            params.append(tenant_id)
+
+        if project_id:
+            sql_parts.append("AND project_id = %s")
+            params.append(project_id)
+
+        sql_parts.append("ORDER BY created_at DESC LIMIT %s OFFSET %s")
+        params.extend([str(limit), str(offset)])
+
+        final_sql = " ".join(sql_parts)
+        return self.db.fetchall(final_sql, tuple(params))
+
+    def count_mem_by_user(self, user_identity: IMemoryUserIdentity) -> int:
+        user_id = user_identity.user_id
+        tenant_id = user_identity.tenant_id
+        project_id = user_identity.project_id
+
+        sql_parts = [
+            "SELECT COUNT(*) as cnt FROM memories WHERE user_id = %s"
+        ]
+        params = [user_id]
+
+        if tenant_id:
+            sql_parts.append("AND tenant_id = %s")
+            params.append(tenant_id)
+
+        if project_id:
+            sql_parts.append("AND project_id = %s")
+            params.append(project_id)
+
+        final_sql = " ".join(sql_parts)
+        row = self.db.fetchone(final_sql, tuple(params))
+
         return row["cnt"] if row else 0
 
     def get_waypoints_by_src(self, src_id: str) -> List[Dict[str, Any]]:
@@ -87,8 +130,26 @@ class DMLOps:
         self.db.commit()
         return affected_rows
 
-    def del_mem_by_user(self, uid: str) -> int:
-        memory_ids = self.db.fetchall("SELECT id FROM memories WHERE user_id = %s", (uid,))
+    def del_mem_by_user(self, user_identity: IMemoryUserIdentity) -> int:
+        user_id = user_identity.user_id
+        tenant_id = user_identity.tenant_id
+        project_id = user_identity.project_id
+
+        sql_parts = [
+            "SELECT id FROM memories WHERE user_id = %s"
+        ]
+        params: List[str] = [user_id]
+
+        if tenant_id:
+            sql_parts.append("AND tenant_id = %s")
+            params.append(tenant_id)
+
+        if project_id:
+            sql_parts.append("AND project_id = %s")
+            params.append(project_id)
+
+        final_sql = " ".join(sql_parts)
+        memory_ids = self.db.fetchall(final_sql, tuple(params))
         if not memory_ids:
             return 0
         ids = tuple(row["id"] for row in memory_ids)

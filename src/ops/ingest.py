@@ -9,7 +9,7 @@ from src.core.db import get_db
 from src.core.dml_ops import dml_ops
 from src.core.waypoints import Waypoints
 from src.memory.hsg import add_hsg_memory
-from src.memory.models.memory_models import IMemoryConfig
+from src.memory.models.memory_models import IMemoryConfig, IMemoryUserIdentity
 from src.ops.extract import extract_text
 from src.utils.log_helper import LogHelper
 
@@ -116,7 +116,7 @@ def split_text(t: str, sz: int) -> list[str]:
     return secs
 
 
-async def mk_root(txt: str, cfg: IMemoryConfig, ex_dict: Dict, sec_count: int, meta: Dict[str, Any] = None, user_id: str = None) -> str:
+async def mk_root(txt: str, cfg: IMemoryConfig, ex_dict: Dict, sec_count: int, meta: Dict[str, Any] = None, user_identity: IMemoryUserIdentity = None) -> str:
     """
     创建根记忆
     说明：根记忆包含文档摘要和元数据，作为子记忆的父节点
@@ -128,7 +128,7 @@ async def mk_root(txt: str, cfg: IMemoryConfig, ex_dict: Dict, sec_count: int, m
     :param ex_dict: 扩展字典
     :param sec_count: 文本切分后的数量
     :param meta: 元数据
-    :param user_id: 用户 ID
+    :param user_identity: 用户身份
     :return:
     """
     metadata = ex_dict["metadata"]
@@ -151,9 +151,16 @@ async def mk_root(txt: str, cfg: IMemoryConfig, ex_dict: Dict, sec_count: int, m
             "ingested_at": now.strftime("%Y-%m-%d %H:%M:%S")
         })
 
+        user_id = user_identity.user_id
+        tenant_id = user_identity.tenant_id
+        project_id = user_identity.project_id
+
         dml_ops.ins_mem(
             id=mid,
             content=content,
+            user_id=user_id,
+            tenant_id=tenant_id or None,
+            project_id=project_id or None,
             primary_sector="reflective",
             sectors=json.dumps([]),
             tags=json.dumps([]),
@@ -164,7 +171,6 @@ async def mk_root(txt: str, cfg: IMemoryConfig, ex_dict: Dict, sec_count: int, m
             salience=1.0,
             decay_lambda=0.1,
             segment=1,
-            user_id=user_id,
             feedback_score=0
         )
         return mid
@@ -172,7 +178,7 @@ async def mk_root(txt: str, cfg: IMemoryConfig, ex_dict: Dict, sec_count: int, m
         raise e
 
 
-async def mk_child(sec_txt: str, idx: int, sec_size: int, root_id: str, meta: Dict = None, user_id: str = None) -> str:
+async def mk_child(sec_txt: str, idx: int, sec_size: int, root_id: str, meta: Dict = None, user_identity: IMemoryUserIdentity = None) -> str:
     """
     创建子记忆
     :param sec_txt: 部分内容
@@ -180,7 +186,7 @@ async def mk_child(sec_txt: str, idx: int, sec_size: int, root_id: str, meta: Di
     :param sec_size: 部门内容长度
     :param root_id: 根 ID
     :param meta: 元数据
-    :param user_id: 用户 ID
+    :param user_identity: 用户身份
     :return:
     """
     m = meta or {}
@@ -191,13 +197,13 @@ async def mk_child(sec_txt: str, idx: int, sec_size: int, root_id: str, meta: Di
         "total_sections": sec_size,
         "root_id": root_id
     })
-    r = await add_hsg_memory(sec_txt, [], m, user_id)
+    r = await add_hsg_memory(sec_txt, [], m, user_identity)
     return r["id"]
 
 
 async def ingest_document(*,
                           content_type: str,
-                          user_id: str = None,
+                          user_identity: IMemoryUserIdentity = None,
                           data: Any,
                           meta: Dict[str, Any] = None,
                           cfg: IMemoryConfig = None,
@@ -224,7 +230,7 @@ async def ingest_document(*,
         m.update(ex_meta)
         m.update({"ingestion_strategy": "single", "ingested_at": now.strftime("%Y-%m-%d %H:%M:%S")})
         # 将记忆写入数据库
-        r = await add_hsg_memory(text, tags, m, user_id)
+        r = await add_hsg_memory(text, tags, m, user_identity)
         return {
             "root_memory_id": r["id"],
             "child_count": 0,
@@ -242,12 +248,12 @@ async def ingest_document(*,
         # 创建 Waypoints 实例
         waypoints = Waypoints()
         # 创建根记忆 (传入实际分段数)
-        root_id = await mk_root(text, cfg, ex_dict, len(secs), meta, user_id)
+        root_id = await mk_root(text, cfg, ex_dict, len(secs), meta, user_identity)
         # 创建子记忆并建立链接
         for i, s in enumerate(secs):
-            child_id = await mk_child(s, i, len(secs), root_id, meta, user_id)
+            child_id = await mk_child(s, i, len(secs), root_id, meta, user_identity)
             child_ids.append(child_id)
-            await waypoints.link(root_id, child_id, i, user_id)
+            await waypoints.link(root_id, child_id, i, user_identity)
 
         return {
             "root_memory_id": root_id,

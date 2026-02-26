@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import List, Optional
 
 from src.core.config import env
-from src.memory.models.memory_models import IMemoryFilters
+from src.memory.models.memory_models import IMemoryFilters, IMemoryUserIdentity
 from src.utils.log_helper import LogHelper
 
 logger = LogHelper.get_logger()
@@ -26,14 +26,14 @@ class VectorSearch:
 
 class BaseVectorStore(ABC):
     @abstractmethod
-    async def store_vector(self, id: str, sector: str, vector: List[float], dim: int, user_id: Optional[str] = None):
+    async def store_vector(self, id: str, sector: str, vector: List[float], dim: int, user_identity: IMemoryUserIdentity = None):
         """
         存储向量
         :param id: 唯一标识
         :param sector: 扇区名称
         :param vector: 向量列表
         :param dim: 向量维度
-        :param user_id: 用户标识
+        :param user_identity: 用户身份
         :return:
         """
         pass

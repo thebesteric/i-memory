@@ -1,7 +1,8 @@
 import asyncio
-from typing import Any
+from typing import Any, List
 
 from src.ai.client.base_model_registrar import BaseModelRegistrar
+from src.memory.models.memory_models import IMemoryItemInfo
 from src.utils.log_helper import LogHelper
 
 logger = LogHelper.get_logger()
@@ -21,7 +22,7 @@ class OpenAIRegistrar(BaseModelRegistrar):
         # 获取历史消息
         messages = kwargs.get("messages", [])
         # 获取用户 ID
-        uid = user_id or self.mem.default_user
+        uid = user_id or self.mem.default_user_identity
         if messages and uid:
             try:
                 # 获取最后一条用户消息
@@ -31,10 +32,10 @@ class OpenAIRegistrar(BaseModelRegistrar):
                     query = last_msg.get("content")
                     if isinstance(query, str):
                         # 从记忆中检索相关内容
-                        context = await self.mem.search(query, user_id=uid, limit=3)
+                        context: List[IMemoryItemInfo] = await self.mem.search(query, user_id=uid, limit=3)
                         if context:
                             # 将上下文内容格式化
-                            ctx_text = "\n".join([f"- {m['content']}" for m in context])
+                            ctx_text = "\n".join([f"- {m.content}" for m in context])
                             instr = f"\n\nrelevant context from memory:\n{ctx_text}"
                             # 将上下文添加到系统消息中
                             if messages[0].get("role") == "system":
@@ -64,7 +65,7 @@ class OpenAIRegistrar(BaseModelRegistrar):
         # 获取历史消息
         messages = kwargs.get("messages", [])
         # 获取用户 ID
-        uid = user_id or self.mem.default_user
+        uid = user_id or self.mem.default_user_identity
         if messages and uid:
             try:
                 # 获取最后一条用户消息
@@ -85,7 +86,7 @@ class OpenAIRegistrar(BaseModelRegistrar):
                                 context = asyncio.run(self.mem.search(query, user_id=uid, limit=3))
                             if context:
                                 # 将上下文内容格式化
-                                ctx_text = "\n".join([f"- {m['content']}" for m in context])
+                                ctx_text = "\n".join([f"- {m.content}" for m in context])
                                 instr = f"\n\nrelevant context from memory:\n{ctx_text}"
                                 # 将上下文添加到系统消息中
                                 if messages[0].get("role") == "system":

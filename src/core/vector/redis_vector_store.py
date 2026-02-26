@@ -4,7 +4,7 @@ import numpy as np
 import redis
 
 from src.core.vector.base_vector_store import BaseVectorStore, VectorRow, VectorSearch
-from src.memory.models.memory_filters import IMemoryFilters
+from src.memory.models.memory_models import IMemoryFilters, IMemoryUserIdentity
 from src.utils.log_helper import LogHelper
 from src.utils.singleton import singleton
 
@@ -27,29 +27,42 @@ class RedisVectorStore(BaseVectorStore):
     def _key(self, id: str) -> str:
         return f"{self.prefix}{id}"
 
-    async def store_vector(self, id: str, sector: str, vector: List[float], dim: int, user_id: Optional[str] = None):
+    async def store_vector(self, id: str, sector: str, vector: List[float], dim: int, user_identity: IMemoryUserIdentity = None):
         """
         存储向量
         :param id: 唯一标识
         :param sector: 扇区名称
         :param vector: 向量列表
         :param dim: 向量维度
-        :param user_id: 用户标识
+        :param user_identity: 用户身份
         :return:
         """
         client = await self._get_client()
         key = self._key(id)
         vec_bytes = np.array(vector, dtype=np.float32).tobytes()
 
-        original_user_id = await client.hget(key, "user_id")
-        final_user_id = user_id if user_id is not None else (original_user_id or "")
+        user_id = user_identity.user_id if (user_identity and user_identity.user_id) else None
+        tenant_id = user_identity.tenant_id if (user_identity and user_identity.tenant_id) else None
+        project_id = user_identity.project_id if (user_identity and user_identity.project_id) else None
+
+        # 批量获取 Redis 中原有值
+        original_vals = await client.hmget(key, "user_id", "tenant_id", "project_id")
+        original_user_id = original_vals[0] or ""
+        original_tenant_id = original_vals[1] or ""
+        original_project_id = original_vals[2] or ""
+
+        final_user_id = user_id if user_id else original_user_id
+        final_tenant_id = tenant_id if tenant_id else original_tenant_id
+        final_project_id = project_id if project_id else original_project_id
 
         mapping = {
             "id": id,
             "sector": sector,
             "dim": dim,
             "v": vec_bytes,
-            "user_id": final_user_id
+            "user_id": final_user_id,
+            "tenant_id": final_tenant_id,
+            "project_id": final_project_id
         }
         await client.hset(key, mapping=mapping)
 
@@ -128,12 +141,19 @@ class RedisVectorStore(BaseVectorStore):
                     def decode(x):
                         return x.decode('utf-8') if isinstance(x, bytes) else str(x)
 
+                    # 过滤 sector
                     i_sector = decode(item.get(b'sector') or item.get('sector'))
-                    if i_sector != sector: continue
+                    if i_sector != sector:
+                        continue
 
-                    if filter and filters.user_id:
+                    # 过滤用户身份
+                    if filters and filters.user_identity:
+                        user_identity = filters.user_identity
                         i_uid = decode(item.get(b'user_id') or item.get('user_id'))
-                        if i_uid != filters.user_id: continue
+                        i_tid = decode(item.get(b'tenant_id') or item.get('tenant_id'))
+                        i_pid = decode(item.get(b'project_id') or item.get('project_id'))
+                        if i_uid != user_identity.user_id or i_tid != user_identity.tenant_id or i_pid != user_identity.project_id:
+                            continue
 
                     v_bytes = item.get(b'v') or item.get('v')
                     v = np.frombuffer(v_bytes, dtype=np.float32)
