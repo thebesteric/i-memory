@@ -90,4 +90,5 @@ def create_app() -> FastAPI:
 if __name__ == '__main__':
     import uvicorn
 
-    uvicorn.run("src.web.api:create_app", host=env.WEB_HOST, port=env.WEB_PORT, reload=True)
+    logger.info(f"Starting iMemory API server on {env.WEB_HOST}:{env.WEB_PORT} with debug={env.WEB_DEBUG}")
+    uvicorn.run("src.web.api:create_app", host=env.WEB_HOST, port=env.WEB_PORT, reload=env.WEB_DEBUG)

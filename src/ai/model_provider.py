@@ -46,7 +46,7 @@ def get_chat_model() -> BaseChatModel:
     if model_provider == ModelProvider.GEMINI.value:
         from langchain_google_genai import ChatGoogleGenerativeAI
         logger.info(f"Using Gemini embedding model: {env.GEMINI_CHAT_MODEL}")
-        return ChatGoogleGenerativeAI(model=env.GEMINI_CHAT_MODEL, api_key=env.GEMINI_API_KEY, base_url=env.GEMINI_BASE_URL)
+        return ChatGoogleGenerativeAI(model=env.GEMINI_MODEL, api_key=env.GEMINI_API_KEY, base_url=env.GEMINI_BASE_URL)
     if model_provider == ModelProvider.DASHSCOPE.value:
         logger.info(f"Using DashScope model: {env.DASHSCOPE_MODEL}")
         return ChatOpenAI(model=env.DASHSCOPE_MODEL, temperature=0.0, api_key=env.DASHSCOPE_API_KEY, base_url=env.DASHSCOPE_BASE_URL)
