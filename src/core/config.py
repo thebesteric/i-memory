@@ -18,7 +18,7 @@ class EnvConfig:
         # Web 服务配置
         self.WEB_HOST = os.getenv("WEB_HOST", "127.0.0.1")
         self.WEB_PORT = int(os.getenv("WEB_PORT", 5432))
-        self.WEB_DEBUG = os.getenv("WEB_DEBUG", "False").lower() in ("true", "1")
+        self.WEB_DEBUG = os.getenv("WEB_DEBUG", "false").lower() in ("true", "1")
 
         # 数据库配置
         self.POSTGRES_DB_HOST = os.getenv("DB_HOST", "localhost")
@@ -26,7 +26,7 @@ class EnvConfig:
         self.POSTGRES_DB_NAME = os.getenv("DB_NAME", "i-memory")
         self.POSTGRES_DB_USER = os.getenv("DB_USER", "admin")
         self.POSTGRES_DB_PASSWORD = os.getenv("DB_PASSWORD", "123456")
-        self.POSTGRES_DB_AUTOCOMMIT = os.getenv("DB_AUTOCOMMIT", True)
+        self.POSTGRES_DB_AUTOCOMMIT = os.getenv("DB_AUTOCOMMIT", "true").lower() in ("true", "1")
         self.POSTGRES_DB_URL = f"postgresql://{self.POSTGRES_DB_USER}:{self.POSTGRES_DB_PASSWORD}@{self.POSTGRES_DB_HOST}:{self.POSTGRES_DB_PORT}/{self.POSTGRES_DB_NAME}"
 
         # Redis 配置
@@ -67,7 +67,7 @@ class EnvConfig:
         # 摘要层数
         self.SUMMARY_LAYERS = int(os.getenv("IM_SUMMARY_LAYERS", 3))
         # 是否只使用摘要进行信息检索
-        self.USE_SUMMARY_ONLY = os.getenv("IM_USE_SUMMARY_ONLY", True).lower() in ("true", "1")
+        self.USE_SUMMARY_ONLY = os.getenv("IM_USE_SUMMARY_ONLY", "true").lower() in ("true", "1")
 
         # 扇区存储大小
         self.SECTOR_SIZE = int(os.getenv("IM_SECTOR_SIZE", 10000))
