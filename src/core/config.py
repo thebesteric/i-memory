@@ -68,7 +68,7 @@ class EnvConfig:
         self.SECTOR_SIZE = os.getenv("IM_SECTOR_SIZE", 10000)
 
         # 是否只使用摘要进行信息检索
-        self.USE_SUMMARY_ONLY = os.getenv("IM_USE_SUMMARY_ONLY", False)
+        self.USE_SUMMARY_ONLY = os.getenv("IM_USE_SUMMARY_ONLY", True)
 
         # 向量存储配置
         self.IM_VECTOR_STORE = os.getenv("IM_VECTOR_STORE", VectorStoreProvider.POSTGRES.value)

@@ -5,7 +5,8 @@ from sqlite3 import OperationalError
 from typing import Optional, Tuple, Dict, List, Any
 
 import psycopg2
-import psycopg2.extras
+from psycopg2.extras import DictCursor
+from psycopg2.pool import ThreadedConnectionPool
 import inspect
 import logging
 
@@ -31,7 +32,8 @@ def _get_caller_info(skip_modules: Tuple[str, ...] = ("src.core.db",)) -> str:
         fi = inspect.stack()[2]
         module = inspect.getmodule(fi.frame)
         return f"{module.__name__ if module else fi.filename}:{fi.function}:{fi.lineno}"
-    except Exception:
+    except Exception as e:
+        logger.warning(f"[DB] Failed to get caller_info: {e}")
         return "unknown:unknown:0"
 
 
@@ -41,34 +43,56 @@ class DB:
     def __init__(self, db_url: str = None, autocommit: bool = True):
         self.db_url = db_url if db_url else env.POSTGRES_DB_URL
         self.autocommit = autocommit if autocommit is not None else env.POSTGRES_DB_AUTOCOMMIT
-        self.conn: Optional[psycopg2.extensions.connection] = None
-        self.cur: Optional[psycopg2.extensions.cursor] = None
+        self._pool: Optional[ThreadedConnectionPool] = None
+        self._pool_min_conn = 1
+        self._pool_max_conn = 10
         self.conn_kwargs = {
             "sslmode": "disable"
         }
+
+    def get_pool(self) -> ThreadedConnectionPool:
+        if self._pool:
+            return self._pool
+        if not self.db_url.startswith("postgresql://"):
+            raise ValueError("Unsupported database URL schema: postgresql://. Only PostgreSQL is supported currently.")
+        # Ensure database exists before creating the pool
+        self._ensure_database_exists()
+        try:
+            self._pool = ThreadedConnectionPool(
+                self._pool_min_conn,
+                self._pool_max_conn,
+                self.db_url,
+                **self.conn_kwargs,
+            )
+            logger.info(
+                f"[DB] Connection pool created for [{env.POSTGRES_DB_NAME}] "
+                f"(min={self._pool_min_conn}, max={self._pool_max_conn})"
+            )
+            return self._pool
+        except psycopg2.OperationalError as e:
+            raise OperationalError(f"Connect to PostgreSQL failed: {str(e)}") from e
+
+    def get_conn(self) -> psycopg2.extensions.connection:
+        pool = self.get_pool()
+        conn = pool.getconn()
+        conn.autocommit = self.autocommit
+        return conn
+
+    def put_conn(self, conn: psycopg2.extensions.connection) -> None:
+        if self._pool and conn and not conn.closed:
+            self._pool.putconn(conn)
 
     def connect(self):
         """
         连接数据库
         :return:
         """
-        if self.conn:
-            return
-        if self.db_url.startswith("postgresql://"):
-            # 确保数据库存在，如果不存在则创建
-            self._ensure_database_exists()
-            try:
-                self.conn = psycopg2.connect(self.db_url, **self.conn_kwargs)
-                self.conn.autocommit = self.autocommit
-                self.cur = self.conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-                logger.info(f"[DB] Connected to PostgreSQL database [{env.POSTGRES_DB_NAME}]")
-            except psycopg2.OperationalError as e:
-                raise OperationalError(f"Connect to PostgreSQL failed: {str(e)}") from e
-        else:
-            raise ValueError(f"Unsupported database URL schema: postgresql://. Only PostgreSQL is supported currently.")
-
-        # 初始化数据库结构
-        self.init_schema()
+        conn = self.get_conn()
+        try:
+            # 初始化数据库结构
+            self.init_schema(conn)
+        finally:
+            self.put_conn(conn)
 
     def _ensure_database_exists(self):
         """
@@ -91,44 +115,44 @@ class DB:
             logger.error(f"[DB] Failed to create database {env.POSTGRES_DB_NAME}: {e}")
             raise
 
-    def _run_migrations(self):
+    def _run_migrations(self, conn: psycopg2.extensions.connection):
         """
         初始化数据库结构
         :return:
         """
-        c = self.cur
         try:
-            c.execute("CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY, applied_at BIGINT)")
-            files = []
-            mig_path = Path(__file__).parent.parent / "migrations"
-            if mig_path.exists():
-                files = [f for f in os.listdir(mig_path) if f.endswith(".sql")]
-            files.sort()
-            for f in files:
-                c.execute("SELECT 1 FROM _migrations WHERE name = %s", (f,))
-                if not c.fetchone():
-                    logger.info(f"[DB] Applying migration {f}")
-                    sql = (mig_path / f).read_text(encoding="utf-8")
-                    for statement in [s.strip() for s in sql.split(';') if s.strip()]:
-                        try:
-                            c.execute(statement)
-                        except Exception as e:
-                            logger.error(f"[DB] Migration statement failed: {statement}, Error: {e}")
-                            self.conn.rollback()
-                            raise
-                    c.execute("INSERT INTO _migrations (name, applied_at) VALUES (%s, %s)", (f, int(time.time())))
+            with conn.cursor() as c:
+                c.execute("CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY, applied_at BIGINT)")
+                files = []
+                mig_path = Path(__file__).parent.parent / "migrations"
+                if mig_path.exists():
+                    files = [f for f in os.listdir(mig_path) if f.endswith(".sql")]
+                files.sort()
+                for f in files:
+                    c.execute("SELECT 1 FROM _migrations WHERE name = %s", (f,))
+                    if not c.fetchone():
+                        logger.info(f"[DB] Applying migration {f}")
+                        sql = (mig_path / f).read_text(encoding="utf-8")
+                        for statement in [s.strip() for s in sql.split(';') if s.strip()]:
+                            try:
+                                c.execute(statement)
+                            except Exception as e:
+                                logger.error(f"[DB] Migration statement failed: {statement}, Error: {e}")
+                                conn.rollback()
+                                raise
+                        c.execute("INSERT INTO _migrations (name, applied_at) VALUES (%s, %s)", (f, int(time.time())))
             # 迁移完成后强制提交（确保会话状态同步）
-            self.commit()
+            self.commit(conn)
         except Exception as e:
-            self.conn.rollback()
+            conn.rollback()
             raise e
 
-    def init_schema(self):
+    def init_schema(self, conn: psycopg2.extensions.connection):
         """
         初始化数据库结构
         :return:
         """
-        self._run_migrations()
+        self._run_migrations(conn)
 
     def execute(self, sql: str, params: Tuple = None) -> int:
         """
@@ -137,21 +161,21 @@ class DB:
         :param params: 参数
         :return:
         """
-        if not self.conn or not self.cur:
-            raise RuntimeError("Please call connect() to establish a database connection first.")
-
+        conn = self.get_conn()
         try:
-            self.cur.execute(sql, params)
-            affected_rows = self.cur.rowcount
-            # include caller info in the log so it's clear who invoked the DB operation
-            caller = _get_caller_info() if logger.isEnabledFor(logging.INFO) else "unknown:unknown:0"
-            logger.info(f"[DB] (caller: {caller}) Execution successful, affected rows: {affected_rows}")
-            return affected_rows
+            with conn.cursor() as cur:
+                cur.execute(sql, params)
+                affected_rows = cur.rowcount
+                # include caller info in the log so it's clear who invoked the DB operation
+                caller = _get_caller_info() if logger.isEnabledFor(logging.INFO) else "unknown:unknown:0"
+                logger.info(f"[DB] (caller: {caller}) Execution successful, affected rows: {affected_rows}")
+                return affected_rows
         except Exception as e:
-            if self.conn:
-                self.conn.rollback()
+            conn.rollback()
             caller = _get_caller_info() if logger.isEnabledFor(logging.INFO) else "unknown:unknown:0"
             raise Exception(f"[DB] (caller: {caller}) Execution failed: {str(e)}") from e
+        finally:
+            self.put_conn(conn)
 
     def fetchone(self, sql: str, params: Optional[Tuple] = None) -> Dict[str, Any] | None:
         """
@@ -160,17 +184,18 @@ class DB:
         :param params: 查询参数
         :return: 查询结果
         """
-        if not self.conn or not self.cur:
-            raise RuntimeError("Please call connect() to establish a database connection first.")
-
+        conn = self.get_conn()
         try:
-            self.cur.execute(sql, params)
-            result = self.cur.fetchone()
-            if result:
-                return dict(result)
-            return None
+            with conn.cursor(cursor_factory=DictCursor) as cur:
+                cur.execute(sql, params)
+                result = cur.fetchone()
+                if result:
+                    return dict(result)
+                return None
         except Exception as e:
             raise Exception(f"Query failed: {str(e)}") from e
+        finally:
+            self.put_conn(conn)
 
     def fetchall(self, sql: str, params: Optional[Tuple] = None) -> List[Dict[str, Any]]:
         """
@@ -179,36 +204,34 @@ class DB:
         :param params: 查询参数
         :return: 查询结果列表
         """
-        if not self.conn or not self.cur:
-            raise RuntimeError("Please call connect() to establish a database connection first.")
-
+        conn = self.get_conn()
         try:
-            self.cur.execute(sql, params)
-            results = self.cur.fetchall()
-            return [dict(row) for row in results]
+            with conn.cursor(cursor_factory=DictCursor) as cur:
+                cur.execute(sql, params)
+                results = cur.fetchall()
+                return [dict(row) for row in results]
         except Exception as e:
             raise Exception(f"Query failed: {str(e)}") from e
+        finally:
+            self.put_conn(conn)
 
-    def commit(self) -> None:
+    def commit(self, conn: Optional[psycopg2.extensions.connection] = None) -> None:
         """
         提交事务
         :return:
         """
-        if self.conn and not self.autocommit:
-            self.conn.commit()
+        if conn and not self.autocommit:
+            conn.commit()
 
     def close(self) -> None:
         """
         关闭数据库连接
         :return:
         """
-        if self.cur:
-            self.cur.close()
-            self.cur = None
-        if self.conn:
-            self.conn.close()
-            self.conn = None
-        logger.info("[DB] Database connection closed.")
+        if self._pool:
+            self._pool.closeall()
+            self._pool = None
+            logger.info("[DB] Database connection pool closed.")
 
     def __enter__(self):
         """
@@ -230,20 +253,21 @@ def transaction():
     :return:
     """
     db_instance: DB = get_db()
-    db_instance.connect()
-    # 保存原始状态
+    conn = db_instance.get_conn()
     original_autocommit = db_instance.autocommit
+    original_conn_autocommit = conn.autocommit
     try:
-        # 临时关闭自动提交
         db_instance.autocommit = False
-        yield db_instance.conn
-        db_instance.commit()
+        conn.autocommit = False
+        yield conn
+        db_instance.commit(conn)
     except Exception as e:
-        db_instance.conn.rollback()
+        conn.rollback()
         raise e
     finally:
-        # 恢复原始自动提交方式
         db_instance.autocommit = original_autocommit
+        conn.autocommit = original_conn_autocommit
+        db_instance.put_conn(conn)
 
 
 # 全局唯一实例
