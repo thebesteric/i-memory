@@ -17,7 +17,7 @@ class EnvConfig:
 
         # Web 服务配置
         self.WEB_HOST = os.getenv("WEB_HOST", "127.0.0.1")
-        self.WEB_PORT = int(os.getenv("WEB_PORT", 5432))
+        self.WEB_PORT = int(os.getenv("WEB_PORT", 8000))
         self.WEB_DEBUG = os.getenv("WEB_DEBUG", "false").lower() in ("true", "1")
 
         # 数据库配置
