@@ -78,7 +78,7 @@ async def delete_memory(memory_ids: list[str] = Body(..., description="记忆 ID
 
 
 @router.post("/clear", summary="清空用户的所有记忆内容")
-async def clear_memory(user_identity: IMemoryUserIdentity):
+async def clear_memory(user_identity: IMemoryUserIdentity = Body(..., description="用户身份")):
     """
     清空用户的所有记忆内容
     :param user_identity: 用户身份

@@ -3,7 +3,7 @@ from abc import ABC
 from pydantic import BaseModel
 
 
-class BaseDictModel(BaseModel, ABC):
+class BaseModelEnhance(BaseModel, ABC):
 
     def __getitem__(self, key: str):
         if key not in self.__class__.model_fields:

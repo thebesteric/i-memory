@@ -20,7 +20,6 @@ class SearchMemoryRequest(BaseModel):
     搜索记忆请求模型
     """
     query: str = Field(..., description="搜索查询文本")
-    user_id: Optional[str] = Field(default=None, description="用户 ID")
     limit: Optional[int] = Field(default=10, ge=1, le=100, description="至少要返回的结果数量")
     filters: Optional[IMemoryFilters] = Field(default=None, description="搜索过滤条件")
 

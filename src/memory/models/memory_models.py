@@ -1,9 +1,9 @@
 import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
-from src.utils.pydantic_extension import BaseDictModel
+from src.utils.pydantic_extension import BaseModelEnhance
 
 
 class IMemoryUserIdentity(BaseModel):
@@ -59,7 +59,7 @@ class IMemoryItemDebugInfo(BaseModel):
     penalty_score: float = Field(default=0.0, description="惩罚得分")
 
 
-class IMemoryItemInfo(BaseDictModel):
+class IMemoryItemInfo(BaseModelEnhance):
     """
     记忆项模型
     """
