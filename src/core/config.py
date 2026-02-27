@@ -73,7 +73,7 @@ class EnvConfig:
         self.SECTOR_SIZE = int(os.getenv("IM_SECTOR_SIZE", 10000))
 
         # 文本相似度阈值（用于记忆激活）
-        self.SIMILARITY_THRESHOLD = int(os.getenv("IM_SIMILARITY_THRESHOLD", 0.95))
+        self.SIMILARITY_THRESHOLD = float(os.getenv("IM_SIMILARITY_THRESHOLD", 0.95))
 
         # ================ 衰减相关配置 ================
         # 衰减线程数
