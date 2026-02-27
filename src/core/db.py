@@ -43,6 +43,9 @@ class DB:
         self.autocommit = autocommit if autocommit is not None else env.POSTGRES_DB_AUTOCOMMIT
         self.conn: Optional[psycopg2.extensions.connection] = None
         self.cur: Optional[psycopg2.extensions.cursor] = None
+        self.conn_kwargs = {
+            "sslmode": "disable"
+        }
 
     def connect(self):
         """
@@ -52,9 +55,10 @@ class DB:
         if self.conn:
             return
         if self.db_url.startswith("postgresql://"):
+            # 确保数据库存在，如果不存在则创建
             self._ensure_database_exists()
             try:
-                self.conn = psycopg2.connect(self.db_url)
+                self.conn = psycopg2.connect(self.db_url, **self.conn_kwargs)
                 self.conn.autocommit = self.autocommit
                 self.cur = self.conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
                 logger.info(f"[DB] Connected to PostgreSQL database [{env.POSTGRES_DB_NAME}]")
@@ -66,15 +70,14 @@ class DB:
         # 初始化数据库结构
         self.init_schema()
 
-    @staticmethod
-    def _ensure_database_exists():
+    def _ensure_database_exists(self):
         """
         确保数据库存在，如果不存在则创建
         :return:
         """
         base_url = f"postgresql://{env.POSTGRES_DB_USER}:{env.POSTGRES_DB_PASSWORD}@{env.POSTGRES_DB_HOST}:{env.POSTGRES_DB_PORT}/postgres"
         try:
-            conn = psycopg2.connect(base_url)
+            conn = psycopg2.connect(base_url, **self.conn_kwargs)
             conn.autocommit = True
             cur = conn.cursor()
             cur.execute(f"SELECT 1 FROM pg_database WHERE datname = %s", (env.POSTGRES_DB_NAME,))
@@ -94,25 +97,31 @@ class DB:
         :return:
         """
         c = self.cur
-        c.execute("CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY, applied_at BIGINT)")
-        files = []
-        mig_path = Path(__file__).parent.parent / "migrations"
-        if mig_path.exists():
-            files = [f for f in os.listdir(mig_path) if f.endswith(".sql")]
-        files.sort()
-        for f in files:
-            c.execute("SELECT 1 FROM _migrations WHERE name=%s", (f,))
-            if not c.fetchone():
-                logger.info(f"[DB] Applying migration {f}")
-                sql = (mig_path / f).read_text(encoding="utf-8")
-                for statement in [s.strip() for s in sql.split(';') if s.strip()]:
-                    try:
-                        c.execute(statement)
-                    except Exception as e:
-                        logger.error(f"[DB] Migration statement failed: {statement}, Error: {e}")
-                        self.conn.rollback()
-                        raise
-                c.execute("INSERT INTO _migrations (name, applied_at) VALUES (%s, %s)", (f, int(time.time())))
+        try:
+            c.execute("CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY, applied_at BIGINT)")
+            files = []
+            mig_path = Path(__file__).parent.parent / "migrations"
+            if mig_path.exists():
+                files = [f for f in os.listdir(mig_path) if f.endswith(".sql")]
+            files.sort()
+            for f in files:
+                c.execute("SELECT 1 FROM _migrations WHERE name = %s", (f,))
+                if not c.fetchone():
+                    logger.info(f"[DB] Applying migration {f}")
+                    sql = (mig_path / f).read_text(encoding="utf-8")
+                    for statement in [s.strip() for s in sql.split(';') if s.strip()]:
+                        try:
+                            c.execute(statement)
+                        except Exception as e:
+                            logger.error(f"[DB] Migration statement failed: {statement}, Error: {e}")
+                            self.conn.rollback()
+                            raise
+                    c.execute("INSERT INTO _migrations (name, applied_at) VALUES (%s, %s)", (f, int(time.time())))
+            # 迁移完成后强制提交（确保会话状态同步）
+            self.commit()
+        except Exception as e:
+            self.conn.rollback()
+            raise e
 
     def init_schema(self):
         """
@@ -220,8 +229,21 @@ def transaction():
     获取数据库连接，用于事务处理
     :return:
     """
-    db_instance: DB = DB().get(DB)
-    return db_instance.conn
+    db_instance: DB = get_db()
+    db_instance.connect()
+    # 保存原始状态
+    original_autocommit = db_instance.autocommit
+    try:
+        # 临时关闭自动提交
+        db_instance.autocommit = False
+        yield db_instance.conn
+        db_instance.commit()
+    except Exception as e:
+        db_instance.conn.rollback()
+        raise e
+    finally:
+        # 恢复原始自动提交方式
+        db_instance.autocommit = original_autocommit
 
 
 # 全局唯一实例
@@ -230,5 +252,5 @@ def get_db() -> DB:
     获取数据库实例
     :return:
     """
-    db = DB()
-    return db
+    db_instance = DB()
+    return db_instance
