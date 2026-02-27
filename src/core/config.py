@@ -5,7 +5,7 @@ import dotenv
 import pyrootutils
 from injector import inject
 
-from src.core.constants import ModelProvider
+from src.core.constants import ModelProvider, VectorStoreProvider
 from src.utils.singleton import singleton
 
 
@@ -50,7 +50,7 @@ class EnvConfig:
         self.DASHSCOPE_EMBEDDING_MODEL = os.getenv("DASHSCOPE_EMBEDDING_MODEL", "text-embedding-v4")
 
         # 模型提供商（包含向量和记忆相关识别模型）
-        self.MODEL_PROVIDER = os.getenv("IM_MODEL_PROVIDER", ModelProvider.DASHSCOPE)
+        self.MODEL_PROVIDER = os.getenv("IM_MODEL_PROVIDER", ModelProvider.DASHSCOPE.value)
 
         # 向量维度
         self.VEC_DIM = os.getenv("IM_VEC_DIM", 1536)
@@ -71,7 +71,7 @@ class EnvConfig:
         self.USE_SUMMARY_ONLY = os.getenv("IM_USE_SUMMARY_ONLY", False)
 
         # 向量存储配置
-        self.IM_VECTOR_STORE = os.getenv("IM_VECTOR_STORE", "postgres")
+        self.IM_VECTOR_STORE = os.getenv("IM_VECTOR_STORE", VectorStoreProvider.POSTGRES.value)
 
         # 文本相似度阈值（用于记忆激活）
         self.SIMILARITY_THRESHOLD = os.getenv("IM_SIMILARITY_THRESHOLD", 0.95)

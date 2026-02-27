@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from typing import List, Optional
 
 from src.core.config import env
+from src.core.constants import VectorStoreProvider
 from src.memory.models.memory_models import IMemoryFilters, IMemoryUserIdentity
 from src.utils.log_helper import LogHelper
 
@@ -84,13 +85,13 @@ def get_vector_store() -> BaseVectorStore:
     根据配置获取向量存储后端实例
     :return:
     """
-    backend = env.IM_VECTOR_STORE or "postgres"
-    if backend == "postgres":
+    backend = env.IM_VECTOR_STORE or VectorStoreProvider.POSTGRES.value
+    if backend == VectorStoreProvider.POSTGRES.value:
         from src.core.vector.postgres_vector_store import PostgresVectorStore
         dsn = env.POSTGRES_DB_URL
         logger.info(f"Using PostgresVectorStore at {dsn}")
         return PostgresVectorStore(dsn)
-    elif backend == "valkey" or backend == "redis":
+    elif backend == VectorStoreProvider.VALKEY.value or backend == VectorStoreProvider.REDIS.value:
         from src.core.vector.redis_vector_store import RedisVectorStore
         url = env.REDIS_URL
         logger.info(f"Using RedisVectorStore at {url}")

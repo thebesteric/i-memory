@@ -40,3 +40,12 @@ class ModelProvider(Enum):
     OPENAI = "openai"
     GEMINI = "gemini"
     DASHSCOPE = "dashscope"
+
+
+class VectorStoreProvider(Enum):
+    """
+    向量存储后端枚举
+    """
+    POSTGRES = "postgres"
+    REDIS = "redis"
+    VALKEY = "valkey"
