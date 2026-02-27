@@ -1,7 +1,6 @@
-# 记忆缓存时间，单位秒
 from enum import Enum
 
-from src.utils.time_unit import TimeUnit
+from utils.time_unit import TimeUnit
 
 # 记忆缓存时间
 CACHE_TTL = 60

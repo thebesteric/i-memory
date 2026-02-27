@@ -1,14 +1,14 @@
 import json
 from typing import Dict, List, Any
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter
 from fastapi.params import Path, Body
+from web.common_result import R
+from web.paging import PagingResponse
 
 from src.imemory import IMemory
 from src.memory.models.memory_models import IMemoryItemInfo, IMemoryUserIdentity
-from src.utils.paging import PagingResponse
 from src.web.models.web_models import AddMemoryRequest, SearchMemoryRequest, HistoryMemoryRequest
-from src.utils.common_result import R
 
 router = APIRouter(prefix="/memory", tags=["memory"])
 

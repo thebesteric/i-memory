@@ -1,10 +1,11 @@
 from abc import ABC, abstractmethod
 from typing import List, Optional
 
+from utils.log_helper import LogHelper
+
 from src.core.config import env
 from src.core.constants import VectorStoreProvider
 from src.memory.models.memory_models import IMemoryFilters, IMemoryUserIdentity
-from src.utils.log_helper import LogHelper
 
 logger = LogHelper.get_logger()
 

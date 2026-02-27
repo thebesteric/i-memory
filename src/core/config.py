@@ -4,9 +4,9 @@ from dataclasses import dataclass
 import dotenv
 import pyrootutils
 from injector import inject
+from utils.singleton import singleton
 
 from src.core.constants import ModelProvider, VectorStoreProvider
-from src.utils.singleton import singleton
 
 
 @singleton

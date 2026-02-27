@@ -4,13 +4,13 @@ from typing import List
 
 import numpy as np
 from pydantic import BaseModel, Field
+from utils.log_helper import LogHelper
+from utils.singleton import singleton
 
 from src.core.db import get_db
 from src.core.dml_ops import dml_ops
 from src.memory.models.memory_models import IMemoryUserIdentity
 from src.tools.vectors import buf_to_vec, cos_sim
-from src.utils.log_helper import LogHelper
-from src.utils.singleton import singleton
 
 logger = LogHelper.get_logger()
 db = get_db()

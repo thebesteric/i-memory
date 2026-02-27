@@ -1,9 +1,8 @@
 import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_serializer
-
-from src.utils.pydantic_extension import BaseModelEnhance
+from pydantic import BaseModel, ConfigDict, Field
+from utils.pydantic_extension import BaseModelEnhance
 
 
 class IMemoryUserIdentity(BaseModel):

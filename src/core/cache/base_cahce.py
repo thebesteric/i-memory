@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Optional, Union
 import time
 
-from src.utils.time_unit import TimeUnit
+from utils.time_unit import TimeUnit
 
 
 class BaseCache(ABC):

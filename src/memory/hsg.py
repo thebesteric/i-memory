@@ -5,6 +5,8 @@ import time
 import uuid
 from typing import Optional, Any, Dict, List
 
+from utils.log_helper import LogHelper
+
 from src.ai.embed.base_embed_model import BaseEmbedModel
 from src.ai.model_provider import get_embed_model
 from src.core.cache.memory_cache import MemoryCache
@@ -28,8 +30,6 @@ from src.tools.chunking import chunk_text
 from src.tools.keyword import compute_keyword_overlap, compute_token_overlap
 from src.tools.text import canonical_token_set
 from src.tools.vectors import vec_to_buf, cos_sim
-from src.utils.log_helper import LogHelper
-from src.utils.time_unit import TimeUnit
 
 logger = LogHelper.get_logger()
 waypoints = Waypoints()

@@ -3,14 +3,15 @@ import math
 import time
 from typing import Optional
 
+from utils.log_helper import LogHelper
+from utils.singleton import singleton
+
 from src.core.config import env
 from src.core.constants import HYBRID_PARAMS
 from src.core.db import get_db, DB
 from src.core.dml_ops import dml_ops
 from src.core.sector_classify import SECTOR_CONFIGS, SectorCfg
 from src.core.vector.base_vector_store import get_vector_store, BaseVectorStore
-from src.utils.log_helper import LogHelper
-from src.utils.singleton import singleton
 
 logger = LogHelper.get_logger()
 

@@ -5,13 +5,14 @@ import time
 import uuid
 from typing import Dict, Any
 
+from utils.log_helper import LogHelper
+
 from src.core.db import get_db
 from src.core.dml_ops import dml_ops
 from src.core.waypoints import Waypoints
 from src.memory.hsg import add_hsg_memory
 from src.memory.models.memory_models import IMemoryConfig, IMemoryUserIdentity
 from src.ops.extract import extract_text
-from src.utils.log_helper import LogHelper
 
 logger = LogHelper.get_logger()
 db = get_db()

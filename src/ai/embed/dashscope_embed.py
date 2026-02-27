@@ -3,11 +3,11 @@ from typing import List
 
 from langchain_openai import OpenAIEmbeddings
 from openai import AsyncOpenAI
+from utils.singleton import singleton
 
 from src.ai.embed.base_embed_model import BaseEmbedModel
 from src.ai.embed.openai_embed import OpenAIEmbed
 from src.core.config import env
-from src.utils.singleton import singleton
 
 
 @singleton

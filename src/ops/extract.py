@@ -1,9 +1,9 @@
 import warnings
 
+from utils.log_helper import LogHelper
+
 warnings.filterwarnings("ignore", category=UserWarning, module="jieba")
 warnings.filterwarnings("ignore", category=SyntaxWarning, module="jieba")
-
-from src.utils.log_helper import LogHelper
 
 import os
 import tempfile

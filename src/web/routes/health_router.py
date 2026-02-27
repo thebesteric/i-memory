@@ -1,6 +1,5 @@
 from fastapi import APIRouter
-
-from src.utils.common_result import R
+from web.common_result import R
 
 router = APIRouter(prefix="/health", tags=["health"])
 

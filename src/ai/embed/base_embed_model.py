@@ -3,9 +3,9 @@ from typing import List
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict
+from utils.log_helper import LogHelper
 
 from src.core.config import env
-from src.utils.log_helper import LogHelper
 
 logger = LogHelper.get_logger()
 

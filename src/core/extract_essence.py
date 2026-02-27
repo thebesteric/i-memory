@@ -1,10 +1,9 @@
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import PromptTemplate
-from langchain_openai import ChatOpenAI
+from utils.log_helper import LogHelper
 
 from src.ai.model_provider import get_chat_model
 from src.core.config import env
-from src.utils.log_helper import LogHelper
 
 logger = LogHelper.get_logger()
 

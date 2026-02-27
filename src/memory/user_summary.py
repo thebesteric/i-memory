@@ -4,11 +4,12 @@ import json
 import asyncio
 from typing import Dict, List
 
+from utils.log_helper import LogHelper
+
 from src.core.config import env
 from src.core.db import get_db
 from src.memory import user_ops
 from src.memory.models.memory_models import IMemoryUserIdentity, IMemoryUser
-from src.utils.log_helper import LogHelper
 
 logger = LogHelper.get_logger()
 

@@ -10,9 +10,10 @@ from psycopg2.pool import ThreadedConnectionPool
 import inspect
 import logging
 
+from utils.log_helper import LogHelper
+from utils.singleton import singleton
+
 from src.core.config import env
-from src.utils.log_helper import LogHelper
-from src.utils.singleton import singleton
 
 logger = LogHelper.get_logger()
 
