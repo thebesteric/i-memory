@@ -2,11 +2,12 @@ from typing import List, Optional
 
 import numpy as np
 import redis
+from utils.log_helper import LogHelper
+from utils.singleton import singleton
 
 from src.core.vector.base_vector_store import BaseVectorStore, VectorRow, VectorSearch
 from src.memory.models.memory_models import IMemoryFilters, IMemoryUserIdentity
-from src.utils.log_helper import LogHelper
-from src.utils.singleton import singleton
+
 
 logger = LogHelper.get_logger()
 
