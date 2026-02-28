@@ -2,14 +2,14 @@
 
 [[package]]
 name = "agile-commons"
-version = "0.1.0"
+version = "0.1.1"
 description = "A simple Python package for demonstration"
 optional = false
 python-versions = ">=3.12"
 groups = ["main"]
 files = [
-    {file = "agile_commons-0.1.0-py3-none-any.whl", hash = "sha256:648f8d76b032a77057e40b6f4eabb75ee33d34d7a2acbaab5eeef37b91067f7f"},
-    {file = "agile_commons-0.1.0.tar.gz", hash = "sha256:9b9237a68244fcc5fcf01b16d67cd2dbdd93fb936d1c9cc04ccc854d4b42e289"},
+    {file = "agile_commons-0.1.1-py3-none-any.whl", hash = "sha256:aecc3e849c95b829b28d8596ae34da8cb2d1803f0dc8f2efae6ad12c16a0ba6f"},
+    {file = "agile_commons-0.1.1.tar.gz", hash = "sha256:ba6241d1576942c3547d28aefa0b17e93e0d5c9a29cbb7aa905810c74f3f0c84"},
 ]
 
 [package.dependencies]

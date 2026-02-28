@@ -33,7 +33,7 @@ dependencies = [
     "pytest (>=9.0.2,<10.0.0)",
     "langchain-google-genai (>=4.2.0,<5.0.0)",
     "uvicorn (>=0.41.0,<0.42.0)",
-    "agile-commons (>=0.1.0,<0.2.0)",
+    "agile-commons (>=0.1.1,<0.2.0)",
 ]
 
 
