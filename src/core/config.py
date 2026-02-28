@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass
 
 import pyrootutils
@@ -12,12 +13,11 @@ from src.core.constants import ModelProvider, VectorStoreProvider
 class EnvConfig:
     def __init__(self, env_file_path: str = f"{pyrootutils.find_root()}/.env"):
         # 加载环境变量文件
-        env_helper = EnvHelper(env_file_path=env_file_path, override=False)
+        env_helper = EnvHelper(env_file_path=env_file_path, override=False, env_mode=os.getenv("ENV_MODE"))
 
         # Web 服务配置
         self.WEB_HOST = env_helper.get("WEB_HOST", "127.0.0.1")
         self.WEB_PORT = env_helper.get("WEB_PORT", 8000)
-        self.WEB_DEBUG = env_helper.get("WEB_DEBUG", "false")
 
         # 数据库配置
         self.POSTGRES_DB_HOST = env_helper.get("DB_HOST", "localhost")

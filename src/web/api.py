@@ -1,3 +1,6 @@
+import argparse
+import os
+import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -6,13 +9,22 @@ from fastapi.middleware.cors import CORSMiddleware
 import time
 
 from starlette.responses import JSONResponse
+from utils.env_helper import EnvHelper
 from utils.log_helper import LogHelper
 from web.common_result import R
+
+# 获取当前脚本（api.py）的目录
+current_dir = os.path.dirname(os.path.abspath(__file__))
+# 获取项目根目录（i-memory），根据你的目录结构调整 ../ 的层数
+project_root = os.path.abspath(os.path.join(current_dir, '../../'))
+# 将项目根目录加入 Python 搜索路径
+sys.path.append(project_root)
 
 from src.core.config import env
 from src.web.routes import health_router, memory_router, sources_router
 
 logger = LogHelper.get_logger()
+env_helper = EnvHelper()
 
 
 def create_app() -> FastAPI:
@@ -88,7 +100,19 @@ def create_app() -> FastAPI:
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--env-mode',
+                        dest='env_mode',
+                        type=str,
+                        default='',
+                        help='设置运行环境，可选值：dev/test/prod')
+    args = parser.parse_args()
+    env_mode = args.env_mode if args.env_mode else ""
+    env_helper.set("ENV_MODE", env_mode)
+
     import uvicorn
 
-    logger.info(f"Starting iMemory API server on {env.WEB_HOST}:{env.WEB_PORT} with debug={env.WEB_DEBUG}")
-    uvicorn.run("src.web.api:create_app", host=env.WEB_HOST, port=env.WEB_PORT, reload=env.WEB_DEBUG)
+    debug = True if env_mode in ["", "dev"] else False
+    logger.info(f"Starting iMemory API server on {env.WEB_HOST}:{env.WEB_PORT} with debug={debug}, using environment mode: {env_mode if env_mode else "local"}")
+
+    uvicorn.run("src.web.api:create_app", host=env.WEB_HOST, port=env.WEB_PORT, reload=debug)
