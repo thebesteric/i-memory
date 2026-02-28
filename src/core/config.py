@@ -1,3 +1,4 @@
+import argparse
 import os
 from dataclasses import dataclass
 
@@ -81,4 +82,19 @@ class EnvConfig:
         self.DECAY_COLD_THRESHOLD = env_helper.get("IM_DECAY_COLD_THRESHOLD", 0.25)
 
 
-env = EnvConfig()
+def _load_env_file():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--env-mode',
+                        dest='env_mode',
+                        type=str,
+                        default='',
+                        help='运行环境，可选值：dev/test/prod')
+    args = parser.parse_args()
+    env_mode = args.env_mode if args.env_mode else ""
+    if env_mode:
+        os.environ["ENV_MODE"] = env_mode
+    env_file_name = ".env" if not env_mode else f".env.{env_mode}"
+    return f"{pyrootutils.find_root()}/{env_file_name}"
+
+
+env = EnvConfig(env_file_path=_load_env_file())

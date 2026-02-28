@@ -9,7 +9,6 @@ from fastapi.middleware.cors import CORSMiddleware
 import time
 
 from starlette.responses import JSONResponse
-from utils.env_helper import EnvHelper
 from utils.log_helper import LogHelper
 from web.common_result import R
 
@@ -24,11 +23,27 @@ from src.core.config import env
 from src.web.routes import health_router, memory_router, sources_router
 
 logger = LogHelper.get_logger()
-env_helper = EnvHelper()
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="iMemory API", version="1.0.0")
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        """
+        FastAPI 生命周期管理
+        :param app: FastAPI
+        """
+        # 启动阶段：执行初始化操作
+        env_mode = os.getenv("ENV_MODE")
+        debug = True if env_mode and env_mode in ["", "dev"] else False
+        logger.info(
+            f"🚀 Starting iMemory API server on {env.WEB_HOST}:{env.WEB_PORT} with debug: {debug}, using environment mode: {env_mode if env_mode else "local"}")
+
+        yield  # 应用运行阶段
+
+        # 关闭阶段：执行资源释放操作
+        logger.info("🛑 iMemory Server shutting down...")
+
+    app = FastAPI(title="iMemory API", version="1.0.0", lifespan=lifespan)
 
     # CORS Middleware
     app.add_middleware(
@@ -46,20 +61,6 @@ def create_app() -> FastAPI:
         process_time = (time.time() - start) * 1000
         logger.info(f"{request.method} {request.url.path} - {response.status_code} ({process_time:.2f}ms)")
         return response
-
-    @asynccontextmanager
-    async def lifespan(app: FastAPI):
-        """
-        FastAPI 生命周期管理
-        :param app: FastAPI
-        """
-        # 启动阶段：执行初始化操作
-        logger.info(f"🚀 iMemory Server running on port {env.WEB_PORT}")
-
-        yield  # 应用运行阶段
-
-        # 关闭阶段：执行资源释放操作
-        logger.info("🛑 iMemory Server shutting down...")
 
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
@@ -100,19 +101,6 @@ def create_app() -> FastAPI:
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--env-mode',
-                        dest='env_mode',
-                        type=str,
-                        default='',
-                        help='设置运行环境，可选值：dev/test/prod')
-    args = parser.parse_args()
-    env_mode = args.env_mode if args.env_mode else ""
-    env_helper.set("ENV_MODE", env_mode)
-
     import uvicorn
-
-    debug = True if env_mode in ["", "dev"] else False
-    logger.info(f"Starting iMemory API server on {env.WEB_HOST}:{env.WEB_PORT} with debug={debug}, using environment mode: {env_mode if env_mode else "local"}")
-
+    debug = True
     uvicorn.run("src.web.api:create_app", host=env.WEB_HOST, port=env.WEB_PORT, reload=debug)
