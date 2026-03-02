@@ -43,7 +43,13 @@ def create_app() -> FastAPI:
         # 关闭阶段：执行资源释放操作
         logger.info("🛑 iMemory Server shutting down...")
 
-    app = FastAPI(title="iMemory API", version="1.0.0", lifespan=lifespan)
+    app = FastAPI(
+        title="iMemory API",
+        version="1.0.0",
+        lifespan=lifespan,
+        docs_url=None,
+        redoc_url="/redoc"
+    )
 
     # CORS Middleware
     app.add_middleware(
@@ -102,5 +108,6 @@ def create_app() -> FastAPI:
 
 if __name__ == '__main__':
     import uvicorn
+
     debug = True
     uvicorn.run("src.web.api:create_app", host=env.WEB_HOST, port=env.WEB_PORT, reload=debug)
