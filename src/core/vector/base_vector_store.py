@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import List, Optional
 
-from utils.log_helper import LogHelper
+from agile_commons.utils import LogHelper
 
 from src.core.config import env
 from src.core.constants import VectorStoreProvider

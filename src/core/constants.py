@@ -1,13 +1,19 @@
 from enum import Enum
 
-from utils.time_unit import TimeUnit
+from agile_commons.cache import MemoryCache
+from agile_commons.utils import TimeUnit
 
-# 记忆缓存时间
-CACHE_TTL = 60
-# 记忆缓存时间单位
-CACHE_TTL_TIME_UNIT = TimeUnit.SECONDS
-# 记忆缓存大小
-CACHE_SIZE = 2000
+# 记忆查询缓存
+MEMORIES_CACHE = MemoryCache(
+    maxsize=2048,
+    default_ttl=60,
+    time_unit=TimeUnit.SECONDS
+)
+
+# 组件查询缓存（用于存放一些单例的组件）
+COMPONENTS_CACHE = MemoryCache(
+    time_unit=TimeUnit.SECONDS
+)
 
 # 记忆扇区关联度定义
 SECTOR_RELATIONSHIPS = {

@@ -1,20 +1,24 @@
 import argparse
 import os
-from dataclasses import dataclass
 
 import pyrootutils
-from utils.env_helper import EnvHelper
-from utils.singleton import singleton
+from agile_commons.utils import EnvHelper, singleton
 
 from src.core.constants import ModelProvider, VectorStoreProvider
 
+env_helper: EnvHelper | None = None
+
 
 @singleton
-@dataclass
 class EnvConfig:
     def __init__(self, env_file_path: str = f"{pyrootutils.find_root()}/.env"):
         # 加载环境变量文件
-        env_helper = EnvHelper(env_file_path=env_file_path, override=False, env_mode=os.getenv("ENV_MODE"))
+        global env_helper
+        env_helper = EnvHelper(
+            env_file_path=env_file_path,
+            override=False,
+            env_mode=os.getenv("ENV_MODE")
+        )
 
         # Web 服务配置
         self.WEB_HOST = env_helper.get("WEB_HOST", "127.0.0.1")
@@ -49,6 +53,11 @@ class EnvConfig:
         self.DASHSCOPE_BASE_URL = env_helper.get("DASHSCOPE_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
         self.DASHSCOPE_MODEL = env_helper.get("DASHSCOPE_MODEL", "qwen-plus")
         self.DASHSCOPE_EMBEDDING_MODEL = env_helper.get("DASHSCOPE_EMBEDDING_MODEL", "text-embedding-v4")
+
+        # Milvus 配置（开启向量数据库辅助）
+        self.MILVUS_URL = env_helper.get("MILVUS_URL")
+        self.MILVUS_TOKEN = env_helper.get("MILVUS_TOKEN")
+        self.MILVUS_COLLECTION = env_helper.get("MILVUS_COLLECTION", "i_memory")
 
         # 模型提供商（包含向量和记忆相关识别模型）
         self.MODEL_PROVIDER = env_helper.get("IM_MODEL_PROVIDER", ModelProvider.DASHSCOPE.value)

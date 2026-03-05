@@ -1,6 +1,6 @@
+from agile_commons.utils import LogHelper
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import PromptTemplate
-from utils.log_helper import LogHelper
 
 from src.ai.model_provider import get_chat_model
 from src.core.config import env

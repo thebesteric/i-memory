@@ -1,7 +1,7 @@
 import datetime
 import uuid
 
-from utils.log_helper import LogHelper
+from agile_commons.utils import LogHelper
 
 from src.core.db import get_db
 from src.memory.models.memory_models import IMemoryUserIdentity, IMemoryUser

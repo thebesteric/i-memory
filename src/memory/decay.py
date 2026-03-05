@@ -3,8 +3,7 @@ import math
 import time
 from typing import Optional
 
-from utils.log_helper import LogHelper
-from utils.singleton import singleton
+from agile_commons.utils import LogHelper, singleton
 
 from src.core.config import env
 from src.core.constants import HYBRID_PARAMS

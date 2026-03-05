@@ -1,6 +1,6 @@
+from agile_commons.utils import LogHelper
 from langchain_core.language_models import BaseChatModel
 from langchain_openai import ChatOpenAI
-from utils.log_helper import LogHelper
 
 from src.ai.embed.base_embed_model import BaseEmbedModel
 from src.core.config import env

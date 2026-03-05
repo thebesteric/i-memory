@@ -3,15 +3,14 @@ import json
 import math
 import time
 import uuid
-from typing import Optional, Any, Dict, List
+from typing import Any, Dict, List
 
-from utils.log_helper import LogHelper
+from agile_commons.utils import LogHelper
 
 from src.ai.embed.base_embed_model import BaseEmbedModel
 from src.ai.model_provider import get_embed_model
-from src.core.cache.memory_cache import MemoryCache
 from src.core.config import env
-from src.core.constants import SECTOR_RELATIONSHIPS, HYBRID_PARAMS, CACHE_TTL, CACHE_SIZE, CACHE_TTL_TIME_UNIT
+from src.core.constants import SECTOR_RELATIONSHIPS, HYBRID_PARAMS, MEMORIES_CACHE
 from src.core.db import get_db
 from src.core.dml_ops import dml_ops
 from src.core.extract_essence import ExtractEssence
@@ -311,10 +310,6 @@ async def calc_multi_vec_fusion_score(mid: str, qe: Dict[str, List[float]], w: D
     return s / tot if tot > 0 else 0.0
 
 
-# 查询缓存
-CACHE = MemoryCache(maxsize=CACHE_SIZE, default_ttl=CACHE_TTL, time_unit=CACHE_TTL_TIME_UNIT)
-
-
 async def hsg_query(query: str, top_k: int = 10, filters: IMemoryFilters = None) -> List[IMemoryItemInfo]:
     """
     基于混合评分机制（内容相似度、关键词重叠、路标关联、时间衰减等）进行记忆检索
@@ -329,7 +324,7 @@ async def hsg_query(query: str, top_k: int = 10, filters: IMemoryFilters = None)
     try:
         # 检查 60 秒内的查询缓存，命中则直接返回
         cache_key = f"{query}:{top_k}:{filters.model_dump_json() if filters else '{}'}"
-        entry = CACHE.get(cache_key)
+        entry = MEMORIES_CACHE.get(cache_key)
         if entry:
             return entry
 
@@ -535,7 +530,7 @@ async def hsg_query(query: str, top_k: int = 10, filters: IMemoryFilters = None)
             await decay.on_query_hit(_item.id, _item.primary_sector, lambda t: embed(t, _item.primary_sector))
 
         # 存入查询缓存
-        CACHE.set(cache_key, effective_k_list)
+        MEMORIES_CACHE.set(cache_key, effective_k_list)
         logger.info(
             f"[HSG] Query processed in {time.time() - start_q:.3f} seconds. Query: '{query}' Expected: {effective_k}, Actual: {len(effective_k_list)} returned.")
         return effective_k_list

@@ -1,10 +1,10 @@
 import json
-from typing import Dict, List, Any
+from typing import Dict, List
 
+from agile_commons.web import PagingResponse
+from agile_commons.web.common_result import gen_response_model, R
 from fastapi import APIRouter
 from fastapi.params import Path, Body
-from web.common_result import R, gen_response_model
-from web.paging import PagingResponse
 
 from src.imemory import IMemory
 from src.memory.models.memory_models import IMemoryItemInfo, IMemoryUserIdentity

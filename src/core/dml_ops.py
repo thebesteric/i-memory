@@ -1,6 +1,6 @@
 from typing import Optional, Any, Dict, List
 
-from utils.singleton import singleton
+from agile_commons.utils import singleton
 
 from src.core.db import DB, get_db
 from src.memory.models.memory_models import IMemoryUserIdentity

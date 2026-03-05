@@ -1,9 +1,9 @@
 import httpx
 import os
 import asyncio
-from typing import List, Dict, Any, Optional
+from typing import List
 
-from utils.singleton import singleton
+from agile_commons.utils import singleton
 
 from src.ai.embed.base_embed_model import BaseEmbedModel
 from src.core.config import env

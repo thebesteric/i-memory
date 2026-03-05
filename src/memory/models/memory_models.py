@@ -1,8 +1,8 @@
 import datetime
 from typing import Any
 
+from agile_commons.utils.pydantic_extension import BaseModelEnhance
 from pydantic import BaseModel, ConfigDict, Field
-from utils.pydantic_extension import BaseModelEnhance
 
 
 class IMemoryUserIdentity(BaseModel):

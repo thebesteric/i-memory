@@ -1,19 +1,18 @@
-import math
 from typing import Dict, Any, List
 
-from utils.log_helper import LogHelper
-from utils.singleton import singleton
-from web.paging import PagingResponse
+from agile_commons.utils import LogHelper, singleton
+from agile_commons.web import PagingResponse
 
 from src.ai.client.openai_registrar import OpenAIRegistrar
+from src.core.config import env
 from src.core.db import get_db
 from src.core.dml_ops import dml_ops
+from src.core.vector.milvus.milvus_manager import MilvusManager, get_milvus_manager
 from src.memory.hsg import hsg_query
 from src.memory.models.memory_models import IMemoryConfig, IMemoryFilters, IMemoryUserIdentity, IMemoryItemInfo
 from src.ops.ingest import ingest_document
 
 logger = LogHelper.get_logger()
-db = get_db()
 
 
 @singleton
@@ -22,8 +21,21 @@ class IMemory:
     def __init__(self, user_identity: IMemoryUserIdentity = None):
         self.default_user_identity: IMemoryUserIdentity = user_identity or IMemoryUserIdentity()
         self.dml_ops = dml_ops
-        db.connect()
         self._openai = OpenAIRegistrar(self)
+        self.milvus_manager: MilvusManager | None = None
+        self._prepare_resource()
+
+    def _prepare_resource(self):
+        """
+        预先准备资源，例如数据库连接、向量数据库集合等
+        """
+        # 初始化数据库与连接池
+        get_db().connect()
+        # 初始化向量数据库集合（如果需要）
+        if env.VECTOR_MILVUS_SUPPORT is True:
+            from src.core.vector.milvus.milvus_manager import MilvusManager
+            self.milvus_manager = get_milvus_manager()
+            # TODO 检查集合是否存在，不存在则创建，然后导入数据，存在，则检查是否有数据，如果没有数据，则导入数据
 
     @property
     def openai(self):

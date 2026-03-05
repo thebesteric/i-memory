@@ -4,7 +4,7 @@ import json
 import asyncio
 from typing import Dict, List
 
-from utils.log_helper import LogHelper
+from agile_commons.utils import LogHelper
 
 from src.core.config import env
 from src.core.db import get_db
