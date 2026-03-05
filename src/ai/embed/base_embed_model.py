@@ -16,7 +16,7 @@ class BaseEmbedModel(BaseModel, ABC):
     @abstractmethod
     def __init__(self, /, **data):
         super().__init__(**data)
-        self.dim = env.VEC_DIM or 1536
+        self.dim = env.VECTOR_DIM or 1536
 
     @abstractmethod
     async def embed(self, text: str, model: str = None, dim: int = None) -> List[float]:

@@ -86,7 +86,7 @@ def get_vector_store() -> BaseVectorStore:
     根据配置获取向量存储后端实例
     :return:
     """
-    backend = env.IM_VECTOR_STORE or VectorStoreProvider.POSTGRES.value
+    backend = env.VECTOR_STORE or VectorStoreProvider.POSTGRES.value
     if backend == VectorStoreProvider.POSTGRES.value:
         from src.core.vector.postgres_vector_store import PostgresVectorStore
         dsn = env.POSTGRES_DB_URL

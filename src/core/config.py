@@ -52,15 +52,17 @@ class EnvConfig:
 
         # 模型提供商（包含向量和记忆相关识别模型）
         self.MODEL_PROVIDER = env_helper.get("IM_MODEL_PROVIDER", ModelProvider.DASHSCOPE.value)
-        # 向量存储提供商
-        self.IM_VECTOR_STORE = env_helper.get("IM_VECTOR_STORE", VectorStoreProvider.POSTGRES.value)
 
+        # 向量存储提供商
+        self.VECTOR_STORE = env_helper.get("IM_VECTOR_STORE", VectorStoreProvider.POSTGRES.value)
         # 向量维度
-        self.VEC_DIM = env_helper.get("IM_VEC_DIM", 1536)
+        self.VECTOR_DIM = env_helper.get("IM_VECTOR_DIM", 1536)
         # 最小向量维度
-        self.MIN_VEC_DIM = env_helper.get("IM_MIN_VEC_DIM", 64)
+        self.VECTOR_MIN_DIM = env_helper.get("IM_VECTOR_MIN_DIM", 64)
         # 最大向量维度
-        self.MAX_VEC_DIM = env_helper.get("IM_MAX_VEC_DIM", 1536)
+        self.VECTOR_MAX_DIM = env_helper.get("IM_VECTOR_MAX_DIM", 1536)
+        # 是否使用向量数据库辅助
+        self.VECTOR_MILVUS_SUPPORT = env_helper.get("IM_VECTOR_MILVUS_SUPPORT", True)
 
         # 摘要最大长度
         self.SUMMARY_MAX_LENGTH = env_helper.get("IM_SUMMARY_MAX_LENGTH", 1000)

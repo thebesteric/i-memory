@@ -23,8 +23,8 @@ class DecayCfg:
         self.cold_threshold = env.DECAY_COLD_THRESHOLD or 0.25
         self.reinforce_on_query = reinforce_on_query
         self.regeneration_enabled = regeneration_enabled
-        self.max_vec_dim = env.MAX_VEC_DIM or 1536
-        self.min_vec_dim = env.MIN_VEC_DIM or 64
+        self.max_vec_dim = env.VECTOR_MAX_DIM or 1536
+        self.min_vec_dim = env.VECTOR_MIN_DIM or 64
         self.summary_layers = min(3, max(1, env.SUMMARY_LAYERS or 3))
         self.lambda_hot = 0.005
         self.lambda_warm = 0.02

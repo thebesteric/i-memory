@@ -41,7 +41,7 @@ class PostgresVectorStore(BaseVectorStore):
                         user_id TEXT,
                         tenant_id TEXT,
                         project_id TEXT,
-                        v vector({env.VEC_DIM}),
+                        v vector({env.VECTOR_DIM}),
                         dim INTEGER,
                         created_at TIMESTAMPTZ DEFAULT NOW(),
                         PRIMARY KEY (id, sector)
