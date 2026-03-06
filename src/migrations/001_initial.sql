@@ -55,12 +55,12 @@ COMMENT ON COLUMN memories.feedback_score IS '用户反馈得分';
 CREATE TABLE IF NOT EXISTS vectors
 (
     id         TEXT,
+    sector     TEXT,
     tenant_id  TEXT,
     project_id TEXT,
     user_id    TEXT,
     v          vector(1536),
     dim        INTEGER,
-    sector     TEXT,
     PRIMARY KEY (id, sector),
     CONSTRAINT fk_vectors_id_memories_id
         FOREIGN KEY (id) REFERENCES memories (id)
@@ -68,12 +68,12 @@ CREATE TABLE IF NOT EXISTS vectors
 
 COMMENT ON TABLE vectors IS '记忆的嵌入向量';
 COMMENT ON COLUMN vectors.id IS '记忆标识';
+COMMENT ON COLUMN vectors.sector IS '扇区/主题标签';
 COMMENT ON COLUMN vectors.tenant_id IS '租户标识';
 COMMENT ON COLUMN vectors.project_id IS '项目标识';
 COMMENT ON COLUMN vectors.user_id IS '用户标识';
 COMMENT ON COLUMN vectors.v IS '嵌入向量';
 COMMENT ON COLUMN vectors.dim IS '向量维度';
-COMMENT ON COLUMN vectors.sector IS '扇区/主题标签';
 
 -- 用户表
 
