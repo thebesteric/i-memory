@@ -1,4 +1,4 @@
-from agile_commons.utils import singleton
+from agile.utils import singleton
 
 from src.ai.embed.openai_embed import OpenAIEmbed
 from src.core.config import env

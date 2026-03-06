@@ -2,7 +2,7 @@ import argparse
 import os
 
 import pyrootutils
-from agile_commons.utils import EnvHelper, singleton
+from agile.utils import EnvHelper, singleton
 
 from src.core.constants import ModelProvider, VectorStoreProvider
 
@@ -57,7 +57,7 @@ class EnvConfig:
         # Milvus 配置（开启向量数据库辅助）
         self.MILVUS_URL = env_helper.get("MILVUS_URL")
         self.MILVUS_TOKEN = env_helper.get("MILVUS_TOKEN")
-        self.MILVUS_COLLECTION = env_helper.get("MILVUS_COLLECTION", "i_memory")
+        self.MILVUS_COLLECTION_NAME = env_helper.get("MILVUS_COLLECTION_NAME", "i_memory")
 
         # 模型提供商（包含向量和记忆相关识别模型）
         self.MODEL_PROVIDER = env_helper.get("IM_MODEL_PROVIDER", ModelProvider.DASHSCOPE.value)

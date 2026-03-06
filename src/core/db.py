@@ -5,7 +5,7 @@ from sqlite3 import OperationalError
 from typing import Optional, Tuple, Dict, List, Any
 
 import psycopg2
-from agile_commons.utils import LogHelper, singleton
+from agile.utils import LogHelper, singleton
 from psycopg2.extras import DictCursor
 from psycopg2.pool import ThreadedConnectionPool
 import inspect

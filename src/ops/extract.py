@@ -1,6 +1,6 @@
 import warnings
 
-from agile_commons.utils import LogHelper
+from agile.utils import LogHelper
 
 warnings.filterwarnings("ignore", category=UserWarning, module="jieba")
 warnings.filterwarnings("ignore", category=SyntaxWarning, module="jieba")

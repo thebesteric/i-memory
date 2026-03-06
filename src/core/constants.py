@@ -1,7 +1,7 @@
 from enum import Enum
 
-from agile_commons.cache import MemoryCache
-from agile_commons.utils import TimeUnit
+from agile.cache import MemoryCache
+from agile.utils import TimeUnit
 
 # 记忆查询缓存
 MEMORIES_CACHE = MemoryCache(

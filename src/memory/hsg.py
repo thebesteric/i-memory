@@ -5,7 +5,7 @@ import time
 import uuid
 from typing import Any, Dict, List
 
-from agile_commons.utils import LogHelper
+from agile.utils import LogHelper
 
 from src.ai.embed.base_embed_model import BaseEmbedModel
 from src.ai.model_provider import get_embed_model
@@ -337,7 +337,7 @@ async def hsg_query(query: str, top_k: int = 10, filters: IMemoryFilters = None)
         if not sectors:
             sectors = ["semantic"]
         # 为各扇区生成嵌入向量
-        query_embed = await embed_query_for_all_sectors(query, sectors)
+        query_embed_with_sectors = await embed_query_for_all_sectors(query, sectors)
 
         # 动态权重调
         primary_classify = query_classify.primary
@@ -353,7 +353,7 @@ async def hsg_query(query: str, top_k: int = 10, filters: IMemoryFilters = None)
         sector_result = {}
         for sector in sectors:
             # 获取该扇区的查询向量
-            query_vector = query_embed[sector]
+            query_vector = query_embed_with_sectors[sector]
             # 每个扇区返回 top_k × 3 个候选
             res: List[VectorSearch] = await vector_store.search(query_vector, sector, top_k * 3, filters)
             sector_result[sector] = res
@@ -414,7 +414,7 @@ async def hsg_query(query: str, top_k: int = 10, filters: IMemoryFilters = None)
                 continue
 
             # 多向量融合相似度
-            mvf = await calc_multi_vec_fusion_score(mid, query_embed, weight)
+            mvf = await calc_multi_vec_fusion_score(mid, query_embed_with_sectors, weight)
             # 跨扇区共振分数
             csr = await calculate_cross_sector_resonance_score(mem["primary_sector"], query_classify.primary, mvf)
 

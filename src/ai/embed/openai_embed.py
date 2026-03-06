@@ -1,6 +1,6 @@
 from typing import List
 
-from agile_commons.utils import singleton
+from agile.utils import singleton
 from openai import AsyncOpenAI
 
 from src.ai.embed.base_embed_model import BaseEmbedModel

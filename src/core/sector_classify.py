@@ -206,6 +206,7 @@ begin!!
                 scores={meta_sec: 100.0}
             )
 
+        # 调用模型执行链获取分类结果
         chain = self.get_chain()
         output: ClassifyOutput = await chain.ainvoke({"content": self.content})
 

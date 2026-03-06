@@ -3,7 +3,7 @@ import time
 from typing import List
 
 import numpy as np
-from agile_commons.utils import LogHelper, singleton
+from agile.utils import LogHelper, singleton
 from pydantic import BaseModel, Field
 
 from src.core.db import get_db

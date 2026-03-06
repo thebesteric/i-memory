@@ -1,4 +1,4 @@
-from agile_commons.web import R
+from agile.web import R
 from fastapi import APIRouter
 
 router = APIRouter(prefix="/health", tags=["health"])

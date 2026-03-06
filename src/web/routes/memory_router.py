@@ -1,8 +1,8 @@
 import json
 from typing import Dict, List
 
-from agile_commons.web import PagingResponse
-from agile_commons.web.common_result import gen_response_model, R
+from agile.web import PagingResponse
+from agile.web.common_result import gen_response_model, R
 from fastapi import APIRouter
 from fastapi.params import Path, Body
 

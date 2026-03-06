@@ -3,8 +3,8 @@ import sys
 import time
 from contextlib import asynccontextmanager
 
-from agile_commons.utils import LogHelper
-from agile_commons.web import R
+from agile.utils import LogHelper
+from agile.web import R
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError, HTTPException
 from fastapi.middleware.cors import CORSMiddleware

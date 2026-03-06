@@ -2,7 +2,7 @@ from abc import abstractmethod, ABC
 from typing import List
 
 import numpy as np
-from agile_commons.utils import LogHelper
+from agile.utils import LogHelper
 from pydantic import BaseModel, ConfigDict
 
 from src.core.config import env

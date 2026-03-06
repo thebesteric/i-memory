@@ -2,7 +2,7 @@ import json
 import math
 from typing import Any, Set
 
-from agile_commons.utils import LogHelper
+from agile.utils import LogHelper
 
 from src.core.constants import HYBRID_PARAMS
 

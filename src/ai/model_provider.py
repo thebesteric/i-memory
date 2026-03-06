@@ -1,4 +1,4 @@
-from agile_commons.utils import LogHelper
+from agile.utils import LogHelper
 from langchain_core.language_models import BaseChatModel
 from langchain_openai import ChatOpenAI
 

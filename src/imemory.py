@@ -1,13 +1,16 @@
+import asyncio
 from typing import Dict, Any, List
 
-from agile_commons.utils import LogHelper, singleton
-from agile_commons.web import PagingResponse
+from agile.db.vector.milvus.milvus_manager import MilvusManager
+from agile.utils import LogHelper, singleton
+from agile.web import PagingResponse
+from pymilvus import Collection
 
 from src.ai.client.openai_registrar import OpenAIRegistrar
+from src.core.components import get_milvus_manager
 from src.core.config import env
 from src.core.db import get_db
 from src.core.dml_ops import dml_ops
-from src.core.vector.milvus.milvus_manager import MilvusManager, get_milvus_manager
 from src.memory.hsg import hsg_query
 from src.memory.models.memory_models import IMemoryConfig, IMemoryFilters, IMemoryUserIdentity, IMemoryItemInfo
 from src.ops.ingest import ingest_document
@@ -22,26 +25,35 @@ class IMemory:
         self.default_user_identity: IMemoryUserIdentity = user_identity or IMemoryUserIdentity()
         self.dml_ops = dml_ops
         self._openai = OpenAIRegistrar(self)
+        self.db = get_db()
         self.milvus_manager: MilvusManager | None = None
-        self._prepare_resource()
+        # 预先准备资源，例如数据库连接、向量数据库集合等
+        asyncio.run(self._prepare_resource())
 
-    def _prepare_resource(self):
+    async def _prepare_resource(self):
         """
         预先准备资源，例如数据库连接、向量数据库集合等
         """
         # 初始化数据库与连接池
-        get_db().connect()
+        self.db.connect()
         # 初始化向量数据库集合（如果需要）
         if env.VECTOR_MILVUS_SUPPORT is True:
-            from src.core.vector.milvus.milvus_manager import MilvusManager
             self.milvus_manager = get_milvus_manager()
-            # TODO 检查集合是否存在，不存在则创建，然后导入数据，存在，则检查是否有数据，如果没有数据，则导入数据
+            # 检查集合是否存在，不存在则创建
+            await self.milvus_manager.ensure_collection_ready()
+            collection: Collection = await self.milvus_manager.get_collection(env.MILVUS_COLLECTION_NAME)
+            if collection.num_entities == 0:
+                print("================0")
 
     @property
     def openai(self):
         return self._openai
 
-    async def add(self, content: str, user_identity: IMemoryUserIdentity = None, cfg: IMemoryConfig = None, tags: List[str] = None,
+    async def add(self,
+                  content: str,
+                  user_identity: IMemoryUserIdentity = None,
+                  cfg: IMemoryConfig = None,
+                  tags: List[str] = None,
                   meta: Dict[str, Any] = None) -> Dict[str, Any]:
         """
         添加记忆内容
@@ -64,7 +76,11 @@ class IMemory:
             res["id"] = res["root_memory_id"]
         return res
 
-    async def search(self, query: str, *, limit: int = 10, filters: IMemoryFilters = None) -> List[IMemoryItemInfo]:
+    async def search(self,
+                     query: str,
+                     *,
+                     limit: int = 10,
+                     filters: IMemoryFilters = None) -> List[IMemoryItemInfo]:
         """
         搜索记忆内容
         :param query: 查询文本
@@ -103,7 +119,11 @@ class IMemory:
         user_identity = user_identity or self.default_user_identity
         return self.dml_ops.del_mem_by_user(user_identity)
 
-    async def history(self, *, user_identity: IMemoryUserIdentity = None, current: int = 1, size: int = 10) -> PagingResponse:
+    async def history(self,
+                      *,
+                      user_identity: IMemoryUserIdentity = None,
+                      current: int = 1,
+                      size: int = 10) -> PagingResponse:
         """
         获取用户记忆历史
         :param user_identity: 用户身份

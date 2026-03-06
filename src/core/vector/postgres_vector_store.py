@@ -2,7 +2,7 @@ import json
 from typing import List, Optional
 
 import asyncpg
-from agile_commons.utils import LogHelper, singleton
+from agile.utils import LogHelper, singleton
 from asyncpg import InvalidColumnReferenceError
 
 from src.core.config import env

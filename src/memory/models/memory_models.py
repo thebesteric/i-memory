@@ -1,7 +1,7 @@
 import datetime
 from typing import Any
 
-from agile_commons.utils.pydantic_extension import BaseModelEnhance
+from agile.utils.pydantic_extension import BaseModelEnhance
 from pydantic import BaseModel, ConfigDict, Field
 
 
