@@ -2,7 +2,7 @@ import json
 from typing import List, Optional
 
 import asyncpg
-from agile.utils import LogHelper, singleton
+from agile.utils import LogHelper, singleton, timing
 from asyncpg import InvalidColumnReferenceError
 
 from src.core.config import env
@@ -135,6 +135,7 @@ class PostgresVectorStore(BaseVectorStore):
         async with pool.acquire() as conn:
             await conn.execute(f"DELETE FROM {self.vector_table_name} WHERE id=$1", id)
 
+    @timing
     async def search(self, vector: List[float], sector: str, k: int, filters: IMemoryFilters = None) -> List[VectorSearch]:
         """
         相似度搜索

@@ -5,7 +5,7 @@ import time
 import uuid
 from typing import Any, Dict, List
 
-from agile.utils import LogHelper
+from agile.utils import LogHelper, timing
 
 from src.ai.embed.base_embed_model import BaseEmbedModel
 from src.ai.model_provider import get_embed_model
@@ -23,7 +23,7 @@ from src.memory.decay import Decay
 from src.memory.embed import embed_multi_sector, calc_mean_vec, embed
 from src.memory.models.memory_models import IMemoryFilters, IMemoryItemDebugInfo, IMemoryItemInfo, IMemoryUserIdentity, IMemoryUser
 from src.memory.user_summary import update_user_summary
-from src.ops.dynamic_memory import calculate_cross_sector_resonance_score, apply_retrieval_trace_reinforcement_to_memory, \
+from src.ops.dynamic_memory import calc_cross_sector_resonance_score, apply_retrieval_trace_reinforcement_to_memory, \
     propagate_associative_reinforcement_to_linked_nodes
 from src.tools.chunking import chunk_text
 from src.tools.keyword import compute_keyword_overlap, compute_token_overlap
@@ -35,10 +35,11 @@ waypoints = Waypoints()
 db = get_db()
 decay = Decay(reinforce_on_query=True, regeneration_enabled=True)
 
-
+@timing
 async def embed_query_for_all_sectors(query: str, sectors: List[str]) -> Dict[str, List[float]]:
     res = {}
     for s in sectors:
+        # 调用 embed 函数为查询文本生成对应扇区的向量
         res[s] = await embed(query, s)
     return res
 
@@ -309,7 +310,7 @@ async def calc_multi_vec_fusion_score(mid: str, qe: Dict[str, List[float]], w: D
     # 返回归一化的融合相似度评分
     return s / tot if tot > 0 else 0.0
 
-
+@timing
 async def hsg_query(query: str, top_k: int = 10, filters: IMemoryFilters = None) -> List[IMemoryItemInfo]:
     """
     基于混合评分机制（内容相似度、关键词重叠、路标关联、时间衰减等）进行记忆检索
@@ -416,7 +417,7 @@ async def hsg_query(query: str, top_k: int = 10, filters: IMemoryFilters = None)
             # 多向量融合相似度
             mvf = await calc_multi_vec_fusion_score(mid, query_embed_with_sectors, weight)
             # 跨扇区共振分数
-            csr = await calculate_cross_sector_resonance_score(mem["primary_sector"], query_classify.primary, mvf)
+            csr = await calc_cross_sector_resonance_score(mem["primary_sector"], query_classify.primary, mvf)
 
             # 取最高相似度
             best_sim = csr

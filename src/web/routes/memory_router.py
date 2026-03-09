@@ -17,8 +17,6 @@ router = APIRouter(prefix="/memory", tags=["memory"])
 mem = IMemory()
 
 
-# TODO router.post 中相关的文档属性
-
 @router.post(
     "/add",
     summary="添加记忆内容",

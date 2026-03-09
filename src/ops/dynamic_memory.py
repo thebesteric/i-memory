@@ -80,7 +80,7 @@ SECTOR_INDEX_MAPPING_FOR_MATRIX_LOOKUP = {
 }
 
 
-async def calculate_cross_sector_resonance_score(ms: str, qs: str, bs: float) -> float:
+async def calc_cross_sector_resonance_score(ms: str, qs: str, bs: float) -> float:
     """
     计算跨扇区共鸣分数 - 根据记忆类型间的相互作用强度计算激活程度
 

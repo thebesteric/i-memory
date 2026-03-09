@@ -2,6 +2,7 @@ import asyncio
 from typing import TypedDict, List, Any, Dict
 
 import regex as re
+from agile.utils import timing
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
@@ -190,6 +191,7 @@ begin!!
         # 构建执行链
         return prompt_template | llm | output_parser
 
+    @timing
     async def classify(self) -> ClassifyResult:
         """
         根据文本内容分类记忆领域

@@ -2,19 +2,19 @@
 
 [[package]]
 name = "agile"
-version = "0.1.2"
+version = "0.1.4"
 description = "An easy-to-use general-purpose Python utility toolkits"
 optional = false
 python-versions = "<4.0.0,>=3.12"
 groups = ["main"]
 files = [
-    {file = "agile-0.1.2-py3-none-any.whl", hash = "sha256:61d64ea516636089f6b417038c55b49b8b8b1e36c62f8c3b1a35ec23499aec0a"},
-    {file = "agile-0.1.2.tar.gz", hash = "sha256:c9598a974c2ee6ce90d7b0cae90ff63397b97d1248f4834d13f0bc3defe95438"},
+    {file = "agile-0.1.4-py3-none-any.whl", hash = "sha256:a4faf1092cf85fd7daf52cd9d485a479b686f8dabfadddb6691167cad26f6a86"},
+    {file = "agile-0.1.4.tar.gz", hash = "sha256:acf66f460785a76db68d39ffd596223553dda4f0c4c28c5d3dd8acdb03ce24c8"},
 ]
 
 [package.dependencies]
 build = ">=1.4.0,<2.0.0"
-cachetools = ">=7.0.0,<8.0.0"
+cachetools = ">=7.0.4,<8.0.0"
 colorlog = ">=6.10.1,<7.0.0"
 langchain = ">=1.2.10,<2.0.0"
 numpy = ">=2.4.2,<3.0.0"
@@ -223,14 +223,14 @@ virtualenv = ["virtualenv (>=20.11) ; python_version < \"3.10\"", "virtualenv (>
 
 [[package]]
 name = "cachetools"
-version = "7.0.0"
+version = "7.0.4"
 description = "Extensible memoizing collections and decorators"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "cachetools-7.0.0-py3-none-any.whl", hash = "sha256:d52fef60e6e964a1969cfb61ccf6242a801b432790fe520d78720d757c81cbd2"},
-    {file = "cachetools-7.0.0.tar.gz", hash = "sha256:a9abf18ff3b86c7d05b27ead412e235e16ae045925e531fae38d5fada5ed5b08"},
+    {file = "cachetools-7.0.4-py3-none-any.whl", hash = "sha256:0c8bb1b9ec8194fa4d764accfde602dfe52f70d0f311e62792d4c3f8c051b1e9"},
+    {file = "cachetools-7.0.4.tar.gz", hash = "sha256:7042c0e4eea87812f04744ce6ee9ed3de457875eb1f82d8a206c46d6e48b6734"},
 ]
 
 [[package]]
@@ -3225,4 +3225,4 @@ cffi = ["cffi (>=1.17,<2.0) ; platform_python_implementation != \"PyPy\" and pyt
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0.0"
-content-hash = "9a8783ae0a6282defd6995385ccf333b5859f6ecac555ede3ae99200ca95aaaf"
+content-hash = "2dba6e74ca142a72d0a9f7679c0c6f65c53e81006d5eeefd11f52c045fd98775"

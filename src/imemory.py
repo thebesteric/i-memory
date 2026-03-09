@@ -43,7 +43,8 @@ class IMemory:
             await self.milvus_manager.ensure_collection_ready()
             collection: Collection = await self.milvus_manager.get_collection(env.MILVUS_COLLECTION_NAME)
             if collection.num_entities == 0:
-                print("================0")
+                # TODO: 从数据库读取向量数据并插入到 Milvus 中
+                pass
 
     @property
     def openai(self):
