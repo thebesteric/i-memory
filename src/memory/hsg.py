@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import json
 import math
@@ -37,11 +38,9 @@ decay = Decay(reinforce_on_query=True, regeneration_enabled=True)
 
 @timing
 async def embed_query_for_all_sectors(query: str, sectors: List[str]) -> Dict[str, List[float]]:
-    res = {}
-    for s in sectors:
-        # 调用 embed 函数为查询文本生成对应扇区的向量
-        res[s] = await embed(query, s)
-    return res
+    # 并发生成各扇区查询向量，减少多扇区检索的总等待时间
+    vectors = await asyncio.gather(*(embed(query, sector) for sector in sectors))
+    return {sector: vector for sector, vector in zip(sectors, vectors)}
 
 
 def compress_vec_for_storage(vec: List[float], target_dim: int) -> List[float]:

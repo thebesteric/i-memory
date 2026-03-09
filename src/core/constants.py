@@ -10,6 +10,11 @@ MEMORIES_CACHE = MemoryCache(
     time_unit=TimeUnit.SECONDS
 )
 
+# 记忆分类缓存（用于存放记忆分类结果，减少重复计算）
+QUERY_CLASSIFY_CACHE = MemoryCache(
+    time_unit=TimeUnit.SECONDS
+)
+
 # 组件查询缓存（用于存放一些单例的组件）
 COMPONENTS_CACHE = MemoryCache(
     time_unit=TimeUnit.SECONDS
