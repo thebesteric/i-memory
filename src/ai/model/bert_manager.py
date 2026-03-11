@@ -226,6 +226,7 @@ class BertManager:
               epochs: int = 10000,
               lr: float = 1e-3,
               patience: int = 10,
+              periodic_checkpoint_max_keep: int | None = None,
               drop_last: bool = False,
               start_epoch: int | None = None,
               optimizer: torch.optim.Optimizer | None = None,
@@ -243,6 +244,7 @@ class BertManager:
         :param epochs: 训练轮数
         :param lr: 学习率
         :param patience: 提前停止的耐心值
+        :param periodic_checkpoint_max_keep: periodic checkpoint 最大保留数量，None 表示不限制
         :param text_field: 文本字段名称
         :param label_fields: 标签字段名称列表
         :param loss_weights: 损失权重列表
@@ -274,6 +276,9 @@ class BertManager:
         # 检查 label_fields 中是否有重复的字段名
         if len(set(label_fields)) != len(label_fields):
             raise ValueError(f"label_fields contains duplicate names: {label_fields}")
+
+        if periodic_checkpoint_max_keep is not None and periodic_checkpoint_max_keep < 1:
+            raise ValueError("periodic_checkpoint_max_keep must be >= 1 or None")
 
         # 续训时 start_epoch 会根据 checkpoint 计算出 start_epoch，无需外部传入
         if checkpoint_path and start_epoch is not None:
@@ -347,7 +352,7 @@ class BertManager:
         logger.info(
             "[CONFIG]\n"
             f"  runtime: model={self.model_name_or_path}, device={self.device}, freeze_bert={bert_incr_model.freeze_bert}\n"
-            f"  train: batch_size={batch_size}, epochs={epochs}, lr={lr}, drop_last={drop_last}\n"
+            f"  train: batch_size={batch_size}, epochs={epochs}, lr={lr}, drop_last={drop_last}, periodic_checkpoint_max_keep={periodic_checkpoint_max_keep}\n"
             f"  labels: text_field={text_field}, label_fields={label_fields}, loss_weights={loss_weights}\n"
             f"  dataset: train_size={len(train_dataset)}, valid_size={len(valid_dataset) if valid_dataset else 'N/A'}"
         )
@@ -408,7 +413,7 @@ class BertManager:
 
             # 加载训练集
             for i, batch in enumerate(train_loader):
-                # 拆分 拆分 batch：input_ids(0), attention_mask(1), token_type_ids(2), 主标签(3), 辅标签(4), ...
+                # 拆分 batch：input_ids(0), attention_mask(1), token_type_ids(2), 主标签(3), 辅标签(4), ...
                 input_ids = batch[0].to(self.device)
                 attention_mask = batch[1].to(self.device)
                 token_type_ids = batch[2].to(self.device)
@@ -537,8 +542,16 @@ class BertManager:
                         "model_state_dict": bert_incr_model.state_dict(),
                         "optimizer_state_dict": optimizer.state_dict(),
                     }, periodic_file_param_save_path)
+                    # 清理文件，数量保持在 periodic_checkpoint_max_keep 个
+                    periodic_cleanup_result = self._cleanup_old_periodic_checkpoints(
+                        params_save_path=params_save_path,
+                        max_keep=periodic_checkpoint_max_keep,
+                    )
+                    periodic_deleted_files_text = ";".join(periodic_cleanup_result["deleted_files"])
                     logger.info(
-                        f"[SAVE] epoch={epoch}/{epochs}, kind=periodic, path={periodic_file_param_save_path}"
+                        f"[SAVE] epoch={epoch}/{epochs}, kind=periodic, path={periodic_file_param_save_path}, "
+                        f"max_keep={periodic_checkpoint_max_keep}, deleted_old={periodic_cleanup_result['deleted_count']}, "
+                        f"deleted_files={periodic_deleted_files_text}"
                     )
             else:
                 # 验证模型，判断模型是否过拟合
@@ -556,7 +569,7 @@ class BertManager:
                 with torch.no_grad():
                     # 加载验证集
                     for i, batch in enumerate(valid_loader):
-                        # 拆分 拆分 batch：input_ids(0), attention_mask(1), token_type_ids(2), 主标签(3), 辉标签(4), ...
+                        # 拆分 batch：input_ids(0), attention_mask(1), token_type_ids(2), 主标签(3), 辉标签(4), ...
                         input_ids = batch[0].to(self.device)
                         attention_mask = batch[1].to(self.device)
                         token_type_ids = batch[2].to(self.device)
@@ -681,10 +694,21 @@ class BertManager:
                             "model_state_dict": bert_incr_model.state_dict(),
                             "optimizer_state_dict": optimizer.state_dict(),
                         }, best_file_params_save_path)
+                        # 清理文件，保证只有一份最优的 checkpoint 文件存在
+                        cleanup_result = self._cleanup_old_best_checkpoints(
+                            params_save_path=params_save_path,
+                            keep_file_path=best_file_params_save_path,
+                        )
                         early_stop_count = 0
+                        deleted_files_text = ";".join(cleanup_result["deleted_files"])
+                        deleted_count_text = (
+                            f", deleted_old_best={cleanup_result['deleted_count']}"
+                            if cleanup_result["deleted_count"] != 1
+                            else ""
+                        )
                         logger.info(
                             f"[SAVE] epoch={epoch}/{epochs}, kind=best, acc={best_val_acc:.4f}, "
-                            f"path={best_file_params_save_path}"
+                            f"path={best_file_params_save_path}{deleted_count_text}, deleted_files={deleted_files_text}"
                         )
                     else:
                         early_stop_count += 1
@@ -716,6 +740,67 @@ class BertManager:
             "load_result": load_result,
             "final_train_metrics": final_train_metrics,
             "final_valid_metrics": final_valid_metrics,
+        }
+
+    @staticmethod
+    def _cleanup_old_best_checkpoints(*, params_save_path: str, keep_file_path: str) -> dict[str, Any]:
+        keep_file_name = os.path.basename(keep_file_path)
+        deleted_files: list[str] = []
+        for file_name in os.listdir(params_save_path):
+            if not (file_name.startswith("best_bert_epoch_") and file_name.endswith(".pth")):
+                continue
+            if file_name == keep_file_name:
+                continue
+            file_path = os.path.join(params_save_path, file_name)
+            try:
+                os.remove(file_path)
+                deleted_files.append(file_path)
+            except OSError as exc:
+                logger.warning(
+                    f"[SAVE] kind=best_cleanup, action=skip_delete, file={file_path}, error={exc}"
+                )
+
+        return {
+            "deleted_count": len(deleted_files),
+            "deleted_files": deleted_files,
+        }
+
+    @staticmethod
+    def _cleanup_old_periodic_checkpoints(*, params_save_path: str, max_keep: int | None) -> dict[str, Any]:
+        if max_keep is None:
+            return {
+                "deleted_count": 0,
+                "deleted_files": [],
+            }
+
+        periodic_files: list[tuple[int, str]] = []
+        for file_name in os.listdir(params_save_path):
+            if not (file_name.startswith("periodic_epoch_") and file_name.endswith(".pth")):
+                continue
+
+            file_stem = file_name[:-4]
+            epoch_part = file_stem.replace("periodic_epoch_", "", 1)
+            if not epoch_part.isdigit():
+                continue
+
+            periodic_files.append((int(epoch_part), os.path.join(params_save_path, file_name)))
+
+        periodic_files.sort(key=lambda x: x[0], reverse=True)
+        files_to_delete = periodic_files[max_keep:]
+
+        deleted_files: list[str] = []
+        for _, file_path in files_to_delete:
+            try:
+                os.remove(file_path)
+                deleted_files.append(file_path)
+            except OSError as exc:
+                logger.warning(
+                    f"[SAVE] kind=periodic_cleanup, action=skip_delete, file={file_path}, error={exc}"
+                )
+
+        return {
+            "deleted_count": len(deleted_files),
+            "deleted_files": deleted_files,
         }
 
     @staticmethod
@@ -762,6 +847,7 @@ class BertManager:
                      epochs: int = 10000,
                      lr: float = 1e-3,
                      patience: int = 10,
+                     periodic_checkpoint_max_keep: int | None = None,
                      text_field: str = "text",
                      label_fields: list[str] = None,
                      loss_weights: list[float] = None,
@@ -780,6 +866,7 @@ class BertManager:
         :param epochs: 目标总轮次（例如 checkpoint 的 epoch=3，epochs=10，则从 4 训到 10）
         :param lr: 学习率（当不恢复 optimizer 时生效）
         :param patience: 早停耐心值
+        :param periodic_checkpoint_max_keep: periodic checkpoint 最大保留数量，None 表示不限制
         :param text_field: 文本字段
         :param label_fields: 标签字段
         :param loss_weights: 损失权重
@@ -798,6 +885,7 @@ class BertManager:
             epochs=epochs,
             lr=lr,
             patience=patience,
+            periodic_checkpoint_max_keep=periodic_checkpoint_max_keep,
             text_field=text_field,
             label_fields=label_fields,
             loss_weights=loss_weights,

@@ -1,3 +1,5 @@
+import os
+import os
 import tempfile
 import unittest
 from typing import cast
@@ -83,6 +85,7 @@ class DummyPrimaryMultiIncrModel(torch.nn.Module):
 class TestBertManagerTrain(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
+        print(f"temp_dir: {self.temp_dir}")
         self.addCleanup(self.temp_dir.cleanup)
         self.manager = BertManager(
             model_name_or_path="google-bert/bert-base-multilingual-cased",
@@ -128,6 +131,47 @@ class TestBertManagerTrain(unittest.TestCase):
         self.assertEqual(mocked_create_loader.call_count, 2)
         self.assertTrue(mocked_create_loader.call_args_list[0].kwargs["shuffle"])
         self.assertFalse(mocked_create_loader.call_args_list[1].kwargs["shuffle"])
+
+    def test_train_keeps_only_latest_periodic_checkpoints_when_limited(self):
+        optimizer = torch.optim.SGD(self.model.parameters(), lr=0.1)
+
+        batch = (
+            torch.ones((1, 4), dtype=torch.long),
+            torch.ones((1, 4), dtype=torch.long),
+            torch.zeros((1, 4), dtype=torch.long),
+            torch.tensor([0], dtype=torch.long),
+        )
+
+        with patch.object(self.manager, "_create_data_loader", side_effect=[[batch], None]):
+            self.manager.train(
+                bert_incr_model=self.model,
+                train_dataset=self.dataset,
+                params_save_path=self.temp_dir.name,
+                epochs=30,
+                label_fields=self.label_fields,
+                optimizer=optimizer,
+                periodic_checkpoint_max_keep=2,
+            )
+
+        periodic_files = sorted(
+            f for f in os.listdir(self.temp_dir.name)
+            if f.startswith("periodic_epoch_") and f.endswith(".pth")
+        )
+        self.assertEqual(periodic_files, ["periodic_epoch_20.pth", "periodic_epoch_30.pth"])
+
+    def test_train_rejects_invalid_periodic_checkpoint_max_keep(self):
+        optimizer = torch.optim.SGD(self.model.parameters(), lr=0.1)
+
+        with self.assertRaisesRegex(ValueError, "periodic_checkpoint_max_keep must be >= 1 or None"):
+            self.manager.train(
+                bert_incr_model=self.model,
+                train_dataset=self.dataset,
+                params_save_path=self.temp_dir.name,
+                epochs=1,
+                label_fields=self.label_fields,
+                optimizer=optimizer,
+                periodic_checkpoint_max_keep=0,
+            )
 
     def test_train_resumes_when_checkpoint_path_is_provided(self):
         load_result = {
@@ -222,6 +266,15 @@ class TestBertManagerTrain(unittest.TestCase):
         model = cast(BertIncrModel, cast(torch.nn.Module, DummyMultiBranchIncrModel()))
         optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
 
+        # 预置旧 best 文件，验证新 best 保存后会被清理
+        stale_best_paths = [
+            os.path.join(self.temp_dir.name, "best_bert_epoch_99_acc_0.1000.pth"),
+            os.path.join(self.temp_dir.name, "best_bert_epoch_100_acc_0.2000.pth"),
+        ]
+        for stale_path in stale_best_paths:
+            with open(stale_path, "wb") as f:
+                f.write(b"stale")
+
         input_ids = torch.ones((2, 4), dtype=torch.long)
         attention_mask = torch.ones((2, 4), dtype=torch.long)
         token_type_ids = torch.zeros((2, 4), dtype=torch.long)
@@ -249,6 +302,10 @@ class TestBertManagerTrain(unittest.TestCase):
         self.assertAlmostEqual(result["final_train_metrics"]["additional_label_acc"], 1.0, places=4)
         self.assertAlmostEqual(result["final_valid_metrics"]["additional_acc"], 1.0, places=4)
         self.assertAlmostEqual(result["final_valid_metrics"]["additional_label_acc"], 1.0, places=4)
+
+        best_files = [f for f in os.listdir(self.temp_dir.name) if f.startswith("best_bert_epoch_") and f.endswith(".pth")]
+        self.assertEqual(len(best_files), 1)
+        self.assertTrue(best_files[0].startswith("best_bert_epoch_1_acc_"))
 
     def test_train_main_acc_is_sample_weighted_across_uneven_batches(self):
         model = cast(BertIncrModel, cast(torch.nn.Module, DummyIncrModel()))
