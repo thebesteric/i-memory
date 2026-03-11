@@ -34,7 +34,8 @@ handlers:
   # 控制台输出
   console_handler:
     class: "logging.StreamHandler"
-    level: "DEBUG"
+#    class: "src.utils.logging_handlers.SafeStreamHandler"
+    level: "INFO"
     formatter: console
     stream: "ext://sys.stdout"
 

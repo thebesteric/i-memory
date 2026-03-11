@@ -6,11 +6,9 @@ import regex as re
 from agile.utils import timing
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.prompts import PromptTemplate
-from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field, ConfigDict
 
 from src.ai.model_provider import get_chat_model
-from src.core.config import env
 
 
 class SectorCfg(BaseModel):
@@ -24,7 +22,6 @@ class SectorCfg(BaseModel):
     decay_lambda: float = Field(..., description="记忆衰减系数")
     weight: float = Field(..., description="记忆权重")
     description: str = Field("", description="领域描述")
-    patterns: list[Pattern] = Field(default_factory=list, description="领域相关的正则表达式列表")
 
 
 class ClassifyResult(BaseModel):
@@ -107,7 +104,6 @@ SECTOR_CONFIGS: Dict[str, SectorCfg] = {
         decay_lambda=0.015,
         weight=1.2,
         description="具体的时间、地点、事件、经历",
-        patterns=[]
     ),
     "semantic": SectorCfg(
         name="语义记忆",
@@ -115,7 +111,6 @@ SECTOR_CONFIGS: Dict[str, SectorCfg] = {
         decay_lambda=0.005,
         weight=1.0,
         description="客观的知识、概念、事实、学科信息",
-        patterns=[]
     ),
     "procedural": SectorCfg(
         name="程序记忆",
@@ -123,7 +118,6 @@ SECTOR_CONFIGS: Dict[str, SectorCfg] = {
         decay_lambda=0.008,
         weight=1.1,
         description="步骤、方法、操作流程、技能",
-        patterns=[]
     ),
     "emotional": SectorCfg(
         name="情绪记忆",
@@ -131,7 +125,6 @@ SECTOR_CONFIGS: Dict[str, SectorCfg] = {
         decay_lambda=0.02,
         weight=1.3,
         description="情绪、感受、主观体验",
-        patterns=[]
     ),
     "reflective": SectorCfg(
         name="反思记忆",
@@ -139,8 +132,12 @@ SECTOR_CONFIGS: Dict[str, SectorCfg] = {
         decay_lambda=0.001,
         weight=0.8,
         description="思考、洞察、总结、成长、反馈",
-        patterns=[]
     ),
+}
+
+# 提取键并按顺序映射为数字索引
+SECTOR_INDEX_MAP: Dict[int, str] = {
+    idx: sector_key for idx, sector_key in enumerate(SECTOR_CONFIGS.keys())
 }
 
 # 领域权重
@@ -240,4 +237,6 @@ begin!!
 
 
 if __name__ == '__main__':
-    asyncio.run(SectorClassifier(content="我昨天去了公园，感觉非常开心！").classify())
+    scf = SectorClassifier(content="我昨天去了公园，感觉非常开心！")
+    r = asyncio.run(scf.classify())
+    print(r.model_dump())
