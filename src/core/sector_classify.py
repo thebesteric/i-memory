@@ -135,9 +135,9 @@ SECTOR_CONFIGS: Dict[str, SectorCfg] = {
     ),
 }
 
-# 提取键并按顺序映射为数字索引
-SECTOR_INDEX_MAP: Dict[int, str] = {
-    idx: sector_key for idx, sector_key in enumerate(SECTOR_CONFIGS.keys())
+# 提取键并按顺序映射为数字索引 => {'episodic': 0, 'semantic': 1, 'procedural': 2, 'emotional': 3, 'reflective': 4}
+SECTOR_KEY_INDEX_MAPPING: dict[str, int] = {
+    sector_key: idx for idx, sector_key in enumerate(SECTOR_CONFIGS.keys())
 }
 
 # 领域权重
