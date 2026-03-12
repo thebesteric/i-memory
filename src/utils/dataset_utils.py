@@ -6,10 +6,12 @@ import json
 from datetime import datetime
 from typing import Any
 
+from agile.utils import LogHelper
 from agile.utils.argparser import Argparser, Argument
 
 from src.core.sector_classify import SectorClassifier, SECTOR_KEY_INDEX_MAPPING
 
+logger = LogHelper.get_logger()
 
 def compact_inner_arrays(obj):
     """
@@ -65,18 +67,18 @@ def process_json_file(input_file, output_file, indent=2):
         with open(output_file, 'w', encoding='utf-8') as f:
             f.write(final_json)
 
-        print(f"处理完成！")
-        print(f"输入文件大小：{os.path.getsize(input_file)} 字节")
-        print(f"输出文件路径：{output_file}")
+        logger.info(f"处理完成！")
+        logger.info(f"输入文件大小：{os.path.getsize(input_file)} 字节")
+        logger.info(f"输出文件路径：{output_file}")
 
     except FileNotFoundError:
-        print(f"错误：文件 {input_file} 不存在")
+        logger.error(f"错误：文件 {input_file} 不存在")
     except json.JSONDecodeError:
-        print(f"错误：{input_file} 不是有效的JSON文件")
+        logger.error(f"错误：{input_file} 不是有效的JSON文件")
     except ValueError as e:
-        print(f"错误：{e}")
+        logger.error(f"错误：{e}")
     except Exception as e:
-        print(f"未知错误：{e}")
+        logger.error(f"未知错误：{e}")
 
 
 def generate_hit_labels(primary_sector: str, additional_sectors: list[str]) -> list[int]:
@@ -123,7 +125,7 @@ async def calc_sectors(dataset_file_path: str) -> list[dict[str, Any]]:
             "labels": generate_hit_labels(classify.primary, classify.additional),
         }
         results.append(result)
-        print(f"[{idx}/{total}] {current_text[:30]}... -> {result}")
+        logger.info(f"[{idx}/{total}] {current_text[:30]}... -> {result}")
 
     # 将 results 写入一个新的文件
     if results:
@@ -147,9 +149,9 @@ async def calc_sectors(dataset_file_path: str) -> list[dict[str, Any]]:
                 indent=2
             )
 
-            print(f"\n处理完成！结果已写入：{output_file_path}")
+            logger.info(f"\n处理完成！结果已写入：{output_file_path}")
         except Exception as e:
-            print(f"错误：写入结果文件失败 - {str(e)}")
+            logger.error(f"错误：写入结果文件失败 - {str(e)}")
 
     return results
 
@@ -168,4 +170,5 @@ if __name__ == "__main__":
 
     arg = parser.get_arg("--dataset_path")
     arg.current_val = arg.current_val or arg.default_val
-    asyncio.run(calc_sectors(dataset_file_path=arg.current_val))
+    logger.info(f"使用数据集路径: {arg.current_val}")
+    # asyncio.run(calc_sectors(dataset_file_path=arg.current_val))
