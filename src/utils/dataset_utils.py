@@ -171,4 +171,4 @@ if __name__ == "__main__":
     arg = parser.get_arg("--dataset_path")
     arg.current_val = arg.current_val or arg.default_val
     logger.info(f"使用数据集路径: {arg.current_val}")
-    # asyncio.run(calc_sectors(dataset_file_path=arg.current_val))
+    asyncio.run(calc_sectors(dataset_file_path=arg.current_val))
