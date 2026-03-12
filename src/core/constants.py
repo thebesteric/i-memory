@@ -11,14 +11,16 @@ MEMORIES_CACHE = MemoryCache(
 )
 
 # 记忆分类缓存（用于存放记忆分类结果，减少重复计算）
-QUERY_CLASSIFY_CACHE = MemoryCache(
-    time_unit=TimeUnit.SECONDS
-)
+QUERY_CLASSIFY_CACHE = MemoryCache()
 
 # 组件查询缓存（用于存放一些单例的组件）
-COMPONENTS_CACHE = MemoryCache(
-    time_unit=TimeUnit.SECONDS
-)
+COMPONENTS_CACHE = MemoryCache()
+
+# 模型缓存
+MODEL_CACHE = MemoryCache()
+
+# 嵌入模型缓存
+EMBED_MODEL_CACHE = MemoryCache()
 
 # 记忆扇区关联度定义
 SECTOR_RELATIONSHIPS = {
