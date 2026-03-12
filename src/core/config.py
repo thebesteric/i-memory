@@ -100,7 +100,8 @@ def _load_env_file():
                         type=str,
                         default='',
                         help='运行环境，可选值：dev/test/prod')
-    args = parser.parse_args()
+    # Ignore unknown flags so importing config does not consume other modules' CLI args.
+    args, _ = parser.parse_known_args()
     env_mode = args.env_mode if args.env_mode else ""
     if env_mode:
         os.environ["ENV_MODE"] = env_mode
