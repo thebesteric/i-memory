@@ -1,4 +1,5 @@
 import json
+import math
 import os
 from typing import Literal, Union, Any
 
@@ -293,7 +294,8 @@ class BertManager:
         # 计算早停值
         if patience is not None:
             if isinstance(patience, str) and patience == "auto":
-                patience = int(epochs * 0.1)
+                # 自动计算早停值，至少为 1 次
+                patience = max(1, math.ceil(epochs * 0.1))
 
         load_result = None
         checkpoint_epoch = None
