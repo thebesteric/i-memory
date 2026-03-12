@@ -226,7 +226,7 @@ class BertManager:
               epochs: int = 10000,
               lr: float = 1e-3,
               patience: int = 10,
-              periodic_checkpoint_max_keep: int | None = None,
+              periodic_checkpoint_max_keep: int | None = 10,
               drop_last: bool = False,
               start_epoch: int | None = None,
               optimizer: torch.optim.Optimizer | None = None,
@@ -244,7 +244,7 @@ class BertManager:
         :param epochs: 训练轮数
         :param lr: 学习率
         :param patience: 提前停止的耐心值
-        :param periodic_checkpoint_max_keep: periodic checkpoint 最大保留数量，None 表示不限制
+        :param periodic_checkpoint_max_keep: periodic checkpoint 最大保留数量
         :param text_field: 文本字段名称
         :param label_fields: 标签字段名称列表
         :param loss_weights: 损失权重列表
@@ -277,8 +277,8 @@ class BertManager:
         if len(set(label_fields)) != len(label_fields):
             raise ValueError(f"label_fields contains duplicate names: {label_fields}")
 
-        if periodic_checkpoint_max_keep is not None and periodic_checkpoint_max_keep < 1:
-            raise ValueError("periodic_checkpoint_max_keep must be >= 1 or None")
+        if periodic_checkpoint_max_keep is not None and periodic_checkpoint_max_keep < 0:
+            raise ValueError("periodic_checkpoint_max_keep must be >= 0 or None for unlimited")
 
         # 续训时 start_epoch 会根据 checkpoint 计算出 start_epoch，无需外部传入
         if checkpoint_path and start_epoch is not None:
@@ -767,7 +767,7 @@ class BertManager:
 
     @staticmethod
     def _cleanup_old_periodic_checkpoints(*, params_save_path: str, max_keep: int | None) -> dict[str, Any]:
-        if max_keep is None:
+        if max_keep is None or max_keep < 1:
             return {
                 "deleted_count": 0,
                 "deleted_files": [],
@@ -847,7 +847,7 @@ class BertManager:
                      epochs: int = 10000,
                      lr: float = 1e-3,
                      patience: int = 10,
-                     periodic_checkpoint_max_keep: int | None = None,
+                     periodic_checkpoint_max_keep: int | None = 10,
                      text_field: str = "text",
                      label_fields: list[str] = None,
                      loss_weights: list[float] = None,
@@ -866,7 +866,7 @@ class BertManager:
         :param epochs: 目标总轮次（例如 checkpoint 的 epoch=3，epochs=10，则从 4 训到 10）
         :param lr: 学习率（当不恢复 optimizer 时生效）
         :param patience: 早停耐心值
-        :param periodic_checkpoint_max_keep: periodic checkpoint 最大保留数量，None 表示不限制
+        :param periodic_checkpoint_max_keep: periodic checkpoint 最大保留数量
         :param text_field: 文本字段
         :param label_fields: 标签字段
         :param loss_weights: 损失权重
