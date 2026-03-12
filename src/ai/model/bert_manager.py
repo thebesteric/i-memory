@@ -882,6 +882,103 @@ class BertManager:
 
         return result
 
+    def predict(self,
+                text: str,
+                bert_incr_model: "BertIncrModel",
+                checkpoint_path: str,
+                strict: bool = True,
+                map_location: str | torch.device | None = None,
+                text_field: str = "text",
+                multi_label_threshold: float = 0.5,
+                return_probabilities: bool = True) -> dict[str, Any]:
+
+        if not bert_incr_model:
+            raise ValueError("Model for loading checkpoint is required")
+
+        if not checkpoint_path:
+            raise ValueError("checkpoint_path is required")
+
+        if not os.path.exists(checkpoint_path):
+            raise FileNotFoundError(f"Checkpoint file not found: {checkpoint_path}")
+
+        if not (0.0 <= multi_label_threshold <= 1.0):
+            raise ValueError(f"multi_label_threshold must be in [0, 1], got {multi_label_threshold}")
+
+        load_result = self.load_checkpoint(
+            bert_incr_model=bert_incr_model,
+            checkpoint_path=checkpoint_path,
+            strict=strict,
+            map_location=map_location,
+        )
+
+        # 开启评估模型
+        bert_incr_model.eval()
+
+        # 输入文本
+        # 编码获取到 input_ids, attention_mask, token_type_ids
+        input_ids, attention_mask, token_type_ids = self._collate_fn([{"text": text}], text_field=text_field)
+        # 将 input_ids, attention_mask, token_type_ids 加载到 DEVICE
+        input_ids, attention_mask, token_type_ids = input_ids.to(self.device), attention_mask.to(self.device), token_type_ids.to(self.device)
+
+        # 前向计算；将数据输入模型，得到输出
+        with torch.no_grad():
+            logits_list = bert_incr_model(input_ids=input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids)
+
+        configured_label_names = bert_incr_model.out_features_config.label_names
+        if len(logits_list) != len(configured_label_names):
+            raise ValueError(
+                f"Number of model output branches ({len(logits_list)}) must match configured branches ({len(configured_label_names)})"
+            )
+
+        logits_by_name = dict(zip(configured_label_names, logits_list))
+        predictions: dict[str, dict[str, Any]] = {}
+        for label_name in configured_label_names:
+            branch_cfg = bert_incr_model.out_features_config.get_branch_config(label_name)
+            logits = logits_by_name[label_name]
+
+            if logits.ndim != 2 or logits.size(0) != 1:
+                raise ValueError(
+                    f"Predict expects logits shape [1, C] for label '{label_name}', got {tuple(logits.shape)}"
+                )
+            if logits.size(1) != branch_cfg.num_classes:
+                raise ValueError(
+                    f"Logits class dimension mismatch for label '{label_name}': "
+                    f"expected {branch_cfg.num_classes}, got {logits.size(1)}"
+                )
+
+            if branch_cfg.type == "single":
+                probs = torch.softmax(logits, dim=1)
+                pred_idx = int(torch.argmax(probs, dim=1).item())
+                branch_result = {
+                    "type": "single",
+                    "pred": pred_idx,
+                    "confidence": float(probs[0, pred_idx].item()),
+                }
+                if return_probabilities:
+                    branch_result["probabilities"] = probs[0].detach().cpu().tolist()
+            elif branch_cfg.type == "multi":
+                probs = torch.sigmoid(logits)
+                pred_tensor = (probs >= multi_label_threshold).long()
+                branch_result = {
+                    "type": "multi",
+                    "pred": pred_tensor[0].detach().cpu().tolist(),
+                }
+                if return_probabilities:
+                    branch_result["probabilities"] = probs[0].detach().cpu().tolist()
+            else:
+                raise ValueError(f"Unsupported branch type '{branch_cfg.type}' for label '{label_name}'")
+
+            predictions[label_name] = branch_result
+
+        return {
+            "checkpoint": {
+                "path": checkpoint_path,
+                "type": load_result["checkpoint_type"],
+                "epoch": load_result["epoch"],
+            },
+            "predictions": predictions,
+        }
+
     def _create_data_loader(self,
                             dataset: BertDataset,
                             *,
