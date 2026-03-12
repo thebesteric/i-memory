@@ -19,7 +19,7 @@ def get_embed_model() -> BaseEmbedModel:
         from src.ai.embed.openai_embed import OpenAIEmbed
         _embed_model = EMBED_MODEL_CACHE.get_or_set(
             ModelProvider.OPENAI.value,
-            lambda: OpenAIEmbed()
+            OpenAIEmbed()
         )
         logger.info(f"Using OpenAI embedding model: {_embed_model.model}")
         return _embed_model
@@ -27,7 +27,7 @@ def get_embed_model() -> BaseEmbedModel:
         from src.ai.embed.gemini_embed import GeminiEmbed
         _embed_model = EMBED_MODEL_CACHE.get_or_set(
             ModelProvider.GEMINI.value,
-            lambda: GeminiEmbed()
+            GeminiEmbed()
         )
         logger.info(f"Using Gemini embedding model: {_embed_model.model}")
         return _embed_model
@@ -35,7 +35,7 @@ def get_embed_model() -> BaseEmbedModel:
         from src.ai.embed.dashscope_embed import DashScopeEmbed
         _embed_model = EMBED_MODEL_CACHE.get_or_set(
             ModelProvider.DASHSCOPE.value,
-            lambda: DashScopeEmbed()
+            DashScopeEmbed()
         )
         logger.info(f"Using DashScope embedding model: {_embed_model.model}")
         return _embed_model
@@ -53,20 +53,20 @@ def get_chat_model() -> BaseChatModel:
         logger.info(f"Using OpenAI model: {env.OPENAI_MODEL}")
         return MODEL_CACHE.get_or_set(
             ModelProvider.OPENAI.value,
-            lambda: ChatOpenAI(model=env.OPENAI_MODEL, temperature=0.0, api_key=env.OPENAI_API_KEY, base_url=env.OPENAI_BASE_URL)
+            ChatOpenAI(model=env.OPENAI_MODEL, temperature=0.0, api_key=env.OPENAI_API_KEY, base_url=env.OPENAI_BASE_URL)
         )
     if model_provider == ModelProvider.GEMINI.value:
         from langchain_google_genai import ChatGoogleGenerativeAI
         logger.info(f"Using Gemini embedding model: {env.GEMINI_CHAT_MODEL}")
         return MODEL_CACHE.get_or_set(
             ModelProvider.GEMINI.value,
-            lambda: ChatGoogleGenerativeAI(model=env.GEMINI_MODEL, api_key=env.GEMINI_API_KEY, base_url=env.GEMINI_BASE_URL)
+            ChatGoogleGenerativeAI(model=env.GEMINI_MODEL, api_key=env.GEMINI_API_KEY, base_url=env.GEMINI_BASE_URL)
         )
     if model_provider == ModelProvider.DASHSCOPE.value:
         logger.info(f"Using DashScope model: {env.DASHSCOPE_MODEL}")
         return MODEL_CACHE.get_or_set(
             ModelProvider.DASHSCOPE.value,
-            lambda: ChatOpenAI(model=env.DASHSCOPE_MODEL, temperature=0.0, api_key=env.DASHSCOPE_API_KEY, base_url=env.DASHSCOPE_BASE_URL)
+            ChatOpenAI(model=env.DASHSCOPE_MODEL, temperature=0.0, api_key=env.DASHSCOPE_API_KEY, base_url=env.DASHSCOPE_BASE_URL)
         )
 
     raise ValueError(f"Unsupported chat model: {model_provider}")
