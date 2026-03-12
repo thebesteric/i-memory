@@ -164,8 +164,8 @@ if __name__ == "__main__":
     # )
 
     parser = Argparser()
-    parser.add_arg(Argument(arg_name="path", default_val="/Users/wangweijun/PycharmProjects/i-memory/assets/datasets/validation.json", required=False))
+    parser.add_arg(Argument(arg_name="dataset_path", default_val="/Users/wangweijun/PycharmProjects/i-memory/assets/datasets/validation.json", required=False))
 
-    arg = parser.get_arg("--path")
+    arg = parser.get_arg("--dataset_path")
     arg.current_val = arg.current_val or arg.default_val
     asyncio.run(calc_sectors(dataset_file_path=arg.current_val))
