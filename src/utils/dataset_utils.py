@@ -115,17 +115,64 @@ async def calc_sectors(dataset_file_path: str) -> list[dict[str, Any]]:
     # 对字符串列表 texts 进行去重，且保留元素的原始顺序
     dedup_texts: list[str] = list(dict.fromkeys(texts))
 
-    results: list[dict[str, Any]] = []
+    env_concurrency = os.getenv("IM_SECTOR_CLASSIFY_CONCURRENCY", "5")
+    try:
+        max_concurrency = max(1, int(env_concurrency))
+    except ValueError:
+        max_concurrency = 5
+
     total = len(dedup_texts)
-    for idx, current_text in enumerate(dedup_texts, start=1):
-        classify = await SectorClassifier(content=current_text).classify()
-        result = {
-            "text": current_text,
-            "primary": SECTOR_KEY_INDEX_MAPPING.get(classify.primary),
-            "labels": generate_hit_labels(classify.primary, classify.additional),
-        }
-        results.append(result)
-        logger.info(f"[{idx}/{total}] {current_text[:30]}... -> {result}")
+    semaphore = asyncio.Semaphore(max_concurrency)
+    progress_lock = asyncio.Lock()
+    finished = 0
+
+    async def classify_one(order_idx: int, current_text: str) -> tuple[int, dict[str, Any]]:
+        nonlocal finished
+        async with semaphore:
+            try:
+                classify = await SectorClassifier(content=current_text).classify()
+                result = {
+                    "text": current_text,
+                    "primary": SECTOR_KEY_INDEX_MAPPING.get(classify.primary),
+                    "labels": generate_hit_labels(classify.primary, classify.additional),
+                }
+            except Exception as e:
+                # 单条分类失败不阻塞整个任务，使用 semantic 兜底
+                logger.error(f"分类失败，使用默认标签: {current_text[:30]}... - {e}")
+                result = {
+                    "text": current_text,
+                    "primary": SECTOR_KEY_INDEX_MAPPING.get("semantic"),
+                    "labels": generate_hit_labels("semantic", []),
+                }
+
+            async with progress_lock:
+                finished += 1
+                logger.info(f"[{finished}/{total}] {current_text[:30]}... -> {result}")
+
+            return order_idx, result
+
+    tasks = [
+        asyncio.create_task(classify_one(order_idx, current_text))
+        for order_idx, current_text in enumerate(dedup_texts)
+    ]
+    indexed_results = await asyncio.gather(*tasks)
+
+    # 按输入顺序回填结果，避免并发导致顺序变化
+    ordered_results: list[dict[str, Any] | None] = [None] * total
+    for order_idx, result in indexed_results:
+        ordered_results[order_idx] = result
+
+    results: list[dict[str, Any]] = [item for item in ordered_results if item is not None]
+
+    def primary_sort_key(item: dict[str, Any]) -> int:
+        primary = item.get("primary")
+        # 将非法 primary 放在最后，保证分组排序稳定且安全
+        if isinstance(primary, int) and 0 <= primary <= 4:
+            return primary
+        return 999
+
+    # 按 primary 分组排序：0, 1, 2, 3, 4
+    results = sorted(results, key=primary_sort_key)
 
     # 将 results 写入一个新的文件
     if results:
@@ -149,7 +196,7 @@ async def calc_sectors(dataset_file_path: str) -> list[dict[str, Any]]:
                 indent=2
             )
 
-            logger.info(f"\n处理完成！结果已写入：{output_file_path}")
+            logger.info(f"\n处理完成！结果已写入：{output_file_path}，共计 {len(results)} 条记录")
         except Exception as e:
             logger.error(f"错误：写入结果文件失败 - {str(e)}")
 
@@ -167,8 +214,14 @@ if __name__ == "__main__":
 
     parser = Argparser()
     parser.add_arg(Argument(arg_name="dataset_path", default_val="/Users/wangweijun/PycharmProjects/i-memory/assets/datasets/validation.json", required=False))
+    parser.add_arg(Argument(arg_name="max_concurrency", default_val="5", required=False))
 
     arg = parser.get_arg("--dataset_path")
     arg.current_val = arg.current_val or arg.default_val
+    concurrency_arg = parser.get_arg("--max_concurrency")
+    concurrency_arg.current_val = concurrency_arg.current_val or concurrency_arg.default_val
+    os.environ["IM_SECTOR_CLASSIFY_CONCURRENCY"] = str(concurrency_arg.current_val)
+
     logger.info(f"使用数据集路径: {arg.current_val}")
+    logger.info(f"分类并发数: {os.getenv('IM_SECTOR_CLASSIFY_CONCURRENCY', '5')}")
     asyncio.run(calc_sectors(dataset_file_path=arg.current_val))
