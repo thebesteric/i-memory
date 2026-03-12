@@ -9,7 +9,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--dataset_path',  # 参数名（命令行使用 --xxx 形式）
         type=str,  # 参数类型
-        required=True,  # 设置为必选参数
+        required=False,  # 设置为必选参数
         help='数据集路径'
     )
     args = parser.parse_args()
@@ -36,8 +36,10 @@ if __name__ == '__main__':
         train_dataset=train_dataset,
         valid_dataset=valid_dataset,
         batch_size=100,
-        epochs=1000,
+        epochs=5000,
         text_field="text",
         label_fields=["primary", "additional"],
+        patience="auto",
+        periodic_checkpoint_max_keep=10,
         loss_weights=[0.7, 0.3],
     )
