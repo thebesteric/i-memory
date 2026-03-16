@@ -389,8 +389,8 @@ class BertManager:
         # 定义学习率调度器，根据验证准确率调整学习率，验证准确率连续 5 个 epoch 没有提升，则将学习率降低到原来的 0.5
         scheduler = ReduceLROnPlateau(optimizer, mode="max", patience=10, factor=0.5)
 
-        # 初始化验证最佳准确率
-        best_val_acc = 0.0
+        # 初始化验证最佳加权综合指标
+        best_val_weighted_score = 0.0
         # 早停计数器，记录验证准确率连续没有提升的 epoch 数
         early_stop_count = 0
         # 显式设置训练模式
@@ -481,11 +481,17 @@ class BertManager:
 
                 # 每隔 5 个批次，输出训练信息
                 if i % 5 == 0:
+                    # 当前这个 batch 里，除了主标签分支之外，其他分支的 acc 指标，即：辅助分支准确率
+                    # 如：真实：[1, 0, 1, 0] -> 预测：[1, 0, 0, 0]
+                    # 因为 4 个位置里有 1 个错了，这样真条就是错的，所以这条样本对 xxx_acc 的贡献是 0
                     extra_acc_logs = ", ".join(
                         f"{name}_acc={acc:.4f}"
                         for name, acc in train_batch_branch_acc.items()
                         if name != main_label_name
                     )
+                    # 多标签分支中，每个标签位的准确率（这个指标只会出现在 multi 分支里，single 分支没有这个值）
+                    # 如：真实：[1, 0, 1, 1] -> 预测：[1, 0, 1, 0]
+                    # 因为 4 个位置里对了 3 个，所以 xxx_labels_acc 是 0.75
                     extra_label_acc_logs = ", ".join(
                         f"{name}_label_acc={acc:.4f}"
                         for name, acc in train_batch_branch_label_acc.items()
@@ -626,6 +632,7 @@ class BertManager:
                                 val_branch_label_correct_sums[label_name] += branch_metrics["label_correct"]
                                 val_branch_label_total_sums[label_name] += branch_metrics["label_total"]
                                 val_batch_branch_label_acc[label_name] = branch_metrics["label_acc"]
+                            # 计算主标签
                             if label_name == main_label_name:
                                 main_batch_acc = branch_metrics["acc"]
                                 val_main_correct += branch_metrics["correct"]
@@ -656,21 +663,39 @@ class BertManager:
                         continue
                     # 计算验证的平均损失
                     avg_val_loss = val_total_loss / val_steps
-                    # 计算验证的平均精度
+                    # 计算主标签分支的验证集准确率
                     avg_val_acc = (val_main_correct / val_main_total) if val_main_total > 0 else 0.0
+                    # 各分支样本级准确率：single=分类准确率，multi=样本级 exact-match（整行标签全对才算对）
                     avg_val_branch_accs = {
                         label_name: (val_branch_correct_sums[label_name] / val_branch_total_sums[label_name])
                         if val_branch_total_sums[label_name] > 0 else 0.0
                         for label_name in val_branch_correct_sums.keys()
                     }
+                    # 仅 multi 分支的标签位准确率（label-wise accuracy）；single 分支不进入该字典
                     avg_val_branch_label_accs = {
                         label_name: (val_branch_label_correct_sums[label_name] / val_branch_label_total_sums[label_name])
                         if val_branch_label_total_sums[label_name] > 0 else 0.0
                         for label_name in val_branch_label_correct_sums.keys()
                     }
+                    # 按 loss_weights 计算各分支的加权综合指标：single 用 acc，multi 用 label_acc
+                    # 说明：branch_meta 中的 weight 来自入参 loss_weights，且与 label_fields 一一对齐
+                    weighted_acc_sum = 0.0
+                    weight_sum = 0.0
+                    for label_name, _, weight, branch_cfg in branch_meta:
+                        if branch_cfg.type == "multi":
+                            # 按“标签位准确率”参与综合分
+                            metric_val = avg_val_branch_label_accs.get(label_name, 0.0)
+                        else:
+                            metric_val = avg_val_branch_accs.get(label_name, 0.0)
+                        weighted_acc_sum += weight * metric_val
+                        weight_sum += weight
+                    # 归一化为“加权平均”而非“加权求和”：避免权重总和（如 1.0、10.0）改变指标量纲
+                    # 当 weight_sum=0 时回退到 0.0，防止除零
+                    avg_val_weighted_score = (weighted_acc_sum / weight_sum) if weight_sum > 0 else 0.0
                     final_valid_metrics = {
                         "loss": avg_val_loss,
                         "main_acc": avg_val_acc,
+                        "weighted_score": avg_val_weighted_score,
                         **{f"{name}_acc": acc for name, acc in avg_val_branch_accs.items()},
                         **{f"{name}_label_acc": acc for name, acc in avg_val_branch_label_accs.items()},
                     }
@@ -687,19 +712,25 @@ class BertManager:
                     logger.info(
                         f"[VALID] epoch={epoch}/{epochs}, summary, "
                         f"avg_loss={avg_val_loss:.4f}, avg_main_acc={avg_val_acc:.4f}, "
+                        f"avg_weighted_score={avg_val_weighted_score:.4f}, "
                         f"steps={val_steps}{(', ' + valid_extra_acc_summary) if valid_extra_acc_summary else ''}"
                         f"{(', ' + valid_extra_label_acc_summary) if valid_extra_label_acc_summary else ''}"
                     )
 
                     # 学习率调度
-                    scheduler.step(avg_val_acc)
+                    # 统一使用加权综合指标作为调度目标：综合分长期不提升时，自动降低学习率
+                    scheduler.step(avg_val_weighted_score)
 
-                    # 根据验证准确率，保存最优参数
-                    if avg_val_acc > best_val_acc:
+                    # 根据验证加权综合指标，保存最优参数
+                    # 与 scheduler/early stop 使用同一指标，避免“保存标准”和“停止标准”不一致
+                    if avg_val_weighted_score > best_val_weighted_score:
                         # 把最优的参数保存下来，就是为了方式过拟合，因为一旦过拟合是无法回退的，如果沒有保存，那么只有重新训练
                         # 这就是为什么要保存最优参数的原因
-                        best_val_acc = avg_val_acc
-                        best_file_params_save_path = os.path.join(params_save_path, f"best_bert_epoch_{epoch}_acc_{best_val_acc:.4f}.pth")
+                        best_val_weighted_score = avg_val_weighted_score
+                        best_file_params_save_path = os.path.join(
+                            params_save_path,
+                            f"best_bert_epoch_{epoch}_score_{best_val_weighted_score:.4f}.pth"
+                        )
                         torch.save({
                             "epoch": epoch,
                             "model_state_dict": bert_incr_model.state_dict(),
@@ -720,7 +751,8 @@ class BertManager:
                             else ""
                         )
                         logger.info(
-                            f"[SAVE] epoch={epoch}/{epochs}, kind=best, acc={best_val_acc:.4f}, "
+                            f"[SAVE] epoch={epoch}/{epochs}, kind=best, "
+                            f"score={best_val_weighted_score:.4f}, main_acc={avg_val_acc:.4f}, "
                             f"path={best_file_params_save_path}{deleted_count_text}, deleted_files={deleted_files_text}"
                         )
                     else:
@@ -730,7 +762,7 @@ class BertManager:
                                 # 早停触发，停止训练
                                 logger.info(
                                     f"[EARLY_STOP] epoch={epoch}/{epochs}, patience={patience}, "
-                                    f"best_val_acc={best_val_acc:.4f}"
+                                    f"best_val_weighted_score={best_val_weighted_score:.4f}"
                                 )
                                 break
 
