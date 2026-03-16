@@ -92,6 +92,10 @@ class EnvConfig:
         # 衰减冷阈值
         self.DECAY_COLD_THRESHOLD = env_helper.get("IM_DECAY_COLD_THRESHOLD", 0.25)
 
+        # ================ 记忆分类相关配置 ================
+        # 是否使用 BERT 分类器进行记忆分类
+        self.USE_BERT_CLASSIFIER = env_helper.get("IM_USE_BERT_CLASSIFIER", True)
+
 
 def _load_env_file():
     parser = argparse.ArgumentParser()

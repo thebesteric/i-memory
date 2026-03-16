@@ -10,13 +10,14 @@ from agile.utils import LogHelper, timing
 
 from src.ai.embed.base_embed_model import BaseEmbedModel
 from src.ai.model_provider import get_embed_model
+from src.core.components import get_sector_classifier
 from src.core.config import env
 from src.core.constants import SECTOR_RELATIONSHIPS, HYBRID_PARAMS, MEMORIES_CACHE
 from src.core.db import get_db
 from src.core.dml_ops import dml_ops
 from src.core.extract_essence import ExtractEssence
 from src.core.score import compute_tag_match_score, compute_hybrid_score
-from src.core.sector_classify import SECTOR_CONFIGS, SectorClassifier, ClassifyResult
+from src.core.sector_classify import SECTOR_CONFIGS, ClassifyResult
 from src.core.vector.base_vector_store import vector_store, VectorSearch
 from src.core.waypoints import Waypoints, Expansion
 from src.memory import user_ops
@@ -181,7 +182,7 @@ async def add_hsg_memory(content: str, tags: List[str] = None, metadata: Any = N
     })
 
     # 文本分类：判断内容所属的主/辅 sector（语义、情感、程序、事件、反思等）
-    cls_ret = await SectorClassifier(content=content, metadata=metadata).classify()
+    cls_ret = await get_sector_classifier().classify(content=content, metadata=metadata)
     all_secs = [cls_ret.primary] + cls_ret.additional
     try:
         current_seg_result = db.fetchone("SELECT current_segment FROM segment FOR UPDATE")
@@ -289,7 +290,7 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
             return entry
 
         # 判断查询属于哪个扇区
-        query_classify: ClassifyResult = await SectorClassifier(content=query).classify()
+        query_classify: ClassifyResult = await get_sector_classifier().classify(content=query)
         # 提取查询关键词 token 集合
         query_tokens = canonical_token_set(query)
         # 确定检索扇区范围
