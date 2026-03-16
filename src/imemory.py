@@ -11,7 +11,7 @@ from src.core.components import get_milvus_manager
 from src.core.config import env
 from src.core.db import get_db
 from src.core.dml_ops import dml_ops
-from src.memory.hsg import hsg_query
+from src.memory.hsg import query_hsg_memories
 from src.memory.models.memory_models import IMemoryConfig, IMemoryFilters, IMemoryUserIdentity, IMemoryItemInfo
 from src.ops.ingest import ingest_document
 
@@ -93,7 +93,7 @@ class IMemory:
         if not filters:
             filters = IMemoryFilters(user_identity=self.default_user_identity)
 
-        return await hsg_query(query, limit, filters)
+        return await query_hsg_memories(query, limit, filters)
 
     async def get(self, memory_id: str) -> Dict[str, Any] | None:
         """

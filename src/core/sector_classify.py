@@ -1,14 +1,13 @@
-import asyncio
-from re import Pattern
-from typing import TypedDict, List, Any, Dict
+from typing import List, Any, Dict, Literal
 
-import regex as re
-from agile.utils import timing
+from agile.utils import timing, LogHelper
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.prompts import PromptTemplate
 from pydantic import BaseModel, Field, ConfigDict
 
 from src.ai.model_provider import get_chat_model
+
+logger = LogHelper.get_logger()
 
 
 class SectorCfg(BaseModel):
@@ -75,6 +74,7 @@ class ClassifyOutput(BaseModel):
         sorted_scores = self.sorted_scores()
         primary, p_score = sorted_scores[0]
         # 设定阈值：分数 >= 30 且 >= 主分数的 40% 的其他扇区作为辅扇区
+        # 如：主扇区 80 分，相对阈值 80 * 0.4 = 32，最终阈值 thresh = 32 那么其他扇区里分数 >= 32 的都会被选为辅扇区
         thresh = max(threshold, p_score * primary_percent)
         additional = [(sec, score) for sec, score in sorted_scores[1:] if score >= thresh]
         return additional or []
@@ -131,13 +131,18 @@ SECTOR_CONFIGS: Dict[str, SectorCfg] = {
         model="reflective-optimized",
         decay_lambda=0.001,
         weight=0.8,
-        description="思考、洞察、总结、成长、反馈",
+        description="思考、想法、洞察、总结、成长、反馈",
     ),
 }
 
-# 提取键并按顺序映射为数字索引 => {'episodic': 0, 'semantic': 1, 'procedural': 2, 'emotional': 3, 'reflective': 4}
+# 提取键值并按顺序映射 => {'episodic': 0, 'semantic': 1, 'procedural': 2, 'emotional': 3, 'reflective': 4}
 SECTOR_KEY_INDEX_MAPPING: dict[str, int] = {
     sector_key: idx for idx, sector_key in enumerate(SECTOR_CONFIGS.keys())
+}
+
+# 提取索引并按顺序映射 => {0: 'episodic', 1: 'semantic', 2: 'procedural', 3: 'emotional', 4: 'reflective'}
+SECTOR_INDEX_KEY_MAPPING: dict[int, str] = {
+    idx: sector_key for idx, sector_key in enumerate(SECTOR_CONFIGS.keys())
 }
 
 # 领域权重
@@ -155,15 +160,14 @@ class SectorClassifier:
 ## 记忆类型说明：
 {sec_descriptions}
 
-
 ## 输出格式
 {format_instructions}
 
 ## 注意事项
-1. 分数总和不必为 100，每个类型独立打分，区间为 0-100 分；
-2. 主要类型分数应明显高于其他类型；
-3. 一段内容可能同时涉及多个类型；
-4. 分数 0 表示完全不相关，100 表示非常典型；
+1. 每个类型独立打分，区间为 0-100 分；
+2. 一段内容可能同时涉及多个类型，但是主类型分数应明显高于其他类型；
+3. 分数 0 表示完全不相关，100 表示非常典型；
+4. 评分理由 reasoning 字段需要简短说明分类理由，突出主类型的核心特征和内容中的相关信息；
 
 begin!!
 分析内容：{content}
@@ -227,16 +231,105 @@ begin!!
         if p_score < 20:
             primary = "semantic"
             confidence = 0.3
+            logger.info(f"Primary '{primary}' Sector score is too low: {p_score}, fallback to 'semantic' sector.")
+
+        # 各扇区得分情况
+        scores = {sec: round(secore, 2) for sec, secore in output.sorted_scores()}
+
+        logger.info(
+            f"Classify content: {self.content[:30]}... => primary: {primary}, additional: {[sec for sec, score in additional]}, "
+            f"confidence: {confidence}, scores: {scores}"
+        )
 
         return ClassifyResult(
             primary=primary,
             additional=[sec for sec, score in additional],
             confidence=confidence,
-            scores={sec: round(secore, 2) for sec, secore in output.sorted_scores()}
+            scores=scores
         )
 
 
-if __name__ == '__main__':
-    scf = SectorClassifier(content="我昨天去了公园，感觉非常开心！")
-    r = asyncio.run(scf.classify())
-    print(r.model_dump())
+class SectorSentenceOutput(BaseModel):
+    sector: str = Field(..., description="所属领域")
+    sentences: list[str] = Field(default_factory=list, description="该领域的相关句子列表")
+
+
+class SectorSentenceCreator:
+    CREATE_PROMPT = """
+你精通语义领域分析，并擅长根据语义领域创建符合该领域特征的句子，请根据以下内容要求创建“主要含义”符合该语义领域的句子：
+
+## 领域类型说明：
+{sec_descriptions}
+
+## 输出格式
+{format_instructions}
+
+## 生成要求
+1. 句子内容要相对完整，质量高，最好不要超过 100 个字符；
+2. 句子主要含义需要符合所给定的主领域，并且能够体现该领域的核心特征；
+3. 生成句子的过程中，你需要自习揣摩并思考，句子除主领域含义外，尽量包含一个或多个其他领域的含义，但是不要让其他领域含义反客为主；
+4. 辅助扇区的权重要大于主领域的权重的 40%，如：整条句子中主领域得分 80，那么辅助领域至少要有 80 * 0.4 = 32 的分数才能被包含在句子中；
+5. 每次生成的句子不要和上一批次生成的句子重复；
+6. 生成的句子需满足上述条件；
+
+## 其他注意事项
+1. 如果需要你生成 emotional 类型的句子的话，多加一些情绪、感受、主观体验的描述信息。
+
+## 例子
+### Example 1: 去年春天去婺源看油菜花，漫山遍野的金黄色让我忍不住在田埂上跑了起来。
+主领域：episodic
+包含其他领域：emotional
+
+### Example 2: 知道了声音在空气中的传播速度约340米/秒，由此反思出为什么先看到闪电后听到雷声。
+主领域：semantic
+包含其他领域：reflective
+
+### Example 3: 掌握了叠衣服的标准流程：先铺平再对折，知道正确收纳能节省30%的衣柜空间，这让我意识到整理的重要性。
+主领域：procedural
+包含其他领域：semantic, reflective
+
+### Example 4: 深夜改完第十二稿方案，合上电脑那刻涌上的不是轻松，是种疲惫而踏实的微光。
+主领域：emotional
+包含其他领域：episodic, reflective
+
+### Example 5: 给绿萝换盆时先轻拍旧盆脱土、剪除腐根、填入新营养土再定植压实，三次实践后，我发现自己开始用系统思维观察植物生长节律。
+主领域：reflective
+包含其他领域：episodic, procedural
+
+begin!!
+所属主领域：{sector}
+生成相关领域句子的数量：{num}
+"""
+
+    def __init__(self, *, sector: Literal["episodic", "semantic", "procedural", "emotional", "reflective"], num: int):
+        self.sector = sector
+        self.num = max(num, 1)
+
+    @classmethod
+    def get_chain(cls):
+        """
+        获取模型执行链
+        :return:
+        """
+        # 构建输出解析器
+        output_parser = PydanticOutputParser(pydantic_object=SectorSentenceOutput)
+        # 构建提示词模板
+        prompt_template = PromptTemplate(
+            template=cls.CREATE_PROMPT,
+            input_variables=["sector", "num"],
+            partial_variables={
+                "sec_descriptions": chr(10).join([f"- {k}: {v.description}" for k, v in SECTOR_CONFIGS.items()]),
+                "format_instructions": output_parser.get_format_instructions()
+            }
+        )
+        # 构建语言模型
+        llm = get_chat_model()
+        # 构建执行链
+        return prompt_template | llm | output_parser
+
+    @timing
+    async def create(self) -> SectorSentenceOutput:
+        # 调用模型执行链获取分类结果
+        chain = self.get_chain()
+        output: SectorSentenceOutput = await chain.ainvoke({"sector": self.sector, "num": self.num})
+        return output

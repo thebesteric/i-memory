@@ -24,7 +24,7 @@ class TestIMemoryQuery(unittest.TestCase):
 
     # @unittest.skip
     def test_search_memory(self):
-        query = "我家的是什么猫？"
+        query = "OpenClaw 支持多智能体协同吗？"
         results = asyncio.run(self.mem.search(query, limit=5, filters=IMemoryFilters(user_identity=self.user_identity)))
         print("Search results:", results)
 

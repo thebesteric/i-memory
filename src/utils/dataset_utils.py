@@ -4,14 +4,16 @@ import re
 import json
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
+import pyrootutils
 from agile.utils import LogHelper
 from agile.utils.argparser import Argparser, Argument
 
-from src.core.sector_classify import SectorClassifier, SECTOR_KEY_INDEX_MAPPING
+from src.core.sector_classify import SectorClassifier, SECTOR_KEY_INDEX_MAPPING, ClassifyResult, SectorSentenceCreator, SectorSentenceOutput
 
 logger = LogHelper.get_logger()
+
 
 def compact_inner_arrays(obj):
     """
@@ -101,25 +103,38 @@ def generate_hit_labels(primary_sector: str, additional_sectors: list[str]) -> l
     return labels
 
 
-async def calc_sectors(dataset_file_path: str) -> list[dict[str, Any]]:
-    with open(dataset_file_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-
+async def calc_sectors(
+        dataset_file_path: str | None = None,
+        sentences: list[str] | None = None,
+        max_concurrency: int = 5) -> list[dict[str, Any]]:
+    """
+    通过语句，计算领域
+    :param dataset_file_path: 文件路径，文件内容为 JSON 数组，每个元素为一个对象，对象中包含 "text" 字段
+    :param sentences: 句子列表（如果没有文件路径的话，可以直接传入句子列表）
+    :param max_concurrency: 并发数
+    :return:
+    """
     texts: list[str] = []
-    for item in data:
-        if isinstance(item, dict):
-            item_text = item.get("text")
-            if isinstance(item_text, str) and item_text.strip():
-                texts.append(item_text.strip())
+    if dataset_file_path:
+        with open(dataset_file_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        for item in data:
+            if isinstance(item, dict):
+                item_text = item.get("text")
+                if isinstance(item_text, str) and item_text.strip():
+                    texts.append(item_text.strip())
+
+    elif sentences:
+        for sentence in sentences:
+            texts.append(sentence.strip())
+
+    if not texts:
+        raise ValueError("没有有效的文本输入，请提供 dataset_file_path 或 sentences 参数")
 
     # 对字符串列表 texts 进行去重，且保留元素的原始顺序
     dedup_texts: list[str] = list(dict.fromkeys(texts))
 
-    env_concurrency = os.getenv("IM_SECTOR_CLASSIFY_CONCURRENCY", "5")
-    try:
-        max_concurrency = max(1, int(env_concurrency))
-    except ValueError:
-        max_concurrency = 5
+    max_concurrency = max(1, max_concurrency)
 
     total = len(dedup_texts)
     semaphore = asyncio.Semaphore(max_concurrency)
@@ -131,6 +146,7 @@ async def calc_sectors(dataset_file_path: str) -> list[dict[str, Any]]:
         async with semaphore:
             try:
                 classify = await SectorClassifier(content=current_text).classify()
+                # classify = ClassifyResult(primary="episodic", additional=["semantic"], confidence=0.5, scores={"semantic": 20, "episodic": 80})
                 result = {
                     "text": current_text,
                     "primary": SECTOR_KEY_INDEX_MAPPING.get(classify.primary),
@@ -176,13 +192,17 @@ async def calc_sectors(dataset_file_path: str) -> list[dict[str, Any]]:
 
     # 将 results 写入一个新的文件
     if results:
-        date_suffix = datetime.now().strftime("%Y%m%d")
-        # 生成新文件名：validation.json -> validation_20240620.json
-        if "." in dataset_file_path:
-            name_parts = dataset_file_path.rsplit(".", 1)
-            output_file_path = f"{name_parts[0]}_{date_suffix}.{name_parts[1]}"
+        date_suffix = datetime.now().strftime("%Y%m%d%H%M%S")
+        # 生成新文件名：validation.json -> validation__20260313095730.json
+        if dataset_file_path is not None:
+            if "." in dataset_file_path:
+                name_parts = dataset_file_path.rsplit(".", 1)
+                output_file_path = f"{name_parts[0]}_{date_suffix}.{name_parts[1]}"
+            else:
+                output_file_path = f"{dataset_file_path}_{date_suffix}"
+        # 生成新文件名：sentences_20260313095730.json
         else:
-            output_file_path = f"{dataset_file_path}_{date_suffix}"
+            output_file_path = os.path.join(pyrootutils.find_root(), "assets", "datasets", f"sentences_{date_suffix}.json")
 
         # 写入 JSON 文件
         try:
@@ -203,6 +223,62 @@ async def calc_sectors(dataset_file_path: str) -> list[dict[str, Any]]:
     return results
 
 
+async def create_sector_sentence(sector: Literal["episodic", "semantic", "procedural", "emotional", "reflective"],
+                                 num: int,
+                                 max_concurrency=1):
+    ssc = SectorSentenceCreator(sector=sector, num=num)
+    r: SectorSentenceOutput = await ssc.create()
+    if r.sector != sector:
+        raise ValueError(f"❌ 生成的句子所属领域与请求不符，预期 {sector}，但得到 {r.sector}")
+    logger.info(f"✅ 已成功生成 {num} 条属于 {sector} 领域的句子")
+    await calc_sectors(sentences=r.sentences, max_concurrency=max_concurrency)
+
+async def remove_duplicates_in_file(input_file: str):
+    """
+    从输入文件中读取 JSON 数组，去重后写入输出文件
+    :param input_file: 输入文件路径，内容为 JSON 数组
+    """
+    try:
+        with open(input_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            if not isinstance(data, list):
+                raise ValueError("输入文件必须是JSON列表（最外层为数组）")
+
+        # 使用集合去重，同时保持顺序
+        seen: set[str] = set()
+        first_seen_index: dict[str, int] = {}
+        dedup_data = []
+        duplicate_count = 0
+
+        for idx, item in enumerate(data):
+            # 用稳定序列化结果做键，支持包含 list/dict 的嵌套 JSON 结构
+            item_key = json.dumps(item, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+            if item_key not in seen:
+                seen.add(item_key)
+                first_seen_index[item_key] = idx
+                dedup_data.append(item)
+            else:
+                duplicate_count += 1
+                first_idx = first_seen_index.get(item_key, -1)
+                logger.info(
+                    f"检测到重复数据：当前索引={idx}, 首次索引={first_idx}, 内容={json.dumps(item, ensure_ascii=False)}"
+                )
+
+        with open(input_file, 'w', encoding='utf-8') as f:
+            json.dump(dedup_data, f, ensure_ascii=False, indent=2)
+
+        # 压缩
+        process_json_file(input_file=input_file, output_file=input_file, indent=2)
+
+        # 输出去重结果
+        logger.info(
+            f"去重完成！输入文件路径：{input_file}, 原有数量：{len(data)}, 去重后数量：{len(dedup_data)}, 重复数量：{duplicate_count}"
+        )
+
+    except Exception as e:
+        logger.error(f"错误：{e}")
+
+
 # 示例调用
 if __name__ == "__main__":
     # # 替换为你的文件路径
@@ -212,16 +288,24 @@ if __name__ == "__main__":
     #     indent=2
     # )
 
-    parser = Argparser()
-    parser.add_arg(Argument(arg_name="dataset_path", default_val="/Users/wangweijun/PycharmProjects/i-memory/assets/datasets/validation.json", required=False))
-    parser.add_arg(Argument(arg_name="max_concurrency", default_val="5", required=False))
+    # parser = Argparser()
+    # parser.add_arg(Argument(arg_name="dataset_path", default_val="/Users/wangweijun/PycharmProjects/i-memory/assets/datasets/train.json", required=False))
+    # parser.add_arg(Argument(arg_name="max_concurrency", default_val="20", required=False))
+    #
+    # arg = parser.get_arg("--dataset_path")
+    # arg.current_val = arg.current_val or arg.default_val
+    # concurrency_arg = parser.get_arg("--max_concurrency")
+    # concurrency_arg.current_val = concurrency_arg.current_val or concurrency_arg.default_val
+    # os.environ["IM_SECTOR_CLASSIFY_CONCURRENCY"] = str(concurrency_arg.current_val)
+    # logger.info(f"使用数据集路径: {arg.current_val}")
+    # logger.info(f"分类并发数: {concurrency_arg.current_val}")
+    # asyncio.run(calc_sectors(dataset_file_path=arg.current_val, max_concurrency=int(concurrency_arg.current_val)))
 
-    arg = parser.get_arg("--dataset_path")
-    arg.current_val = arg.current_val or arg.default_val
-    concurrency_arg = parser.get_arg("--max_concurrency")
-    concurrency_arg.current_val = concurrency_arg.current_val or concurrency_arg.default_val
-    os.environ["IM_SECTOR_CLASSIFY_CONCURRENCY"] = str(concurrency_arg.current_val)
+    # 生成用例
+    asyncio.run(create_sector_sentence(sector="emotional", num=50, max_concurrency=10))
 
-    logger.info(f"使用数据集路径: {arg.current_val}")
-    logger.info(f"分类并发数: {os.getenv('IM_SECTOR_CLASSIFY_CONCURRENCY', '5')}")
-    asyncio.run(calc_sectors(dataset_file_path=arg.current_val))
+    # 去重
+    # asyncio.run(remove_duplicates_in_file("/Users/wangweijun/PycharmProjects/i-memory/assets/datasets/validation.json"))
+    # asyncio.run(remove_duplicates_in_file("/Users/wangweijun/PycharmProjects/i-memory/assets/datasets/train.json"))
+
+    pass

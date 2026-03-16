@@ -1,7 +1,9 @@
+import asyncio
 import datetime
 import math
+import random
 import time
-from typing import Optional
+from typing import Optional, Any
 
 from agile.utils import LogHelper, singleton
 
@@ -11,6 +13,7 @@ from src.core.db import get_db, DB
 from src.core.dml_ops import dml_ops
 from src.core.sector_classify import SECTOR_CONFIGS, SectorCfg
 from src.core.vector.base_vector_store import get_vector_store, BaseVectorStore
+from src.tools.text import canonical_tokens_from_text
 
 logger = LogHelper.get_logger()
 
@@ -58,6 +61,75 @@ class Decay:
     @classmethod
     def dec_q(cls):
         cls.active_q = max(0, cls.active_q - 1)
+
+    @classmethod
+    def pick_tier(cls, m: dict, now_ts: int) -> str:
+        dt = max(0, now_ts - (m["last_seen_at"] or m["updated_at"] or now_ts))
+        recent = dt < 6 * 86_400_000
+        high = (m.get("coactivations") or 0) > 5 or (m["salience"] or 0) > 0.7
+        if recent and high: return "hot"
+        if recent or (m["salience"] or 0) > 0.4: return "warm"
+        return "cold"
+
+    @classmethod
+    def mean(cls, arr: list[float]) -> float:
+        return sum(arr) / len(arr) if arr else 0
+
+    @classmethod
+    def normalize(cls, v: list[float]):
+        n = math.sqrt(sum(x * x for x in v))
+        if n > 0:
+            for i in range(len(v)): v[i] /= n
+
+    @classmethod
+    def compress_vector(cls, vec: list[float], f: float, min_dim=64, max_dim=1536) -> list[float]:
+        src = vec if vec else [1.0]
+        tgt_dim = max(min_dim, min(max_dim, math.floor(len(src) * max(0.0, min(1.0, f)))))
+        dim = max(min_dim, min(len(src), tgt_dim))
+
+        if dim >= len(src): return list(src)
+
+        pooled = []
+        bucket = math.ceil(len(src) / dim)
+        for i in range(0, len(src), bucket):
+            sub = src[i: i + bucket]
+            pooled.append(cls.mean(sub))
+
+        cls.normalize(pooled)
+        return pooled
+
+    @classmethod
+    def hash_to_vec(cls, s: str, d=32) -> list[float]:
+        h = 2166136261
+        for c in s:
+            h ^= ord(c)
+            h = (h * 16777619) & 0xffffffff
+
+        out = [0.0] * max(2, d)
+        x = h or 1
+        for i in range(len(out)):
+            x ^= (x << 13) & 0xffffffff
+            x ^= (x >> 17) & 0xffffffff
+            x ^= (x << 5) & 0xffffffff
+            out[i] = ((x / 0xffffffff) * 2 - 1)
+
+        cls.normalize(out)
+        return out
+
+    @classmethod
+    def top_keywords(cls, t: str, k=5) -> list[str]:
+        words = canonical_tokens_from_text(t)
+        freq = {}
+        for w in words: freq[w] = freq.get(w, 0) + 1
+        items = sorted(freq.items(), key=lambda x: x[1], reverse=True)
+        return [x[0] for x in items[:k]]
+
+    @classmethod
+    def fingerprint_mem(cls, m: dict) -> dict[str, Any]:
+        base = f"{m['id']}|{m.get('summary') or m['content'] or ''}".strip()
+        vec = cls.hash_to_vec(base, 32)
+        summary = " ".join(cls.top_keywords(m.get('summary') or m['content'] or "", 3))
+        return {"vector": vec, "summary": summary}
 
     @staticmethod
     def calc_decay(sec: str, init_sal: float, days_since: float, seg_idx: Optional[int] = None, max_seg: Optional[int] = None) -> float:
@@ -149,3 +221,81 @@ class Decay:
 
         if updated:
             logger.info("[decay] Memory %s reinforced on query hit", mem_id)
+
+    async def apply_decay(self):
+        if self.active_q > 0:
+            logger.info(f"[decay] skipped - {self.active_q} active queries")
+            return
+
+        now_ts = int(time.time() * 1000)
+        if now_ts - self.last_decay < self.COOLDOWN:
+            rem = (self.COOLDOWN - (now_ts - self.last_decay)) / 1000
+            print(f"[decay] skipped - cooldown active ({rem:.0f}s left)")
+            return
+
+        last_decay = now_ts
+        t0 = time.time()
+        segments_rows = self.db.fetchall("SELECT DISTINCT segment FROM memories ORDER BY segment DESC")
+        segments = [r["segment"] for r in segments_rows]
+
+        tot_proc = 0
+        tot_chg = 0
+        tot_comp = 0
+        tot_fp = 0
+        tier_counts = {"hot": 0, "warm": 0, "cold": 0}
+
+        for seg in segments:
+            rows = self.db.fetchall(
+                "SELECT id, content, summary, salience, decay_lambda, last_seen_at, updated_at, primary_sector, feedback_score as coactivations FROM memories WHERE segment = ?",
+                (seg,))
+
+            decay_ratio = env.decay_ratio or 0.03
+            batch_sz = max(1, int(len(rows) * decay_ratio))
+            if not rows: continue
+
+            start_idx = random.randint(0, max(0, len(rows) - batch_sz))
+            batch = rows[start_idx: start_idx + batch_sz]
+
+            for m in batch:
+                dict_m = dict(m)
+                m_tier = self.pick_tier(dict_m, now_ts)
+                tier_counts[m_tier] += 1
+
+                lam = self.cfg.lambda_hot if m_tier == "hot" else (self.cfg.lambda_warm if m_tier == "warm" else self.cfg.lambda_cold)
+                dt = max(0, (now_ts - (dict_m["last_seen_at"] or dict_m["updated_at"] or 0)) / self.cfg.time_unit_ms)
+                act = max(0, dict_m.get("coactivations") or dict_m.get("feedback_score") or 0)
+                sal = max(0.0, min(1.0, (dict_m["salience"] or 0.5) * (1 + math.log1p(act))))
+
+                f = math.exp(-lam * (dt / (sal + 0.1)))
+                new_sal = max(0.0, min(1.0, sal * f))
+                changed = abs(new_sal - (dict_m["salience"] or 0)) > 0.001
+                if f < 0.7:
+                    sector = dict_m["primary_sector"] or "semantic"
+                    vec_row = await self.vector_store.get_vector(dict_m["id"], sector)
+                    if vec_row and vec_row.vector:
+                        vec = vec_row.vector
+                        if len(vec) > 0:
+                            new_vec = self.compress_vector(vec, f, self.cfg.min_vec_dim, self.cfg.max_vec_dim)
+
+                            if len(new_vec) < len(vec):
+                                await self.vector_store.store_vector(dict_m["id"], sector, new_vec, len(new_vec))
+                                tot_comp += 1
+                                changed = True
+                if f < max(0.3, self.cfg.cold_threshold):
+                    sector = dict_m["primary_sector"] or "semantic"
+                    fp = self.fingerprint_mem(dict_m)
+                    await self.vector_store.store_vector(dict_m["id"], sector, fp["vector"], len(fp["vector"]))
+                    self.db.execute("UPDATE memories SET summary = ? WHERE id = ?", (fp["summary"], dict_m["id"]))
+                    tot_fp += 1
+                    changed = True
+
+                if changed:
+                    self.db.execute("UPDATE memories SET salience=?, updated_at=? WHERE id=?", (new_sal, int(time.time() * 1000), dict_m["id"]))
+                    tot_chg += 1
+
+                tot_proc += 1
+                await asyncio.sleep(0)
+
+        self.db.commit()
+        dur = (time.time() - t0) * 1000
+        logger.info(f"[decay] {tot_chg}/{tot_proc} | tiers: {tier_counts} | comp={tot_comp} fp={tot_fp} | {dur:.1f}ms")

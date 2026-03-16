@@ -15,6 +15,7 @@
 from typing import List, Dict
 
 from src.core.dml_ops import dml_ops
+from src.core.sector_classify import SECTOR_KEY_INDEX_MAPPING
 
 # ======================== 学习率和衰减系数 ========================
 
@@ -69,16 +70,6 @@ SECTORAL_INTERDEPENDENCE_MATRIX_FOR_COGNITIVE_RESONANCE = [
     [0.6, 0.8, 0.2, 0.8, 1.0],  # 反思记忆（reflective）：元认知、思考、觉悟
 ]
 
-# 扇区索引映射 - 将记忆类型名称映射到矩阵行列坐标
-# 用于快速查询两种记忆类型间的共鸣系数
-SECTOR_INDEX_MAPPING_FOR_MATRIX_LOOKUP = {
-    "episodic": 0,  # 情景记忆：具体的个人经历和事件（如"去年夏天的旅行"）
-    "semantic": 1,  # 语义记忆：一般性的知识和概念（如"巴黎是法国首都"）
-    "procedural": 2,  # 程序记忆：如何做某事的知识（如"如何骑自行车"）
-    "emotional": 3,  # 情感记忆：与情感相关的记忆（如"失恋的悲伤"）
-    "reflective": 4,  # 反思记忆：关于自己想法的记忆（如"我是个完美主义者"）
-}
-
 
 async def calc_cross_sector_resonance_score(ms: str, qs: str, bs: float) -> float:
     """
@@ -113,9 +104,9 @@ async def calc_cross_sector_resonance_score(ms: str, qs: str, bs: float) -> floa
         )
         # 结果：0.5 × MATRIX[1][3] = 0.5 × 0.7 = 0.35
     """
-    # 从映射表获取扇区索引，如果类型不存在则默认使用semantic(1)
-    si = SECTOR_INDEX_MAPPING_FOR_MATRIX_LOOKUP.get(ms, 1)
-    ti = SECTOR_INDEX_MAPPING_FOR_MATRIX_LOOKUP.get(qs, 1)
+    # 从映射表获取扇区索引，如果类型不存在则默认使用 semantic(1)
+    si = SECTOR_KEY_INDEX_MAPPING.get(ms, 1)
+    ti = SECTOR_KEY_INDEX_MAPPING.get(qs, 1)
     # 返回基础显著性与矩阵系数的乘积
     return bs * SECTORAL_INTERDEPENDENCE_MATRIX_FOR_COGNITIVE_RESONANCE[si][ti]
 

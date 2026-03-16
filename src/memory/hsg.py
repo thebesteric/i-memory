@@ -36,6 +36,7 @@ waypoints = Waypoints()
 db = get_db()
 decay = Decay(reinforce_on_query=True, regeneration_enabled=True)
 
+
 @timing
 async def embed_query_for_all_sectors(query: str, sectors: List[str]) -> Dict[str, List[float]]:
     # 并发生成各扇区查询向量，减少多扇区检索的总等待时间
@@ -253,6 +254,8 @@ async def add_hsg_memory(content: str, tags: List[str] = None, metadata: Any = N
             # 更新用户摘要
             await update_user_summary(user_identity)
 
+        logger.info(f"[HSG] Added memory {mid} for User: {user_id}, Primary Sector: {cls_ret.primary}, Additional Sectors: {cls_ret.additional}, Salience: {init_sal}")
+
         # 返回新记忆的 id、内容、sector、分段数、salience 等信息
         return {
             "id": mid,
@@ -266,51 +269,8 @@ async def add_hsg_memory(content: str, tags: List[str] = None, metadata: Any = N
         raise e
 
 
-async def calc_multi_vec_fusion_score(mid: str, qe: Dict[str, List[float]], w: Dict[str, float]) -> float:
-    """
-    计算多向量融合相似度评分
-    通过对记忆的各扇区向量与查询向量进行余弦相似度计算，并根据权重进行加权平均，得到最终的融合相似度评分
-    该评分反映了记忆在多个维度（扇区）上与查询的相关性
-    :param mid: 记忆 ID
-    :param qe: 查询向量字典，键为扇区名称，值为对应的向量列表
-    :param w: 权重字典，键为权重名称，值为对应的权重值
-    :return: 融合相似度评分，浮点数
-    """
-
-    # 获取记忆的所有向量
-    vecs = await vector_store.get_vectors_by_id(mid)
-    # 加权相似度总和（分子）
-    s = 0.0
-    # 有效权重总和（分母），用于归一化
-    tot = 0.0
-    # 权重映射，将权重名称映射到对应的扇区名称
-    weight_mapping = {
-        "semantic": w.get("semantic_dimension_weight", 0),
-        "emotional": w.get("emotional_dimension_weight", 0),
-        "procedural": w.get("procedural_dimension_weight", 0),
-        "episodic": w.get("temporal_dimension_weight", 0),
-        "reflective": w.get("reflective_dimension_weight", 0),
-    }
-
-    for v in vecs:
-        # 获取记忆在该扇区的向量
-        qv = qe.get(v.sector)
-        if not qv:
-            continue
-        # 计算记忆向量与查询向量的余弦相似度
-        sim = cos_sim(v.vector, qv)
-        # 获取该扇区的权重，默认为 0.5
-        wgt = weight_mapping.get(v.sector, 0.5)
-        # 加权累加相似度
-        s += sim * wgt
-        # 累加权重
-        tot += wgt
-
-    # 返回归一化的融合相似度评分
-    return s / tot if tot > 0 else 0.0
-
 @timing
-async def hsg_query(query: str, top_k: int = 10, filters: IMemoryFilters = None) -> List[IMemoryItemInfo]:
+async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilters = None) -> List[IMemoryItemInfo]:
     """
     基于混合评分机制（内容相似度、关键词重叠、路标关联、时间衰减等）进行记忆检索
     @param query: 查询文本
@@ -515,7 +475,7 @@ async def hsg_query(query: str, top_k: int = 10, filters: IMemoryFilters = None)
                     linked_mem = dml_ops.get_mem(u["node_id"])
                     if linked_mem:
                         # “当前时间”与“关联记忆最后访问时间”的间隔天数
-                        time_diff = (now - linked_mem["last_seen_at"]) / 86400.0
+                        time_diff = (now - linked_mem["last_seen_at"]).total_seconds() / 86400.0
                         # 自然指数函数 math.exp 生成一个衰减系数 decay_fact（衰减因子），核心作用是将「关联记忆最后访问时间与当前时间的间隔天数」转化为 0~1 之间的权重值
                         # 时间间隔越久，衰减因子越小，对应记忆的权重 / 影响力越低
                         decay_fact = math.exp(-0.02 * time_diff)
@@ -536,3 +496,47 @@ async def hsg_query(query: str, top_k: int = 10, filters: IMemoryFilters = None)
         return effective_k_list
     finally:
         decay.dec_q()
+
+
+async def calc_multi_vec_fusion_score(mid: str, qe: Dict[str, List[float]], w: Dict[str, float]) -> float:
+    """
+    计算多向量融合相似度评分
+    通过对记忆的各扇区向量与查询向量进行余弦相似度计算，并根据权重进行加权平均，得到最终的融合相似度评分
+    该评分反映了记忆在多个维度（扇区）上与查询的相关性
+    :param mid: 记忆 ID
+    :param qe: 查询向量字典，键为扇区名称，值为对应的向量列表
+    :param w: 权重字典，键为权重名称，值为对应的权重值
+    :return: 融合相似度评分，浮点数
+    """
+
+    # 获取记忆的所有向量
+    vecs = await vector_store.get_vectors_by_id(mid)
+    # 加权相似度总和（分子）
+    s = 0.0
+    # 有效权重总和（分母），用于归一化
+    tot = 0.0
+    # 权重映射，将权重名称映射到对应的扇区名称
+    weight_mapping = {
+        "semantic": w.get("semantic_dimension_weight", 0),
+        "emotional": w.get("emotional_dimension_weight", 0),
+        "procedural": w.get("procedural_dimension_weight", 0),
+        "episodic": w.get("temporal_dimension_weight", 0),
+        "reflective": w.get("reflective_dimension_weight", 0),
+    }
+
+    for v in vecs:
+        # 获取记忆在该扇区的向量
+        qv = qe.get(v.sector)
+        if not qv:
+            continue
+        # 计算记忆向量与查询向量的余弦相似度
+        sim = cos_sim(v.vector, qv)
+        # 获取该扇区的权重，默认为 0.5
+        wgt = weight_mapping.get(v.sector, 0.5)
+        # 加权累加相似度
+        s += sim * wgt
+        # 累加权重
+        tot += wgt
+
+    # 返回归一化的融合相似度评分
+    return s / tot if tot > 0 else 0.0

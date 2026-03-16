@@ -4,6 +4,7 @@ import unittest
 import torch
 
 from src.ai.model.bert_manager import BertManager
+from src.core.sector_classify import SECTOR_INDEX_KEY_MAPPING
 
 
 class TestBertManager(unittest.TestCase):
@@ -37,6 +38,7 @@ class TestBertManager(unittest.TestCase):
 
     def test_dataset_json(self):
         dataset_path = "/Users/wangweijun/PycharmProjects/i-memory/assets/datasets"
+        # dataset = self.manager.load_dataset(dataset_path, load_type="json", split="validation")
         dataset = self.manager.load_dataset(dataset_path, load_type="json", split="train")
         print(f"Dataset loaded from JSON: {dataset}")
         print(f"Dataset length: {len(dataset)}")
@@ -53,17 +55,17 @@ class TestBertManager(unittest.TestCase):
 
         # 输出每个 primary 的样本数量
         for primary, items in m.items():
-            print(f"Primary: {primary}, Count: {len(items)}")
+            print(f"Primary: {primary}-{SECTOR_INDEX_KEY_MAPPING.get(primary)}, Count: {len(items)}")
 
         count = 0
         for primary, items in m.items():
             for item in items:
                 # 找到所有 additional 全部为 [1,1,1,1,1] 的数据
-                additional = item["additional"]
+                additional = item["labels"]
                 if additional == [1, 1, 1, 1, 1]:
                     print(f"{primary}: {item}")
                     count += 1
-        print(f"Total samples with additional [1,1,1,1,1]: {count}")
+        print(f"Total samples with labels [1,1,1,1,1]: {count}")
 
 
 if __name__ == '__main__':
