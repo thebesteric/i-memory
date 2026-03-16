@@ -26,7 +26,7 @@ if __name__ == '__main__':
         out_features_config=LabelConfig(
             branches={
                 "primary": LabelBranchConfig(type="single", num_classes=5),
-                "additional": LabelBranchConfig(type="multi", num_classes=5)
+                "labels": LabelBranchConfig(type="multi", num_classes=5)
             }
         )
     )
@@ -35,10 +35,10 @@ if __name__ == '__main__':
         bert_incr_model=bert_incr_model,
         train_dataset=train_dataset,
         valid_dataset=valid_dataset,
-        batch_size=100,
+        batch_size=16,
         epochs=5000,
         text_field="text",
-        label_fields=["primary", "additional"],
+        label_fields=["primary", "labels"],
         patience="auto",
         periodic_checkpoint_max_keep=10,
         loss_weights=[0.7, 0.3],

@@ -9,6 +9,7 @@ from agile.utils import LogHelper
 from datasets import load_dataset, load_from_disk, IterableDataset, IterableDatasetDict, DatasetDict, Dataset, IterableColumn
 from pydantic import BaseModel, Field, field_validator
 from torch.optim import AdamW
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import Dataset as TorchDataset, DataLoader
 from transformers import AutoModel, AutoTokenizer, PreTrainedModel, PreTrainedTokenizerBase, PreTrainedConfig
 
@@ -294,8 +295,11 @@ class BertManager:
         # 计算早停值
         if patience is not None:
             if isinstance(patience, str) and patience == "auto":
-                # 自动计算早停值，至少为 1 次
-                patience = max(1, math.ceil(epochs * 0.1))
+                # 自动计算早停值：
+                # 基于每 epoch 的步数估算收敛速度，取 steps_per_epoch * 3 和 epochs * 0.05 的较小值
+                # 下限为 10，避免过于激进地早停
+                steps_per_epoch = math.ceil(len(train_dataset) / batch_size)
+                patience = max(10, min(steps_per_epoch * 3, math.ceil(epochs * 0.05)))
 
         load_result = None
         checkpoint_epoch = None
@@ -383,12 +387,7 @@ class BertManager:
             drop_last=drop_last,
         )
         # 定义学习率调度器，根据验证准确率调整学习率，验证准确率连续 5 个 epoch 没有提升，则将学习率降低到原来的 0.5
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer,
-            mode="max",
-            patience=10,
-            factor=0.5
-        )
+        scheduler = ReduceLROnPlateau(optimizer, mode="max", patience=10, factor=0.5)
 
         # 初始化验证最佳准确率
         best_val_acc = 0.0
@@ -498,12 +497,13 @@ class BertManager:
                         f"{(', ' + extra_label_acc_logs) if extra_label_acc_logs else ''}"
                     )
 
-            # 训练集平均指标
+            # 训练阶段步数为 0，意味着 train_loader 没有产生任何 batch，即训练集为空或没有可用数据。
             if train_steps == 0:
                 logger.warning(
                     f"[TRAIN] epoch={epoch}/{epochs} no_batches, drop_last={drop_last}"
                 )
                 continue
+            # 训练集平均指标
             avg_train_loss = train_total_loss / train_steps
             avg_train_acc = (train_main_correct / train_main_total) if train_main_total > 0 else 0.0
             avg_train_branch_accs = {
@@ -543,7 +543,7 @@ class BertManager:
             if not valid_loader:
                 # 每训练 10 个 epoch，保存一次参数
                 if epoch % 10 == 0:
-                    periodic_file_param_save_path = os.path.join(params_save_path, f"periodic_epoch_{epoch}.pth")
+                    periodic_file_param_save_path = os.path.join(params_save_path, f"periodic_epoch_{epoch}_{avg_train_acc:.4f}.pth")
                     torch.save({
                         "epoch": epoch,
                         "model_state_dict": bert_incr_model.state_dict(),
@@ -565,7 +565,9 @@ class BertManager:
             else:
                 # 验证模型，判断模型是否过拟合
                 val_total_loss = 0.0
+                # 每个 batch 中预测正确的样本数
                 val_main_correct = 0.0
+                # 每个 batch 中主标签的样本总数
                 val_main_total = 0.0
                 val_branch_correct_sums = {label_name: 0.0 for label_name, _, _, _ in branch_meta}
                 val_branch_total_sums = {label_name: 0.0 for label_name, _, _, _ in branch_meta}
@@ -714,7 +716,7 @@ class BertManager:
                         deleted_files_text = ";".join(deleted_files_names)
                         deleted_count_text = (
                             f", deleted_old_best={cleanup_result['deleted_count']}"
-                            if cleanup_result["deleted_count"] != 1
+                            if cleanup_result["deleted_count"] > 0
                             else ""
                         )
                         logger.info(
@@ -1152,28 +1154,25 @@ class BertManager:
         :param max_keep: 保留个数
         :return:
         """
-        if max_keep is None or max_keep < 1:
-            return {
-                "deleted_count": 0,
-                "deleted_files": [],
-            }
-
         periodic_files: list[tuple[int, str]] = []
         for file_name in os.listdir(params_save_path):
             if not (file_name.startswith("periodic_epoch_") and file_name.endswith(".pth")):
                 continue
 
-            file_stem = file_name[:-4]
-            epoch_part = file_stem.replace("periodic_epoch_", "", 1)
-            if not epoch_part.isdigit():
-                continue
-
-            periodic_files.append((int(epoch_part), os.path.join(params_save_path, file_name)))
-
-        periodic_files.sort(key=lambda x: x[0], reverse=True)
-        files_to_delete = periodic_files[max_keep:]
+            # 文件名格式：periodic_epoch_{epoch}_{acc}.pth
+            # 无法解析 epoch 时置为 -1，排序后排在末尾被优先删除
+            file_stem = file_name[:-4]  # 去掉 .pth
+            parts = file_stem.split("_")  # ['periodic', 'epoch', '{epoch}', '{acc}']
+            epoch = int(parts[2]) if len(parts) >= 3 and parts[2].isdigit() else -1
+            periodic_files.append((epoch, os.path.join(params_save_path, file_name)))
 
         deleted_files: list[str] = []
+        if max_keep is not None and max_keep >= 1:
+            periodic_files.sort(key=lambda x: x[0], reverse=True)
+            files_to_delete = periodic_files[max_keep:]
+        else:
+            files_to_delete = periodic_files
+
         for _, file_path in files_to_delete:
             try:
                 os.remove(file_path)
