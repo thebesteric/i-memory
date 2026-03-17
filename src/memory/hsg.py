@@ -388,7 +388,7 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
             best_sim = csr
             for s, rlist in sector_result.items():
                 for vector_search in rlist:
-                    if vector_search.id == mem and vector_search.similarity > best_sim:
+                    if vector_search.id == mid and vector_search.similarity > best_sim:
                         best_sim = vector_search.similarity
 
             # 记忆的扇区
