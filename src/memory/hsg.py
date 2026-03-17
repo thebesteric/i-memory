@@ -41,8 +41,12 @@ decay = Decay(reinforce_on_query=True, regeneration_enabled=True)
 @timing
 async def embed_query_for_all_sectors(query: str, sectors: List[str]) -> Dict[str, List[float]]:
     # 并发生成各扇区查询向量，减少多扇区检索的总等待时间
-    vectors = await asyncio.gather(*(embed(query, sector) for sector in sectors))
-    return {sector: vector for sector, vector in zip(sectors, vectors)}
+    # vectors = await asyncio.gather(*(embed(query, sector) for sector in sectors))
+    # return {sector: vector for sector, vector in zip(sectors, vectors)}
+
+    # sector 并没有参与计算，所以直接 embed 一次即可
+    vector = await embed(query, None)
+    return {sector: vector for sector in sectors}
 
 
 def compress_vec_for_storage(vec: List[float], target_dim: int) -> List[float]:
@@ -255,7 +259,8 @@ async def add_hsg_memory(content: str, tags: List[str] = None, metadata: Any = N
             # 更新用户摘要
             await update_user_summary(user_identity)
 
-        logger.info(f"[HSG] Added memory {mid} for User: {user_id}, Primary Sector: {cls_ret.primary}, Additional Sectors: {cls_ret.additional}, Salience: {init_sal}")
+        logger.info(
+            f"[HSG] Added memory {mid} for User: {user_id}, Primary Sector: {cls_ret.primary}, Additional Sectors: {cls_ret.additional}, Salience: {init_sal}")
 
         # 返回新记忆的 id、内容、sector、分段数、salience 等信息
         return {

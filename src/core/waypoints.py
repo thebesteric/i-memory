@@ -3,7 +3,7 @@ import time
 from typing import List
 
 import numpy as np
-from agile.utils import LogHelper, singleton
+from agile.utils import LogHelper, singleton, timing
 from pydantic import BaseModel, Field
 
 from src.core.db import get_db
@@ -49,6 +49,7 @@ class Waypoints:
                         (rid, cid, tenant_id, project_id, user_id, 1.0, now, now))
         self.db.commit()
 
+    @timing
     async def expand_via_waypoints(self, ids: List[str], max_expansion: int = 10) -> List[Expansion]:
         """
         通过路标（waypoints）关系扩展记忆 ID 列表

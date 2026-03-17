@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS memories
     tenant_id      TEXT,
     project_id     TEXT,
     user_id        TEXT             DEFAULT 'anonymous',
+    summary        TEXT,
     content        TEXT,
     primary_sector TEXT,
     sectors        TEXT,
@@ -33,6 +34,7 @@ COMMENT ON COLUMN memories.id IS '记忆主标识';
 COMMENT ON COLUMN memories.tenant_id IS '租户标识';
 COMMENT ON COLUMN memories.project_id IS '项目标识';
 COMMENT ON COLUMN memories.user_id IS '用户标识';
+COMMENT ON COLUMN memories.summary IS '记忆摘要';
 COMMENT ON COLUMN memories.content IS '原始记忆内容';
 COMMENT ON COLUMN memories.primary_sector IS '主扇区/主题标签';
 COMMENT ON COLUMN memories.sectors IS '次级扇区/主题标签';

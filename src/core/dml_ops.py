@@ -1,6 +1,6 @@
 from typing import Optional, Any, Dict, List
 
-from agile.utils import singleton
+from agile.utils import singleton, timing
 
 from src.core.db import DB, get_db
 from src.memory.models.memory_models import IMemoryUserIdentity
@@ -49,6 +49,7 @@ class DMLOps:
         self.db.commit()
         return affected_rows
 
+    @timing
     def find_mem(self, mids: list[str]) -> List[Dict[str, Any]]:
         if not mids:
             return []

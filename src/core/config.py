@@ -91,6 +91,10 @@ class EnvConfig:
         self.DECAY_THREADS = env_helper.get("IM_DECAY_THREADS", 3)
         # 衰减冷阈值
         self.DECAY_COLD_THRESHOLD = env_helper.get("IM_DECAY_COLD_THRESHOLD", 0.25)
+        # 衰减比例（用于自动衰减）
+        self.DECAY_RATIO = env_helper.get("IM_DECAY_RATIO", 0.03)
+        # 自动衰减循环间隔（秒）
+        self.DECAY_INTERVAL_SECONDS = env_helper.get("IM_DECAY_INTERVAL_SECONDS", 60)
 
         # ================ 记忆分类相关配置 ================
         # 是否使用 BERT 分类器进行记忆分类

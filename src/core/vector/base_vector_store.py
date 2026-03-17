@@ -27,6 +27,7 @@ class VectorSearch:
 
 
 class BaseVectorStore(ABC):
+
     @abstractmethod
     async def store_vector(self, id: str, sector: str, vector: List[float], dim: int, user_identity: IMemoryUserIdentity = None):
         """
