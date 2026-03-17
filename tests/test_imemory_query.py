@@ -35,19 +35,6 @@ class TestIMemoryQuery(unittest.TestCase):
         result = asyncio.run(self.mem.get(memory_id))
         print("Get memory result:", result)
 
-    @unittest.skip
-    def test_delete_memory(self):
-        memory_ids = [
-            "66965ce7-4195-404a-8e84-0fc5659ff777",
-        ]
-        for memory_id in memory_ids:
-            asyncio.run(self.mem.delete(memory_id))
-            print(f"Memory {memory_id} deleted.")
-
-    @unittest.skip
-    def test_clear_memory(self):
-        asyncio.run(self.mem.clear(user_identity=self.user_identity))
-
     # @unittest.skip
     def test_history_memory(self):
         response = asyncio.run(self.mem.history(user_identity=self.user_identity, current=1, size=2))
