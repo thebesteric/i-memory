@@ -3,7 +3,7 @@ import unittest
 
 from src.imemory import IMemory
 
-from src.memory.models.memory_models import IMemoryUserIdentity, IMemoryFilters
+from src.memory.models.memory_models import IMemoryUserIdentity, IMemoryFilters, IMemoryItemInfo
 
 
 # @unittest.skip("Skipping TestIMemory")
@@ -24,9 +24,10 @@ class TestIMemoryQuery(unittest.TestCase):
 
     # @unittest.skip
     def test_search_memory(self):
-        query = "OpenClaw 支持多智能体协同吗？"
-        results = asyncio.run(self.mem.search(query, limit=5, filters=IMemoryFilters(user_identity=self.user_identity)))
-        print("Search results:", results)
+        query = "OpenClaw是什么，和普通大模型区别在哪？"
+        results: list[IMemoryItemInfo] = asyncio.run(self.mem.search(query, limit=5, filters=IMemoryFilters(user_identity=self.user_identity)))
+        for result in results:
+            print(f"Result: content={result.content}, score={result.score}")
 
     # @unittest.skip
     def test_get_memory(self):
