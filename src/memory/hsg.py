@@ -35,6 +35,7 @@ waypoints = Waypoints()
 db = get_db()
 decay = Decay(reinforce_on_query=True, regeneration_enabled=True)
 vector_store: BaseVectorStore = get_vector_store()
+sector_classifier = get_sector_classifier()
 
 @timing
 async def embed_query_for_all_sectors(query: str, sectors: List[str]) -> Dict[str, List[float]]:
@@ -195,7 +196,7 @@ async def add_hsg_memory(content: str,
     })
 
     # 文本分类：判断内容所属的主/辅 sector（语义、情感、程序、事件、反思等）
-    cls_ret = await get_sector_classifier().classify(content=content, metadata=metadata)
+    cls_ret = await sector_classifier.classify(content=content, metadata=metadata)
     all_secs = [cls_ret.primary] + cls_ret.additional
     try:
         current_seg_result = db.fetchone("SELECT current_segment FROM segment FOR UPDATE")
@@ -309,7 +310,7 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
             return entry
 
         # 判断查询属于哪个扇区
-        query_classify: ClassifyResult = await get_sector_classifier().classify(content=query)
+        query_classify: ClassifyResult = await sector_classifier.classify(content=query)
         # 提取查询关键词 token 集合
         query_tokens = canonical_token_set(query)
         # 确定检索扇区范围
