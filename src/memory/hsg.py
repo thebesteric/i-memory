@@ -9,7 +9,7 @@ from agile.utils import LogHelper, timing
 
 from src.ai.embed.base_embed_model import BaseEmbedModel
 from src.ai.model_provider import get_embed_model
-from src.core.components import get_sector_classifier
+from src.core.components import get_sector_classifier, get_vector_store
 from src.core.config import env
 from src.core.constants import SECTOR_RELATIONSHIPS, HYBRID_PARAMS, MEMORIES_CACHE
 from src.core.db import get_db
@@ -17,7 +17,7 @@ from src.core.dml_ops import dml_ops
 from src.core.extract_essence import ExtractEssence
 from src.core.score import compute_tag_match_score, compute_hybrid_score
 from src.core.sector_classify import SECTOR_CONFIGS, ClassifyResult
-from src.core.vector.base_vector_store import vector_store, VectorSearch
+from src.core.vector.base_vector_store import VectorSearch, BaseVectorStore
 from src.core.waypoints import Waypoints, Expansion
 from src.memory import user_ops
 from src.memory.decay import Decay
@@ -35,7 +35,7 @@ logger = LogHelper.get_logger()
 waypoints = Waypoints()
 db = get_db()
 decay = Decay(reinforce_on_query=True, regeneration_enabled=True)
-
+vector_store: BaseVectorStore = get_vector_store()
 
 @timing
 async def embed_query_for_all_sectors(query: str, sectors: List[str]) -> Dict[str, List[float]]:
@@ -209,7 +209,7 @@ async def add_hsg_memory(content: str,
             db.execute("UPDATE segment SET current_segment=%s, updated_at=NOW()", (cur_seg,))
             logger.info(f"[HSG] Rotated to segment [{cur_seg}]")
 
-        # 调用 extract_essence，生成摘要
+        # 调用 extract_essence，生成摘要（模型调用）
         essence = await ExtractEssence(content=content, max_len=env.SUMMARY_MAX_LENGTH).extract()
         # 获取主 sector 的配置
         sec_cfg = SECTOR_CONFIGS[cls_ret.primary]

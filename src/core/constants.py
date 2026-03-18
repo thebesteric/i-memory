@@ -52,6 +52,7 @@ class ModelProvider(Enum):
     OPENAI = "openai"
     GEMINI = "gemini"
     DASHSCOPE = "dashscope"
+    LOCAL = "local"
 
 
 class VectorStoreProvider(Enum):

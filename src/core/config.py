@@ -61,6 +61,7 @@ class EnvConfig:
 
         # 模型提供商（包含向量和记忆相关识别模型）
         self.MODEL_PROVIDER = env_helper.get("IM_MODEL_PROVIDER", ModelProvider.DASHSCOPE.value)
+        self.EMBED_MODEL_PROVIDER = env_helper.get("IM_EMBED_MODEL_PROVIDER", ModelProvider.LOCAL.value)
 
         # 向量存储提供商
         self.VECTOR_STORE = env_helper.get("IM_VECTOR_STORE", VectorStoreProvider.POSTGRES.value)

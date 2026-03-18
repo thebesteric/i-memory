@@ -58,7 +58,7 @@ class BaseEmbedModel(BaseModel, ABC):
 
         # 向量化计算点积和范数
         dot_product = np.dot(arr1, arr2)
-        # L2范数
+        # L2 范数
         norm1 = np.linalg.norm(arr1)
         norm2 = np.linalg.norm(arr2)
 

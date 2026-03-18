@@ -7,12 +7,13 @@ from typing import Optional, Any
 
 from agile.utils import LogHelper, singleton, timing
 
+from src.core.components import get_vector_store
 from src.core.config import env
 from src.core.constants import HYBRID_PARAMS
 from src.core.db import get_db, DB
 from src.core.dml_ops import dml_ops
 from src.core.sector_classify import SECTOR_CONFIGS, SectorCfg
-from src.core.vector.base_vector_store import get_vector_store, BaseVectorStore
+from src.core.vector.base_vector_store import BaseVectorStore
 from src.tools.text import canonical_tokens_from_text
 
 logger = LogHelper.get_logger()

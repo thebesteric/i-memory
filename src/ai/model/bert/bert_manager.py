@@ -156,6 +156,7 @@ class BertManager:
                     cache_dir=self.cache_dir,
                     local_files_only=self._is_model_local,
                 ).to(self.device)
+                logger.info(f"Model {self.model_name_or_path} loaded successfully")
             except ImportError as exc:
                 raise RuntimeError(
                     "PyTorch is required to load transformer models. "
@@ -166,7 +167,6 @@ class BertManager:
                     f"Failed to load model '{self.model_name_or_path}' from path '{self.cache_dir}'. "
                     f"Error: {exc}"
                 ) from exc
-            logger.info(f"Model {self.model_name_or_path} loaded successfully")
 
         if self._tokenizer is None:
             self._tokenizer = AutoTokenizer.from_pretrained(
