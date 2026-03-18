@@ -585,8 +585,8 @@ def _promote_qa_assistant_answer(items: List[IMemoryItemInfo], query_sector: str
     if not best_human:
         return items
 
+    # 尝试查找与该 human 记忆配对的 assistant 记忆
     pair_row = None
-
     if best_human.qa_pair_id:
         pair_row = db.fetchone(
             """
@@ -611,11 +611,11 @@ def _promote_qa_assistant_answer(items: List[IMemoryItemInfo], query_sector: str
 
     # 不在候选列表中：动态追加
     items.append(IMemoryItemInfo(
-        id=pair_row["id"],
-        content=pair_row["content"],
+        id=pair_row.get("id"),
+        content=pair_row.get("content"),
         score=best_human.score + 0.2,
-        primary_sector=pair_row["primary_sector"] or query_sector,
-        path=[str(pair_row["id"])],
+        primary_sector=pair_row.get("primary_sector") or query_sector,
+        path=[pair_row.get("id")],
         salience=pair_row.get("salience") or 0.0,
         last_seen_at=pair_row.get("last_seen_at"),
         tags=json.loads(pair_row.get("tags") or "[]"),
