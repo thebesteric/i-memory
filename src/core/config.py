@@ -94,7 +94,7 @@ class EnvConfig:
         # 衰减比例（用于自动衰减）
         self.DECAY_RATIO = env_helper.get("IM_DECAY_RATIO", 0.03)
         # 自动衰减循环间隔（秒）
-        self.DECAY_INTERVAL_SECONDS = env_helper.get("IM_DECAY_INTERVAL_SECONDS", 60)
+        self.DECAY_INTERVAL_SECONDS = env_helper.get("IM_DECAY_INTERVAL_SECONDS", 300)
 
         # ================ 记忆分类相关配置 ================
         # 是否使用 BERT 分类器进行记忆分类

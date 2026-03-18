@@ -39,8 +39,15 @@ class Decay:
     active_q = 0
     last_decay = 0
 
-    # 限制衰减触发频率，单位毫秒，默认 60 秒
-    COOLDOWN = 60000
+    # 内部防抖冷却时间（毫秒）；实例初始化时会根据 DECAY_INTERVAL_SECONDS 自动覆盖
+    cooldown = 60000
+
+    @staticmethod
+    def _derive_cooldown_ms(interval_seconds: int) -> int:
+        # 比调度间隔略小：默认少 10%，最少少 2 秒，最多少 30 秒
+        delta_sec = max(2, min(30, int(interval_seconds * 0.1)))
+        cooldown_sec = max(1, interval_seconds - delta_sec)
+        return cooldown_sec * 1000
 
     def __init__(self, reinforce_on_query: bool = True, regeneration_enabled: bool = True):
         """
@@ -53,6 +60,8 @@ class Decay:
             reinforce_on_query=reinforce_on_query,
             regeneration_enabled=regeneration_enabled
         )
+        interval_sec = max(1, int(getattr(env, "DECAY_INTERVAL_SECONDS", 60) or 60))
+        self.cooldown = self._derive_cooldown_ms(interval_sec)
         self.vector_store: BaseVectorStore = get_vector_store()
         self.db: DB = get_db()
 
@@ -272,9 +281,11 @@ class Decay:
         if updated:
             logger.info("[DECAY] Memory %s reinforced on query hit", mem_id)
 
+    @timing
     async def apply_decay(self):
         """
         批处理衰减器，按 segment 抽样一部分记忆，计算“遗忘程度”，并在必要时做向量压缩或指纹化降级
+        核心：分段抽样 + 渐进衰减 + 分级降级
         :return:
         """
         # 有活跃查询（“读优先”策略，保障在线响应），则跳过
@@ -282,10 +293,10 @@ class Decay:
             logger.info(f"[DECAY] Skipped - {self.active_q} active queries")
             return
 
-        # 当前衰减时间小于 COOLDOWN 定义的时间（避免短时间重复跑批），则跳过
+        # 当前衰减时间小于 cooldown 定义的时间（避免短时间重复跑批），则跳过
         now_ts = int(time.time() * 1000)
-        if now_ts - self.last_decay < self.COOLDOWN:
-            rem = (self.COOLDOWN - (now_ts - self.last_decay)) / 1000
+        if now_ts - self.last_decay < self.cooldown:
+            rem = (self.cooldown - (now_ts - self.last_decay)) / 1000
             logger.info(f"[DECAY] Skipped - cooldown active ({rem:.0f}s left)")
             return
 
@@ -365,6 +376,7 @@ class Decay:
                 # 差值 > 0.001 才算变化，避免无意义写库
                 changed = abs(new_sal - (dict_m["salience"] or 0)) > 0.001
 
+                # 分级降级策略（随遗忘加深）
                 # 当遗忘较明显时，把向量降维（compress_vector），减少存储与检索开销
                 # 关键点：这是“信息保留 + 成本下降”的中间态，不直接删除语义
                 if f < 0.7:
@@ -385,7 +397,7 @@ class Decay:
                                 changed = True
 
                 # 更冷的记忆降级为“指纹向量 + 关键词摘要”
-                # 关键点：这是强降级，召回精度会下降，但能保留最小可检索性
+                # 关键点：这是强降级，召回精度会下降，用关键词重写 summary，保留最小可检索性
                 if f < max(0.3, self.cfg.cold_threshold):
                     sector = dict_m["primary_sector"] or "semantic"
                     # 生成 32 维 hash 向量和短摘要
@@ -405,7 +417,7 @@ class Decay:
                 if changed:
                     self.db.execute(
                         "UPDATE memories SET salience = %s, updated_at = %s WHERE id = %s",
-                        (new_sal, int(time.time() * 1000), dict_m["id"])
+                        (new_sal, datetime.datetime.now(), dict_m["id"])
                     )
                     tot_chg += 1
 

@@ -474,7 +474,7 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
             res_list.append(item)
 
         # QA 模式：prefer/qa 时尝试配对提升
-        if filters.query_mode in ("qa", "prefer"):
+        if filters.query_mode and filters.query_mode in ("qa", "prefer"):
             res_list = _promote_qa_assistant_answer(res_list, query_classify.primary)
 
         # 按分数降序
@@ -600,6 +600,7 @@ def _promote_qa_assistant_answer(items: List[IMemoryItemInfo], query_sector: str
         )
 
     if not pair_row:
+        logger.info(f"[HSG] No paired assistant answer found for human memory {best_human.id} with qa_pair_id {best_human.qa_pair_id}")
         return items
 
     # 已在候选列表中：直接提升分数
@@ -607,6 +608,9 @@ def _promote_qa_assistant_answer(items: List[IMemoryItemInfo], query_sector: str
         if item.id == pair_row["id"]:
             item.score = max(item.score, best_human.score + 0.2)
             item.primary_sector = item.primary_sector or query_sector
+            item_content_preview = item.content if len(item.content) <= 20 else item.content[:20] + "..."
+            logger.info(
+                f"[HSG] Promoted paired assistant memory[{item.id}] content: {item_content_preview} with score {item.score} based on human memory[{best_human.id}]")
             return items
 
     # 不在候选列表中：动态追加
