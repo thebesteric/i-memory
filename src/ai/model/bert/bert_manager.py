@@ -128,7 +128,7 @@ class BertManager:
         """
         self.model_name_or_path = os.fspath(model_name_or_path)
         project_root = pyrootutils.find_root()
-        self.cache_dir = os.fspath(cache_dir) if cache_dir else os.path.join(project_root, "assets", "", "models", self.model_name_or_path)
+        self.cache_dir = os.fspath(cache_dir) if cache_dir else os.path.join(project_root, "assets", "bert", "models", self.model_name_or_path)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         # 模型和分词器实例，初始为 None，按需加载
