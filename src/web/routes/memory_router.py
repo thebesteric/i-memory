@@ -36,7 +36,10 @@ async def add(req: AddMemoryRequest):
     meta = req.metadata or {}
     if req.tags:
         meta["tags"] = req.tags
-    result = await mem.add(req.content, user_identity=req.user_identity, meta=meta)
+    result = await mem.add(req.content,
+                           user_identity=req.user_identity,
+                           meta=meta,
+                           qa_role=req.qa_role)
     return R.success(data=result)
 
 
@@ -56,7 +59,11 @@ async def search(req: SearchMemoryRequest):
     :param req: 搜索记忆请求模型
     :return: 搜索结果列表
     """
-    results: List[IMemoryItemInfo] = await mem.search(query=req.query, limit=req.limit, filters=req.filters)
+    results: List[IMemoryItemInfo] = await mem.search(
+        query=req.query,
+        limit=req.limit,
+        filters=req.filters
+    )
     return R.success(data=results)
 
 

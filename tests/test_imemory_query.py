@@ -24,8 +24,15 @@ class TestIMemoryQuery(unittest.TestCase):
 
     # @unittest.skip
     def test_search_memory(self):
-        query = "OpenClaw是什么，和普通大模型区别在哪？"
-        results: list[IMemoryItemInfo] = asyncio.run(self.mem.search(query, limit=5, filters=IMemoryFilters(user_identity=self.user_identity)))
+        query = "聊聊北京之行"
+        results: list[IMemoryItemInfo] = asyncio.run(self.mem.search(
+            query,
+            limit=10,
+            filters=IMemoryFilters(
+                user_identity=self.user_identity,
+                query_mode="prefer",
+            )
+        ))
         for result in results:
             print(f"Result: content={result.content}, score={result.score}")
 

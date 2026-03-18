@@ -88,6 +88,44 @@ query → embed → vector search → scoring → decay → resonance → reinfo
 
 ---
 
+## 🧭 QA 记忆参数说明（方案 B）
+
+推荐按「问题/回答」分别写入，调用方只需要标记 `qa_role`，其余配对信息由系统自动维护。
+
+- `query_mode`：检索模式，默认 `prefer`
+  - `prefer`：优先尝试 QA 配对提升，找不到则回退普通向量检索
+  - `qa`：只走 QA 配对优先逻辑（仍依赖向量召回候选）
+  - `vector`：完全使用原有向量检索排序
+- `qa_role`：仅允许 `human` / `assistant`
+- `qa_pair_id`：系统内部自动生成/复用，用于配对 human 与 assistant（对外不作为请求参数）
+
+写入示例（`POST /imemory/memory/add`）：
+
+```json
+{
+  "content": "OpenClaw是什么，和普通大模型区别在哪？",
+  "user_identity": {"user_id": "test_user", "tenant_id": "test_tenant", "project_id": "test_project"},
+  "qa_role": "human"
+}
+```
+
+查询示例（`POST /imemory/memory/search`）：
+
+```json
+{
+  "query": "OpenClaw是什么，和普通大模型区别在哪？",
+  "limit": 5,
+  "query_mode": "prefer",
+  "filters": {
+    "user_identity": {"user_id": "test_user", "tenant_id": "test_tenant", "project_id": "test_project"}
+  }
+}
+```
+
+更多细节见技术架构文档 `docs/i-memory_technical_architecture.md` 的「10.4 QA 参数语义」和「10.5 使用建议」。
+
+---
+
 ## 📈 算法创新点
 
 ### 1. 混合评分

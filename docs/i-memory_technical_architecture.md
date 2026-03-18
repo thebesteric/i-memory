@@ -360,13 +360,107 @@ sequenceDiagram
 ## 10.2 过滤器模型
 
 位于 `src/memory/models/memory_models.py`：
+位于 `src/memory/models/memory_models.py`：
 
-- `IMemoryFilters`：`user_identity/sectors/min_salience/debug`
+- `IMemoryFilters`：`user_identity/sectors/min_salience/query_mode/debug`
 
 ## 10.3 返回模型
 
 - 检索项：`IMemoryItemInfo`
 - 可选 debug 字段：`IMemoryItemDebugInfo`
+
+## 10.4 QA 参数语义（方案 B）
+
+### 10.4.1 `query_mode`
+
+用于控制查询时是否启用 QA 配对优先逻辑：
+
+- `prefer`（默认）：优先尝试 QA 配对提升；若条件不满足，自动回退原向量检索
+- `qa`：启用 QA 配对优先逻辑（仍基于向量召回候选）
+- `vector`：关闭 QA 配对提升，仅使用原有向量检索排序
+
+默认值来源：
+
+- `IMemoryFilters.query_mode = "prefer"`
+- `SearchMemoryRequest.query_mode = "prefer"`
+
+### 10.4.2 `qa_role`
+
+写入时的问答角色标记，仅允许：
+
+- `human`
+- `assistant`
+
+约束层：
+
+- API/模型层：`QARole = Literal["human", "assistant"]`
+- 数据库层：`memories.qa_role CHECK (qa_role IS NULL OR qa_role IN ('human', 'assistant'))`
+
+不传 `qa_role` 时按普通记忆处理（兼容旧逻辑）。
+
+方案 B 的关键点：
+
+- 写入时调用方通常只需传 `qa_role`
+- `qa_pair_id` 由系统自动维护：
+  - `human`：自动生成新的 `qa_pair_id`
+  - `assistant`：自动复用同身份下最近一条未配对 human 的 `qa_pair_id`
+- `qa_pair_id` 为内部字段，不作为外部请求参数
+
+### 10.4.3 QA 提升触发条件
+
+`query_hsg_memories()` 中满足以下条件时，会尝试将对应 `assistant` 回答提升到前列：
+
+1. `query_mode` 为 `prefer` 或 `qa`
+2. 召回结果中存在 `qa_role = human` 的记忆
+3. 该 `human` 记忆有 `qa_pair_id`（方案 B 自动生成）
+4. 能通过上述字段在数据库中找到对应的 `assistant` 记忆
+
+若任一条件不满足，系统自动回退原排序链路，不影响既有查询能力。
+
+> 关键设计：配对信息在**写入时**由系统自动固化到每条记忆中，查询方无需管理会话概念。
+
+## 10.5 示例请求与使用建议
+
+### 10.5.1 写入问答对（推荐）
+
+问题（human）：
+
+```json
+{
+  "content": "OpenClaw是什么，和普通大模型区别在哪？",
+  "user_identity": {"user_id": "test_user", "tenant_id": "test_tenant", "project_id": "test_project"},
+  "qa_role": "human"
+}
+```
+
+回答（assistant）：
+
+```json
+{
+  "content": "它是本地部署的AI智能体执行框架，核心是执行任务，不是只聊天。",
+  "user_identity": {"user_id": "test_user", "tenant_id": "test_tenant", "project_id": "test_project"},
+  "qa_role": "assistant"
+}
+```
+
+### 10.5.2 查询（prefer 默认推荐）
+
+```json
+{
+  "query": "OpenClaw是什么，和普通大模型区别在哪？",
+  "limit": 5,
+  "query_mode": "prefer",
+  "filters": {
+    "user_identity": {"user_id": "test_user", "tenant_id": "test_tenant", "project_id": "test_project"}
+  }
+}
+```
+
+### 10.5.3 实践建议
+
+- 方案 B 下，建议调用方只传 `qa_role`，由系统自动配对
+- 若你希望完全复用历史行为，可显式设置 `query_mode = "vector"`
+- 对非对话型内容可不传 QA 字段，系统仍按通用记忆处理
 
 ---
 

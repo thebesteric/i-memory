@@ -17,8 +17,9 @@ class DMLOps:
     def ins_mem(self, **k) -> int:
         sql = """
               INSERT INTO memories(id, user_id, tenant_id, project_id, segment, content, primary_sector, sectors, tags, meta, created_at, updated_at,
-                                   last_seen_at, salience, decay_lambda, version, mean_dim, mean_vec, compressed_vec, feedback_score)
-              VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                   last_seen_at, salience, decay_lambda, version, mean_dim, mean_vec, compressed_vec, feedback_score,
+                                   qa_role, qa_pair_id)
+              VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
               ON CONFLICT (id) DO UPDATE SET user_id=EXCLUDED.user_id,
                                              tenant_id=EXCLUDED.tenant_id,
                                              project_id=EXCLUDED.project_id,
@@ -37,13 +38,16 @@ class DMLOps:
                                              mean_dim=EXCLUDED.mean_dim,
                                              mean_vec=EXCLUDED.mean_vec,
                                              compressed_vec=EXCLUDED.compressed_vec,
-                                             feedback_score=EXCLUDED.feedback_score
+                                             feedback_score=EXCLUDED.feedback_score,
+                                             qa_role=EXCLUDED.qa_role,
+                                             qa_pair_id=EXCLUDED.qa_pair_id
               """
         vals = (
             k.get("id"), k.get("user_id"), k.get("tenant_id"), k.get("project_id"), k.get("segment", 0), k.get("content"),
             k.get("primary_sector"), k.get("sectors"), k.get("tags"), k.get("meta"), k.get("created_at"), k.get("updated_at"),
             k.get("last_seen_at"), k.get("salience", 1.0), k.get("decay_lambda", 0.02), k.get("version", 1),
-            k.get("mean_dim"), k.get("mean_vec"), k.get("compressed_vec"), k.get("feedback_score", 0)
+            k.get("mean_dim"), k.get("mean_vec"), k.get("compressed_vec"), k.get("feedback_score", 0),
+            k.get("qa_role"), k.get("qa_pair_id")
         )
         affected_rows = self.db.execute(sql, vals)
         self.db.commit()

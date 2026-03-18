@@ -12,7 +12,7 @@ from src.core.config import env
 from src.core.db import get_db
 from src.core.dml_ops import dml_ops
 from src.memory.hsg import query_hsg_memories
-from src.memory.models.memory_models import IMemoryConfig, IMemoryFilters, IMemoryUserIdentity, IMemoryItemInfo
+from src.memory.models.memory_models import IMemoryConfig, IMemoryFilters, IMemoryUserIdentity, IMemoryItemInfo, QARole
 from src.ops.ingest import ingest_document
 
 logger = LogHelper.get_logger()
@@ -55,7 +55,8 @@ class IMemory:
                   user_identity: IMemoryUserIdentity = None,
                   cfg: IMemoryConfig = None,
                   tags: List[str] = None,
-                  meta: Dict[str, Any] = None) -> Dict[str, Any]:
+                  meta: Dict[str, Any] = None,
+                  qa_role: QARole | None = None) -> Dict[str, Any]:
         """
         添加记忆内容
         :param content: 记忆内容文本
@@ -63,6 +64,7 @@ class IMemory:
         :param cfg: 记忆配置
         :param tags: 标签列表
         :param meta: 其他元数据
+        :param qa_role: QA 角色（human/assistant）
         :return: 添加结果
         """
         user_identity = user_identity or self.default_user_identity
@@ -72,7 +74,8 @@ class IMemory:
                                     data=content,
                                     cfg=cfg,
                                     meta=meta,
-                                    tags=tags)
+                                    tags=tags,
+                                    qa_role=qa_role)
         if "root_memory_id" in res:
             res["id"] = res["root_memory_id"]
         return res
@@ -92,7 +95,7 @@ class IMemory:
         # 创建 MemoryFilters 对象
         if not filters:
             filters = IMemoryFilters(user_identity=self.default_user_identity)
-
+        # 执行查询
         return await query_hsg_memories(query, limit, filters)
 
     async def get(self, memory_id: str) -> Dict[str, Any] | None:

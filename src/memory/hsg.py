@@ -1,4 +1,3 @@
-import asyncio
 import datetime
 import json
 import math
@@ -23,7 +22,7 @@ from src.core.waypoints import Waypoints, Expansion
 from src.memory import user_ops
 from src.memory.decay import Decay
 from src.memory.embed import embed_multi_sector, calc_mean_vec, embed
-from src.memory.models.memory_models import IMemoryFilters, IMemoryItemDebugInfo, IMemoryItemInfo, IMemoryUserIdentity, IMemoryUser
+from src.memory.models.memory_models import IMemoryFilters, IMemoryItemDebugInfo, IMemoryItemInfo, IMemoryUserIdentity, IMemoryUser, QARole
 from src.memory.user_summary import update_user_summary
 from src.ops.dynamic_memory import calc_cross_sector_resonance_score, apply_retrieval_trace_reinforcement_to_memory, \
     propagate_associative_reinforcement_to_linked_nodes
@@ -78,15 +77,26 @@ def compress_vec_for_storage(vec: List[float], target_dim: int) -> List[float]:
     return comp
 
 
-async def add_hsg_memory(content: str, tags: List[str] = None, metadata: Any = None, user_identity: IMemoryUserIdentity = None) -> Dict[str, Any]:
+async def add_hsg_memory(content: str,
+                         tags: List[str] = None,
+                         metadata: Any = None,
+                         user_identity: IMemoryUserIdentity = None,
+                         qa_role: QARole | None = None) -> Dict[str, Any]:
     """
     添加一条 Hierarchical Semantic Graph 记忆（数据库 + 向量存储、按扇区（sectors）分层组织记忆）
     :param content: 记忆内容
     :param tags: 标签
     :param metadata: 元数据
     :param user_identity: 用户身份
+    :param qa_role: QA 角色（human/assistant）
     :return:
     """
+    if qa_role and qa_role not in ("human", "assistant"):
+        raise ValueError("qa_role must be one of: human, assistant")
+
+    # 需传 qa_role，问答配对由系统内部自动完成。
+    qa_pair_id = _resolve_auto_qa_linking(user_identity, qa_role)
+
     # 获取嵌入模型
     embed_model: BaseEmbedModel = get_embed_model()
     # 生成内容的嵌入向量
@@ -230,7 +240,9 @@ async def add_hsg_memory(content: str, tags: List[str] = None, metadata: Any = N
             mean_dim=None,
             mean_vec=None,
             compressed_vec=None,
-            feedback_score=0
+            feedback_score=0,
+            qa_role=qa_role,
+            qa_pair_id=qa_pair_id
         )
 
         # 调用 embed_multi_sector，对内容进行多 sector 嵌入，生成向量
@@ -269,7 +281,9 @@ async def add_hsg_memory(content: str, tags: List[str] = None, metadata: Any = N
             "primary_sector": cls_ret.primary,
             "sectors": all_secs,
             "chunks": len(chunks),
-            "salience": init_sal
+            "salience": init_sal,
+            "qa_role": qa_role,
+            "qa_pair_id": qa_pair_id
         }
     except Exception as e:
         raise e
@@ -379,7 +393,7 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
             if mem["user_id"] != user_id or (tenant_id and mem["tenant_id"] != tenant_id) or (project_id and mem["project_id"] != project_id):
                 continue
 
-            # 多向量融合相似度
+            # 多向量融合相似度评分
             mvf = await calc_multi_vec_fusion_score(mid, query_embed_with_sectors, weight)
             # 跨扇区共振分数
             csr = await calc_cross_sector_resonance_score(mem["primary_sector"], query_classify.primary, mvf)
@@ -442,6 +456,8 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
                 salience=salience,
                 last_seen_at=mem["last_seen_at"],
                 tags=json.loads(mem["tags"] or "[]"),
+                qa_role=mem.get("qa_role"),
+                qa_pair_id=mem.get("qa_pair_id"),
                 metadata=json.loads(mem["meta"] or {})
             )
             # 调试信息
@@ -456,6 +472,10 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
                 )
             # 加入结果列表
             res_list.append(item)
+
+        # QA 模式：prefer/qa 时尝试配对提升
+        if filters.query_mode in ("qa", "prefer"):
+            res_list = _promote_qa_assistant_answer(res_list, query_classify.primary)
 
         # 按分数降序
         res_list.sort(key=lambda x: x.score, reverse=True)
@@ -546,3 +566,118 @@ async def calc_multi_vec_fusion_score(mid: str, qe: Dict[str, List[float]], w: D
 
     # 返回归一化的融合相似度评分
     return s / tot if tot > 0 else 0.0
+
+
+def _promote_qa_assistant_answer(items: List[IMemoryItemInfo], query_sector: str) -> List[IMemoryItemInfo]:
+    """
+    在 prefer/qa 模式下，优先把与高分问题匹配的 assistant 回答提升到顶部。
+    配对关系仅依赖写入时存储的 qa_pair_id，查询方无需传入会话标识。
+    """
+    if not items:
+        return items
+
+    # 从召回结果中找分数最高的 human 记忆
+    best_human = next(
+        (it for it in sorted(items, key=lambda x: x.score, reverse=True)
+         if it.qa_role == "human"),
+        None
+    )
+    if not best_human:
+        return items
+
+    pair_row = None
+
+    if best_human.qa_pair_id:
+        pair_row = db.fetchone(
+            """
+            SELECT *
+            FROM memories
+            WHERE qa_pair_id = %s
+              AND qa_role = 'assistant'
+            ORDER BY created_at DESC LIMIT 1
+            """,
+            (best_human.qa_pair_id,)
+        )
+
+    if not pair_row:
+        return items
+
+    # 已在候选列表中：直接提升分数
+    for item in items:
+        if item.id == pair_row["id"]:
+            item.score = max(item.score, best_human.score + 0.2)
+            item.primary_sector = item.primary_sector or query_sector
+            return items
+
+    # 不在候选列表中：动态追加
+    items.append(IMemoryItemInfo(
+        id=pair_row["id"],
+        content=pair_row["content"],
+        score=best_human.score + 0.2,
+        primary_sector=pair_row["primary_sector"] or query_sector,
+        path=[str(pair_row["id"])],
+        salience=pair_row.get("salience") or 0.0,
+        last_seen_at=pair_row.get("last_seen_at"),
+        tags=json.loads(pair_row.get("tags") or "[]"),
+        qa_role=pair_row.get("qa_role"),
+        qa_pair_id=pair_row.get("qa_pair_id"),
+        metadata=json.loads(pair_row.get("meta") or "{}")
+    ))
+    return items
+
+
+def _resolve_auto_qa_linking(user_identity: IMemoryUserIdentity,
+                             qa_role: QARole | None) -> str | None:
+    """
+    自动补齐 QA 配对字段：
+    - human：生成新的 qa_pair_id
+    - assistant：复用最近一条“未被 assistant 配对”的 human.qa_pair_id
+    """
+    if qa_role not in ("human", "assistant"):
+        return None
+
+    if qa_role == "human":
+        return str(uuid.uuid4())
+
+    # assistant 自动配对：匹配同身份下最近未配对的 human
+    user_id = user_identity.user_id
+    tenant_id = user_identity.tenant_id
+    project_id = user_identity.project_id
+
+    sql_parts = [
+        """
+        SELECT h.qa_pair_id
+        FROM memories h
+        WHERE h.qa_role = 'human'
+          AND h.user_id = %s
+          AND h.qa_pair_id IS NOT NULL
+        """
+    ]
+    params: list[Any] = [user_id]
+
+    if tenant_id:
+        sql_parts.append("AND h.tenant_id = %s")
+        params.append(tenant_id)
+    if project_id:
+        sql_parts.append("AND h.project_id = %s")
+        params.append(project_id)
+
+    sql_parts.append(
+        """
+        AND NOT EXISTS (
+            SELECT 1
+            FROM memories a
+            WHERE a.qa_role = 'assistant'
+              AND a.qa_pair_id = h.qa_pair_id
+              AND a.user_id = h.user_id
+        )
+        ORDER BY h.created_at DESC
+        LIMIT 1
+        """
+    )
+
+    row = db.fetchone(" ".join(sql_parts), tuple(params))
+    if not row:
+        return str(uuid.uuid4())
+
+    return row.get("qa_pair_id")

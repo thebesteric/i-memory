@@ -6,27 +6,29 @@ CREATE EXTENSION IF NOT EXISTS vector;
 
 CREATE TABLE IF NOT EXISTS memories
 (
-    id             TEXT PRIMARY KEY,
-    tenant_id      TEXT,
-    project_id     TEXT,
-    user_id        TEXT             DEFAULT 'anonymous',
-    summary        TEXT,
-    content        TEXT,
-    primary_sector TEXT,
-    sectors        TEXT,
-    tags           TEXT,
-    compressed_vec BYTEA,
-    meta           TEXT,
-    segment        INTEGER          DEFAULT 0,
-    created_at     TIMESTAMP,
-    updated_at     TIMESTAMP,
-    last_seen_at   TIMESTAMP,
-    salience       DOUBLE PRECISION,
-    decay_lambda   DOUBLE PRECISION,
-    version        INTEGER,
-    mean_dim       INTEGER,
-    mean_vec       BYTEA,
-    feedback_score DOUBLE PRECISION DEFAULT 0
+    id              TEXT PRIMARY KEY,
+    tenant_id       TEXT,
+    project_id      TEXT,
+    user_id         TEXT             DEFAULT 'anonymous',
+    qa_role         TEXT,
+    qa_pair_id      TEXT,
+    content         TEXT,
+    summary         TEXT,
+    primary_sector  TEXT,
+    sectors         TEXT,
+    tags            TEXT,
+    compressed_vec  BYTEA,
+    meta            TEXT,
+    segment         INTEGER          DEFAULT 0,
+    created_at      TIMESTAMP,
+    updated_at      TIMESTAMP,
+    last_seen_at    TIMESTAMP,
+    salience        DOUBLE PRECISION,
+    decay_lambda    DOUBLE PRECISION,
+    version         INTEGER,
+    mean_dim        INTEGER,
+    mean_vec        BYTEA,
+    feedback_score  DOUBLE PRECISION DEFAULT 0
 );
 
 COMMENT ON TABLE memories IS '用户记忆及派生元数据';
@@ -34,8 +36,10 @@ COMMENT ON COLUMN memories.id IS '记忆主标识';
 COMMENT ON COLUMN memories.tenant_id IS '租户标识';
 COMMENT ON COLUMN memories.project_id IS '项目标识';
 COMMENT ON COLUMN memories.user_id IS '用户标识';
-COMMENT ON COLUMN memories.summary IS '记忆摘要';
+COMMENT ON COLUMN memories.qa_role IS '问答角色（human/assistant）';
+COMMENT ON COLUMN memories.qa_pair_id IS '问答对标识';
 COMMENT ON COLUMN memories.content IS '原始记忆内容';
+COMMENT ON COLUMN memories.summary IS '记忆摘要';
 COMMENT ON COLUMN memories.primary_sector IS '主扇区/主题标签';
 COMMENT ON COLUMN memories.sectors IS '次级扇区/主题标签';
 COMMENT ON COLUMN memories.tags IS '用户或系统标签';
@@ -241,8 +245,13 @@ ON CONFLICT DO NOTHING;
 CREATE INDEX IF NOT EXISTS idx_memories_sector ON memories (primary_sector);
 CREATE INDEX IF NOT EXISTS idx_memories_ts ON memories (last_seen_at);
 CREATE INDEX IF NOT EXISTS idx_memories_user ON memories (user_id);
+CREATE INDEX IF NOT EXISTS idx_memories_qa_pair_id ON memories (qa_pair_id);
 CREATE INDEX IF NOT EXISTS idx_vectors_user ON vectors (user_id);
 CREATE INDEX IF NOT EXISTS idx_waypoints_src ON waypoints (src_id);
 CREATE INDEX IF NOT EXISTS idx_waypoints_dst ON waypoints (dst_id);
 CREATE INDEX IF NOT EXISTS idx_stats_ts ON stats (ts);
 CREATE INDEX IF NOT EXISTS idx_temporal_subject ON temporal_facts (subject);
+
+-- 约束
+
+ALTER TABLE memories ADD CONSTRAINT chk_memories_qa_role CHECK (qa_role IS NULL OR qa_role IN ('human', 'assistant'));

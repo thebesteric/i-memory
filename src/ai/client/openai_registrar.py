@@ -4,13 +4,21 @@ from typing import Any, List
 from agile.utils import LogHelper
 
 from src.ai.client.base_model_registrar import BaseModelRegistrar
-from src.memory.models.memory_models import IMemoryItemInfo
+from src.memory.models.memory_models import IMemoryItemInfo, IMemoryFilters, IMemoryUserIdentity
 
 
 logger = LogHelper.get_logger()
 
 
 class OpenAIRegistrar(BaseModelRegistrar):
+
+    @staticmethod
+    def _resolve_user_identity(uid) -> IMemoryUserIdentity:
+        if isinstance(uid, IMemoryUserIdentity):
+            return uid
+        if isinstance(uid, str) and uid:
+            return IMemoryUserIdentity(user_id=uid)
+        return IMemoryUserIdentity()
 
     @staticmethod
     def is_async(client: Any) -> bool:
@@ -24,7 +32,7 @@ class OpenAIRegistrar(BaseModelRegistrar):
         # 获取历史消息
         messages = kwargs.get("messages", [])
         # 获取用户 ID
-        uid = user_id or self.mem.default_user_identity
+        uid = self._resolve_user_identity(user_id or self.mem.default_user_identity)
         if messages and uid:
             try:
                 # 获取最后一条用户消息
@@ -34,7 +42,11 @@ class OpenAIRegistrar(BaseModelRegistrar):
                     query = last_msg.get("content")
                     if isinstance(query, str):
                         # 从记忆中检索相关内容
-                        context: List[IMemoryItemInfo] = await self.mem.search(query, user_id=uid, limit=3)
+                        context: List[IMemoryItemInfo] = await self.mem.search(
+                            query,
+                            limit=3,
+                            filters=IMemoryFilters(user_identity=uid)
+                        )
                         if context:
                             # 将上下文内容格式化
                             ctx_text = "\n".join([f"- {m.content}" for m in context])
@@ -56,7 +68,7 @@ class OpenAIRegistrar(BaseModelRegistrar):
             # 获取模型响应内容
             answer = response.choices[0].message.content
             # 异步执行：将交互内容存储到记忆中
-            asyncio.create_task(self.mem.add(f"user: {query}\nassistant: {answer}", user_id=uid))
+            asyncio.create_task(self.mem.add(f"user: {query}\nassistant: {answer}", user_identity=uid))
         except Exception as e:
             logger.warning(f"failed to store interaction: {e}")
 
@@ -67,7 +79,7 @@ class OpenAIRegistrar(BaseModelRegistrar):
         # 获取历史消息
         messages = kwargs.get("messages", [])
         # 获取用户 ID
-        uid = user_id or self.mem.default_user_identity
+        uid = self._resolve_user_identity(user_id or self.mem.default_user_identity)
         if messages and uid:
             try:
                 # 获取最后一条用户消息
@@ -82,10 +94,13 @@ class OpenAIRegistrar(BaseModelRegistrar):
                             # 如果 loop 正在运行
                             if loop.is_running():
                                 # 以线程安全方式等待结果，获取上下文
-                                context = asyncio.run_coroutine_threadsafe(self.mem.search(query, user_id=uid, limit=3), loop).result()
+                                context = asyncio.run_coroutine_threadsafe(
+                                    self.mem.search(query, limit=3, filters=IMemoryFilters(user_identity=uid)),
+                                    loop
+                                ).result()
                             else:
                                 # 直接运行协程，获取上下文
-                                context = asyncio.run(self.mem.search(query, user_id=uid, limit=3))
+                                context = asyncio.run(self.mem.search(query, limit=3, filters=IMemoryFilters(user_identity=uid)))
                             if context:
                                 # 将上下文内容格式化
                                 ctx_text = "\n".join([f"- {m.content}" for m in context])
@@ -110,7 +125,7 @@ class OpenAIRegistrar(BaseModelRegistrar):
             # 获取模型响应内容
             answer = response.choices[0].message.content
             # 运行协程，将交互内容存储到记忆中
-            asyncio.run(self.mem.add(f"user: {query}\nassistant: {answer}", user_id=uid))
+            asyncio.run(self.mem.add(f"user: {query}\nassistant: {answer}", user_identity=uid))
         except Exception:
             pass
 
