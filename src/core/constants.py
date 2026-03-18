@@ -1,27 +1,5 @@
 from enum import Enum
 
-from agile.cache import MemoryCache
-from agile.utils import TimeUnit
-
-# 记忆查询缓存
-MEMORIES_CACHE = MemoryCache(
-    maxsize=2048,
-    default_ttl=60,
-    time_unit=TimeUnit.SECONDS
-)
-
-# 记忆分类缓存（用于存放记忆分类结果，减少重复计算）
-QUERY_CLASSIFY_CACHE = MemoryCache()
-
-# 组件查询缓存（用于存放一些单例的组件）
-COMPONENTS_CACHE = MemoryCache()
-
-# 模型缓存
-MODEL_CACHE = MemoryCache()
-
-# 嵌入模型缓存
-EMBED_MODEL_CACHE = MemoryCache()
-
 # 记忆扇区关联度定义
 SECTOR_RELATIONSHIPS = {
     "semantic": {"procedural": 0.8, "episodic": 0.6, "reflective": 0.7, "emotional": 0.4},

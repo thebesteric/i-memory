@@ -5,13 +5,12 @@ import time
 import uuid
 from typing import Any, Dict, List
 
+from agile.db.vector.base.base_embed_model import BaseEmbedModel
 from agile.utils import LogHelper, timing
 
-from src.ai.embed.base_embed_model import BaseEmbedModel
-from src.ai.model_provider import get_embed_model
-from src.core.components import get_sector_classifier, get_vector_store
+from src.core.components import get_sector_classifier, get_vector_store, MEMORIES_CACHE, get_embed_model
 from src.core.config import env
-from src.core.constants import SECTOR_RELATIONSHIPS, HYBRID_PARAMS, MEMORIES_CACHE
+from src.core.constants import SECTOR_RELATIONSHIPS, HYBRID_PARAMS
 from src.core.db import get_db
 from src.core.dml_ops import dml_ops
 from src.core.extract_essence import ExtractEssence
@@ -211,6 +210,7 @@ async def add_hsg_memory(content: str,
 
         # 调用 extract_essence，生成摘要（模型调用）
         essence = await ExtractEssence(content=content, max_len=env.SUMMARY_MAX_LENGTH).extract()
+
         # 获取主 sector 的配置
         sec_cfg = SECTOR_CONFIGS[cls_ret.primary]
         # 始化记忆的显著性（salience）分数

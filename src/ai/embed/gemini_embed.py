@@ -1,11 +1,9 @@
 import httpx
-import os
-import asyncio
 from typing import List
 
+from agile.db.vector.base.base_embed_model import BaseEmbedModel
 from agile.utils import singleton
 
-from src.ai.embed.base_embed_model import BaseEmbedModel
 from src.core.config import env
 
 

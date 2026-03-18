@@ -2,7 +2,7 @@ from agile.utils import LogHelper, timing
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import PromptTemplate
 
-from src.ai.model_provider import get_chat_model
+from src.core.components import get_chat_model
 from src.core.config import env
 
 logger = LogHelper.get_logger()

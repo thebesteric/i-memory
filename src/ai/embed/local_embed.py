@@ -1,6 +1,7 @@
 from typing import List
 
-from src.ai.embed.base_embed_model import BaseEmbedModel
+from agile.db.vector.base.base_embed_model import BaseEmbedModel
+
 from src.ai.model.embed.embed_manager import EmbedManager
 
 

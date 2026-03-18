@@ -7,7 +7,7 @@ from langchain_core.prompts import PromptTemplate
 from pydantic import BaseModel, Field, ConfigDict
 
 from src.ai.model.bert.bert_manager import BertManager, BertIncrModel, LabelConfig, LabelBranchConfig
-from src.ai.model_provider import get_chat_model
+from src.core.components import get_chat_model
 from src.core.config import env
 
 logger = LogHelper.get_logger()
