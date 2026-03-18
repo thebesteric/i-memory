@@ -21,8 +21,12 @@ class EmbedManager:
         self.cache_dir = os.fspath(cache_dir) if cache_dir else os.path.join(project_root, "assets", "embed", "models", self.model_name_or_path)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self._model = None
+
         # 初始化时检查模型是否已本地存在
         self._is_model_local = self._check_model_files_exist()
+        if self._is_model_local:
+            self._model = self.load_model()
+
 
         logger.info(f"Embed model initialized: {self.model_name_or_path}, "
                     f"cache_dir={self.cache_dir}, device={self.device}, is_model_local={self._is_model_local}")
