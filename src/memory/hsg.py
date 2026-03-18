@@ -94,7 +94,7 @@ async def add_hsg_memory(content: str,
     if qa_role and qa_role not in ("human", "assistant"):
         raise ValueError("qa_role must be one of: human, assistant")
 
-    # 需传 qa_role，问答配对由系统内部自动完成。
+    # 需传 qa_role，问答配对由系统内部自动完成
     qa_pair_id = _resolve_auto_qa_linking(user_identity, qa_role)
 
     # 获取嵌入模型

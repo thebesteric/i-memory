@@ -1,9 +1,8 @@
-import json
 import unittest
 
 import torch
 
-from src.ai.model.bert_manager import BertManager
+from src.ai.model.bert.bert_manager import BertManager
 from src.core.sector_classify import SECTOR_INDEX_KEY_MAPPING
 
 
