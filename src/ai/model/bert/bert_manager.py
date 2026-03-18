@@ -115,7 +115,6 @@ class BertModelInfo(BaseModel):
         self.vocab_size = getattr(config, "vocab_size", None)
         self.max_position_embeddings = getattr(config, "max_position_embeddings", None)
 
-
 class BertManager:
 
     def __init__(self,
@@ -138,7 +137,7 @@ class BertManager:
         # 初始化时检查模型是否已本地存在
         self._is_model_local = self._check_model_files_exist()
 
-        logger.info(f"BERT model initialized: {self.model_name_or_path}, "
+        logger.info(f"Bert model initialized: {self.model_name_or_path}, "
                     f"cache_dir={self.cache_dir}, device={self.device}, is_model_local={self._is_model_local}")
 
     def _check_model_files_exist(self) -> bool:
