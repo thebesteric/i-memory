@@ -1,4 +1,4 @@
-from typing import Optional, Any, Dict, List
+from typing import Optional, Any, Dict, List, Literal, Tuple
 
 from agile.utils import singleton, timing
 
@@ -76,6 +76,47 @@ class DMLOps:
         affected_rows = self.db.execute("UPDATE embed_logs SET status = %s, err = %s WHERE id = %s", (status, err, id))
         self.db.commit()
         return affected_rows
+
+    def find_mem_by_user(self, user_identity: IMemoryUserIdentity, order_by: List[str], limit=10, offset=0) -> List[
+        Dict[str, Any]]:
+        user_id = user_identity.user_id
+        tenant_id = user_identity.tenant_id
+        project_id = user_identity.project_id
+
+        sql_parts = [
+            """
+            SELECT *
+            FROM memories t
+                     LEFT JOIN vectors v on t.id = v.id
+            WHERE t.user_id = %s
+              AND v.v IS NOT NULL
+            """,
+        ]
+
+        # 查询参数列表，初始包含 user_id
+        params = [user_id]
+
+        # 判断租户是否存在
+        if tenant_id:
+            sql_parts.append("AND t.tenant_id = %s")
+            params.append(tenant_id)
+
+        # 判断项目是否存在
+        if project_id:
+            sql_parts.append("AND t.project_id = %s")
+            params.append(project_id)
+
+        # 拼接排序
+        if order_by:
+            order_by_clause = ", ".join(order_by)
+            sql_parts.append(f"ORDER BY {order_by_clause}")
+
+        # 分页
+        sql_parts.append(f"LIMIT %s OFFSET %s")
+        params.extend([str(limit), str(offset)])
+
+        final_sql = " ".join(sql_parts)
+        return self.db.fetchall(final_sql, tuple(params))
 
     def all_mem_by_user(self, user_identity: IMemoryUserIdentity, limit=10, offset=0) -> List[Dict[str, Any]]:
         user_id = user_identity.user_id

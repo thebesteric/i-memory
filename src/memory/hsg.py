@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import json
 import math
@@ -15,7 +16,7 @@ from src.core.db import get_db
 from src.core.dml_ops import dml_ops
 from src.core.extract_essence import ExtractEssence
 from src.core.score import compute_tag_match_score, compute_hybrid_score
-from src.core.sector_classify import SECTOR_CONFIGS, ClassifyResult
+from src.core.sector_classify import SECTOR_CONFIGS, ClassifyResult, SectorClassifier
 from src.core.vector.base_vector_store import VectorSearch, BaseVectorStore
 from src.core.waypoints import Waypoints, Expansion
 from src.memory import user_ops
@@ -35,7 +36,9 @@ waypoints = Waypoints()
 db = get_db()
 decay = Decay(reinforce_on_query=True, regeneration_enabled=True)
 vector_store: BaseVectorStore = get_vector_store()
-sector_classifier = get_sector_classifier()
+sector_classifier: SectorClassifier = get_sector_classifier()
+embed_model: BaseEmbedModel = get_embed_model()
+
 
 @timing
 async def embed_query_for_all_sectors(query: str, sectors: List[str]) -> Dict[str, List[float]]:
@@ -94,48 +97,14 @@ async def add_hsg_memory(content: str,
     if qa_role and qa_role not in ("human", "assistant"):
         raise ValueError("qa_role must be one of: human, assistant")
 
-    # 需传 qa_role，问答配对由系统内部自动完成
+    # 需传 qa_role，问答配对（尝试复用最近一条未配对 human 的 qa_pair_id）
     qa_pair_id = _resolve_auto_qa_linking(user_identity, qa_role)
 
-    # 获取嵌入模型
-    embed_model: BaseEmbedModel = get_embed_model()
     # 生成内容的嵌入向量
     vec = await embed_model.embed(content)
 
     # 构建 SQL 查询，查询该用户的记忆，包含租户和项目过滤（如果提供了租户和项目信息），并且只查询有向量的记忆
-    sql_parts = [
-        """
-        SELECT *
-        FROM memories t
-                 LEFT JOIN vectors v on t.id = v.id
-        WHERE t.user_id = %s
-          AND v.v IS NOT NULL
-        """,
-    ]
-
-    user_id = user_identity.user_id
-    tenant_id = user_identity.tenant_id
-    project_id = user_identity.project_id
-
-    # 查询参数列表，初始包含 user_id
-    params = [user_id]
-
-    # 判断租户是否存在
-    if tenant_id:
-        sql_parts.append("AND t.tenant_id = %s")
-        params.append(tenant_id)
-
-    # 判断项目是否存在
-    if project_id:
-        sql_parts.append("AND t.project_id = %s")
-        params.append(project_id)
-
-    # 拼接排序和分页
-    sql_parts.append("ORDER BY t.salience DESC, t.last_seen_at DESC LIMIT 100")
-    final_sql = " ".join(sql_parts)
-
-    # 找到该用户最相似的已有记忆
-    user_memories = db.fetchall(final_sql, tuple(params))
+    user_memories = dml_ops.find_mem_by_user(user_identity, order_by=["t.salience DESC", "t.last_seen_at DESC"], limit=100)
 
     # 初始化最佳相似记忆（相似度，记忆记录）
     best_sim_mem_similarity = tuple()
@@ -156,7 +125,12 @@ async def add_hsg_memory(content: str,
     # 当前时间
     now = datetime.datetime.now()
 
-    # 存在相似记忆 && 相似度 >= 0.9
+    # 用户身份信息
+    user_id = user_identity.user_id
+    tenant_id = user_identity.tenant_id
+    project_id = user_identity.project_id
+
+    # 存在相似记忆 && 相似度 >= 0.95
     if best_sim_mem_similarity and best_sim_mem_similarity[0] >= env.SIMILARITY_THRESHOLD:
         """
         如果发现内容高度相似（相似度 >= 0.95）
@@ -185,7 +159,7 @@ async def add_hsg_memory(content: str,
         if not user:
             await user_ops.add_user(user_identity=user_identity)
 
-    # 对内容分段，判断是否需要分块存储
+    # 对内容分段，判断是否需要分块存储（当内容过长时），并统计总的令牌数
     chunks, total_token = chunk_text(content)
     use_chunks = len(chunks) > 1
 
@@ -198,6 +172,7 @@ async def add_hsg_memory(content: str,
     # 文本分类：判断内容所属的主/辅 sector（语义、情感、程序、事件、反思等）
     cls_ret = await sector_classifier.classify(content=content, metadata=metadata)
     all_secs = [cls_ret.primary] + cls_ret.additional
+
     try:
         current_seg_result = db.fetchone("SELECT current_segment FROM segment FOR UPDATE")
         cur_seg = current_seg_result["current_segment"] if current_seg_result else 0
@@ -209,7 +184,7 @@ async def add_hsg_memory(content: str,
             db.execute("UPDATE segment SET current_segment=%s, updated_at=NOW()", (cur_seg,))
             logger.info(f"[HSG] Rotated to segment [{cur_seg}]")
 
-        # 调用 extract_essence，生成摘要（模型调用）
+        # 调用 extract_essence，生成摘要（内容长度 > 1000，模型调用）
         essence = await ExtractEssence(content=content, max_len=env.SUMMARY_MAX_LENGTH).extract()
 
         # 获取主 sector 的配置
@@ -248,9 +223,15 @@ async def add_hsg_memory(content: str,
 
         # 调用 embed_multi_sector，对内容进行多 sector 嵌入，生成向量
         emb_res = await embed_multi_sector(mid, content, all_secs, chunks if use_chunks else None)
+        tasks = []
         for r in emb_res:
             # 存储每个 sector 的向量到向量库
-            await vector_store.store_vector(mid, r["sector"], r["vector"], r["dim"], user_identity)
+            task = vector_store.store_vector(mid, r["sector"], r["vector"], r["dim"], user_identity)
+            tasks.append(task)
+
+        # 并发执行所有任务
+        if tasks:
+            await asyncio.gather(*tasks)
 
         # 计算所有 sector 的均值向量
         mean_vec = calc_mean_vec(emb_res, all_secs)
@@ -263,8 +244,10 @@ async def add_hsg_memory(content: str,
         if len(mean_vec) > 128:
             # 压缩均值向量到 128 维
             comp = compress_vec_for_storage(mean_vec, 128)
+            # 将压缩向量序列化为二进制字节流（bytes）
+            comp_mean_buf = vec_to_buf(comp)
             # 更新记忆的压缩向量
-            db.execute("UPDATE memories SET compressed_vec=%s WHERE id=%s", (vec_to_buf(comp), mid))
+            db.execute("UPDATE memories SET compressed_vec=%s WHERE id=%s", (comp_mean_buf, mid))
 
         # 建立 Waypoint 关联，为新记忆建立与其他记忆的关联
         await waypoints.create_single_waypoint(mid, mean_vec, now, user_identity)

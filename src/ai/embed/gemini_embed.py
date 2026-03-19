@@ -2,7 +2,7 @@ import httpx
 from typing import List
 
 from agile.db.vector.base.base_embed_model import BaseEmbedModel
-from agile.utils import singleton
+from agile.utils import singleton, timing
 
 from src.core.config import env
 
@@ -16,9 +16,11 @@ class GeminiEmbed(BaseEmbedModel):
         self.base_url = env.GEMINI_BASE_URL
         self.model = env.GEMINI_EMBEDDING_MODEL
 
+    @timing
     async def embed(self, text: str, model: str = None, dim: int = None) -> List[float]:
         return (await self.embed_batch([text], model))[0]
 
+    @timing
     async def embed_batch(self, texts: List[str], model: str = None, dim: int = None) -> List[List[float]]:
         if not self.api_key: raise ValueError("Gemini key missing")
         self.model = model or self.model

@@ -33,12 +33,10 @@ async def add(req: AddMemoryRequest):
     :param req: 添加记忆请求模型
     :return: 添加记忆结果
     """
-    meta = req.metadata or {}
-    if req.tags:
-        meta["tags"] = req.tags
     result = await mem.add(req.content,
                            user_identity=req.user_identity,
-                           meta=meta,
+                           meta=req.metadata or {},
+                           tags=req.tags or [],
                            qa_role=req.qa_role)
     return R.success(data=result)
 

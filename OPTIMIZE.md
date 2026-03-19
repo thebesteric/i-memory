@@ -11,3 +11,4 @@
 
 
 ## TODO
+- embed_query_for_all_sectors 的 sector 没有参与计算

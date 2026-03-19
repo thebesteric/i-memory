@@ -22,10 +22,10 @@ class TestIMemoryQuery(unittest.TestCase):
     def tearDownClass(cls):
         pass
 
-    @unittest.skip
+    # @unittest.skip
     def test_delete_memory(self):
         memory_ids = [
-            "66965ce7-4195-404a-8e84-0fc5659ff777",
+            "09adf7da-a854-4197-a579-52fab861ac23",
         ]
         for memory_id in memory_ids:
             asyncio.run(self.mem.delete(memory_id))

@@ -106,7 +106,7 @@ class Waypoints:
         """
         # 获取当前用户的所有记忆
         max_result = 1000
-        memories = dml_ops.all_mem_by_user(user_identity, max_result, 0) if user_identity.user_id else dml_ops.all_mem(max_result, 0)
+        memories = dml_ops.all_mem_by_user(user_identity, limit=max_result, offset=0) if user_identity.user_id else dml_ops.all_mem(limit=max_result, offset=0)
         best = None
         best_sim = -1.0
 
@@ -120,7 +120,7 @@ class Waypoints:
                 continue
             # 将现有记忆的均值向量转换为 numpy 数组
             ex_mean = np.array(buf_to_vec(mem["mean_vec"]), dtype=np.float32)
-            # 计算余弦相似度
+            # 计算与当前记忆的余弦相似度
             sim = cos_sim(nm, ex_mean)
             # 如果相似度超过当前最佳相似度，更新最佳记忆 ID 和相似度
             if sim > best_sim:

@@ -30,10 +30,10 @@ async def embed_multi_sector(uid: str, txt: str, secs: List[str], chunks: Option
 
     res = []
     try:
+        # 调用 embed 对文本 txt 生成向量
+        v = await embed(txt)
         # 遍历传入的 sector 列表
         for s in secs:
-            # 调用 embed 对文本 txt 生成向量
-            v = await embed(txt)
             # 将 sector 名称、生成的向量和向量维度加入结果列表
             res.append({"sector": s, "vector": v, "dim": len(v)})
 
