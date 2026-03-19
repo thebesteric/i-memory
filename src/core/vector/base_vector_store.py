@@ -27,6 +27,7 @@ class VectorSearch:
 
 
 class BaseVectorStore(ABC):
+
     @abstractmethod
     async def store_vector(self, id: str, sector: str, vector: List[float], dim: int, user_identity: IMemoryUserIdentity = None):
         """
@@ -79,27 +80,3 @@ class BaseVectorStore(ABC):
         :return:
         """
         pass
-
-
-def get_vector_store() -> BaseVectorStore:
-    """
-    根据配置获取向量存储后端实例
-    :return:
-    """
-    backend = env.VECTOR_STORE or VectorStoreProvider.POSTGRES.value
-    if backend == VectorStoreProvider.POSTGRES.value:
-        from src.core.vector.postgres_vector_store import PostgresVectorStore
-        dsn = env.POSTGRES_DB_URL
-        logger.info(f"Using PostgresVectorStore at {dsn}")
-        return PostgresVectorStore(dsn)
-    elif backend == VectorStoreProvider.VALKEY.value or backend == VectorStoreProvider.REDIS.value:
-        from src.core.vector.redis_vector_store import RedisVectorStore
-        url = env.REDIS_URL
-        logger.info(f"Using RedisVectorStore at {url}")
-        return RedisVectorStore(url)
-
-    raise ValueError(f"Unsupported vector store backend: {backend}")
-
-
-# 全局向量存储实例
-vector_store: BaseVectorStore = get_vector_store()

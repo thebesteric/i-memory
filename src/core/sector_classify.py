@@ -1,3 +1,4 @@
+import os
 from typing import List, Any, Dict, Literal
 
 from agile.utils import timing, LogHelper
@@ -5,7 +6,8 @@ from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.prompts import PromptTemplate
 from pydantic import BaseModel, Field, ConfigDict
 
-from src.ai.model_provider import get_chat_model
+from src.ai.model.bert.bert_manager import BertManager, BertIncrModel, LabelConfig, LabelBranchConfig
+from src.core.config import env
 
 logger = LogHelper.get_logger()
 
@@ -45,6 +47,31 @@ class ClassifyOutput(BaseModel):
     emotional: float = Field(0.0, description="情绪记忆分数")
     reflective: float = Field(0.0, description="反思记忆分数")
     reasoning: str = Field(..., description="简短说明分类理由")
+
+    @classmethod
+    def from_predictions(cls, predictions: dict[str, dict[str, Any]]) -> "ClassifyOutput":
+        # 获取主扇区信息
+        primary_dict = predictions["primary"]
+        primary_pred = primary_dict['pred']
+
+        # 获取所有扇区信息
+        labels_dict = predictions["labels"]
+        labels_pred = labels_dict["pred"]
+        probabilities = labels_dict["probabilities"]
+
+        # 兜底：如果预测出的所有扇区不包含主扇区的话，则强制增加主扇区
+        p_val = labels_pred[primary_pred]
+        if p_val == 0:
+            labels_pred[primary_pred] = 1
+            probabilities[primary_pred] = primary_dict["confidence"]
+
+        # 计算各扇区得分
+        scores = {SECTOR_INDEX_KEY_MAPPING.get(idx, "semantic"): round(prob * 100, 1) for idx, prob in enumerate(probabilities)}
+
+        return cls(
+            **scores,
+            reasoning="Using BERT model predictions to classify."
+        )
 
     def sorted_scores(self) -> List[tuple[str, int]]:
         """
@@ -173,9 +200,32 @@ begin!!
 分析内容：{content}
 """
 
-    def __init__(self, *, content: str, metadata: Any = None):
-        self.content = content
-        self.metadata = metadata or {}
+    def __init__(self, *, checkpoint_path: str = None):
+        # 权重文件
+        self.checkpoint_path = checkpoint_path
+        # 初始化 Bert 模型
+        self.bert_manager, self.bert_incr_model = self.init_bert_model()
+
+    def init_bert_model(self) -> tuple[BertManager | None, BertIncrModel | None]:
+        if not self.checkpoint_path or not os.path.exists(self.checkpoint_path):
+            return None, None
+
+        # Bert 管理器
+        bert_manager = BertManager(
+            model_name_or_path="google-bert/bert-base-multilingual-cased",
+        )
+        # Bert 增量模型
+        bert_incr_model = BertIncrModel(
+            bert_manager=bert_manager,
+            in_features=768,
+            out_features_config=LabelConfig(
+                branches={
+                    "primary": LabelBranchConfig(type="single", num_classes=5),
+                    "labels": LabelBranchConfig(type="multi", num_classes=5),
+                }
+            ),
+        )
+        return bert_manager, bert_incr_model
 
     @classmethod
     def get_chain(cls):
@@ -195,19 +245,20 @@ begin!!
             }
         )
         # 构建语言模型
+        from src.core.components import get_chat_model
         llm = get_chat_model()
         # 构建执行链
         return prompt_template | llm | output_parser
 
     @timing
-    async def classify(self) -> ClassifyResult:
+    async def classify(self, *, content: str, metadata: Any = None) -> ClassifyResult:
         """
         根据文本内容分类记忆领域
         :return: 包含 primary（主扇区）、additional（辅扇区）、confidence（置信度）、scores（各扇区分数）的字典
         """
 
         # 如果 metadata 参数中已经指定了 sector（且在配置中合法），直接返回该 sector 作为主扇区，置信度为 1.0，不再做内容分析
-        meta_sec = self.metadata.get("sector") if isinstance(self.metadata, dict) else None
+        meta_sec = metadata.get("sector") if isinstance(metadata, dict) else None
         if meta_sec and meta_sec in SECTOR_CONFIGS:
             return ClassifyResult(
                 primary=meta_sec,
@@ -216,10 +267,33 @@ begin!!
                 scores={meta_sec: 100.0}
             )
 
-        # 调用模型执行链获取分类结果
-        chain = self.get_chain()
-        output: ClassifyOutput = await chain.ainvoke({"content": self.content})
+        if env.USE_BERT_CLASSIFIER:
+            # 检查
+            if not self.bert_manager or not self.bert_incr_model:
+                raise ValueError("BERT model is not initialized. Please provide a valid checkpoint path for initialization.")
+            # 调用 Bert 模型进行预测
+            result = self.bert_manager.predict(
+                text=content,
+                bert_incr_model=self.bert_incr_model,
+                checkpoint_path=self.checkpoint_path,
+                strict=False,
+                return_probabilities=True,
+            )
+            # 获取预测结果
+            predictions = result["predictions"]
+            # 计算各扇区得分
+            output: ClassifyOutput = ClassifyOutput.from_predictions(predictions)
+        else:
+            # 调用模型执行链获取分类结果
+            chain = self.get_chain()
+            # 计算各扇区得分
+            output: ClassifyOutput = await chain.ainvoke({"content": content})
 
+        # 返回 ClassifyResult 对象
+        return self.to_classify_result(content, output)
+
+    @staticmethod
+    def to_classify_result(content: str, output: ClassifyOutput) -> ClassifyResult:
         # 获取主扇区
         primary, p_score = output.get_primary_sector()
         # 获取辅扇区，分数阈值大于 30.0 且大于主扇区分数的 40%
@@ -237,7 +311,7 @@ begin!!
         scores = {sec: round(secore, 2) for sec, secore in output.sorted_scores()}
 
         logger.info(
-            f"Classify content: {self.content[:30]}... => primary: {primary}, additional: {[sec for sec, score in additional]}, "
+            f"Classify content: {content[:30]}... => primary: {primary}, additional: {[sec for sec, score in additional]}, "
             f"confidence: {confidence}, scores: {scores}"
         )
 
@@ -323,6 +397,7 @@ begin!!
             }
         )
         # 构建语言模型
+        from src.core.components import get_chat_model
         llm = get_chat_model()
         # 构建执行链
         return prompt_template | llm | output_parser

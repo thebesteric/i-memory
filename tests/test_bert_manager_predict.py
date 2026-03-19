@@ -1,17 +1,15 @@
 import os
 import unittest
 
-from src.ai.model.bert_manager import BertIncrModel, BertManager, LabelBranchConfig, LabelConfig
+from src.ai.model.bert.bert_manager import BertIncrModel, BertManager, LabelBranchConfig, LabelConfig
 
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 REAL_CHECKPOINT_PATH = os.path.join(
     PROJECT_ROOT,
     "assets",
-    "models",
-    "google-bert",
-    "bert-base-multilingual-cased",
-    "params",
+    "bert",
+    "checkpoint",
     "checkpoint.pth",
 )
 
@@ -31,12 +29,17 @@ class TestBertManagerPredict(unittest.TestCase):
             out_features_config=LabelConfig(
                 branches={
                     "primary": LabelBranchConfig(type="single", num_classes=5),
-                    "additional": LabelBranchConfig(type="multi", num_classes=5),
+                    "labels": LabelBranchConfig(type="multi", num_classes=5),
                 }
             ),
         )
         cls.checkpoint_path = REAL_CHECKPOINT_PATH
-        cls.text = "今天完成了一个重要任务，进展顺利。"
+        cls.text = "旧毛衣袖口磨出毛边，套上时熟悉的柔软裹住手腕，像被时光温柔地抱了一下。"
+        # {
+        #     "text": "旧毛衣袖口磨出毛边，套上时熟悉的柔软裹住手腕，像被时光温柔地抱了一下。",
+        #     "primary": 3,
+        #     "labels": [1,0,0,1,1]
+        #   },
 
     def test_predict_mixed_single_and_multi_returns_structured_results(self):
         result = self.manager.predict(
@@ -58,12 +61,12 @@ class TestBertManagerPredict(unittest.TestCase):
         self.assertEqual(len(primary["probabilities"]), 5)
         self.assertAlmostEqual(sum(primary["probabilities"]), 1.0, places=6)
 
-        additional = result["predictions"]["additional"]
-        self.assertEqual(additional["type"], "multi")
-        self.assertEqual(len(additional["pred"]), 5)
-        self.assertTrue(all(v in (0, 1) for v in additional["pred"]))
-        self.assertEqual(len(additional["probabilities"]), 5)
-        self.assertTrue(all(0.0 <= v <= 1.0 for v in additional["probabilities"]))
+        labels = result["predictions"]["labels"]
+        self.assertEqual(labels["type"], "multi")
+        self.assertEqual(len(labels["pred"]), 5)
+        self.assertTrue(all(v in (0, 1) for v in labels["pred"]))
+        self.assertEqual(len(labels["probabilities"]), 5)
+        self.assertTrue(all(0.0 <= v <= 1.0 for v in labels["probabilities"]))
 
     def test_predict_multi_threshold_boundary_uses_greater_equal(self):
         baseline = self.manager.predict(
@@ -73,7 +76,7 @@ class TestBertManagerPredict(unittest.TestCase):
             strict=False,
             return_probabilities=True,
         )
-        multi_probs = baseline["predictions"]["additional"]["probabilities"]
+        multi_probs = baseline["predictions"]["labels"]["probabilities"]
 
         target_idx = next((i for i, p in enumerate(multi_probs) if p < 1.0), None)
         if target_idx is None:
@@ -97,10 +100,10 @@ class TestBertManagerPredict(unittest.TestCase):
             return_probabilities=False,
         )
 
-        self.assertEqual(result_eq["predictions"]["additional"]["pred"][target_idx], 1)
-        self.assertEqual(result_high["predictions"]["additional"]["pred"][target_idx], 0)
+        self.assertEqual(result_eq["predictions"]["labels"]["pred"][target_idx], 1)
+        self.assertEqual(result_high["predictions"]["labels"]["pred"][target_idx], 0)
         self.assertNotIn("probabilities", result_eq["predictions"]["primary"])
-        self.assertNotIn("probabilities", result_eq["predictions"]["additional"])
+        self.assertNotIn("probabilities", result_eq["predictions"]["labels"])
 
     def test_predict_rejects_invalid_threshold(self):
         with self.assertRaisesRegex(ValueError, r"multi_label_threshold must be in \[0, 1\]"):

@@ -9,6 +9,9 @@ from typing import Any, Literal
 import pyrootutils
 from agile.utils import LogHelper
 from agile.utils.argparser import Argparser, Argument
+from langchain_core.output_parsers import PydanticOutputParser
+from langchain_core.prompts import PromptTemplate
+from pydantic import BaseModel, Field
 
 from src.core.sector_classify import SectorClassifier, SECTOR_KEY_INDEX_MAPPING, ClassifyResult, SectorSentenceCreator, SectorSentenceOutput
 
@@ -145,7 +148,7 @@ async def calc_sectors(
         nonlocal finished
         async with semaphore:
             try:
-                classify = await SectorClassifier(content=current_text).classify()
+                classify = await SectorClassifier().classify(content=current_text)
                 # classify = ClassifyResult(primary="episodic", additional=["semantic"], confidence=0.5, scores={"semantic": 20, "episodic": 80})
                 result = {
                     "text": current_text,
@@ -279,6 +282,112 @@ async def remove_duplicates_in_file(input_file: str):
         logger.error(f"错误：{e}")
 
 
+async def datasets_to_english(input_file: str, max_concurrency: int = 5):
+    class TranslationOutput(BaseModel):
+        text: str = Field(..., description="Translated English text")
+
+    output_parser = PydanticOutputParser(pydantic_object=TranslationOutput)
+    prompt_template = PromptTemplate(
+        template="""
+You are a professional translator.
+Translate the input text into natural, fluent English.
+
+## Rules
+1. Keep the original meaning, key facts, numbers, and named entities unchanged.
+2. Do not add any explanation, only return the translated text.
+3. If the input is already English, keep it as-is with light grammar polishing.
+
+## Output Format
+{format_instructions}
+
+Input text:
+{text}
+""",
+        input_variables=["text"],
+        partial_variables={
+            "format_instructions": output_parser.get_format_instructions()
+        }
+    )
+
+    from src.core.components import get_chat_model
+    chain = prompt_template | get_chat_model() | output_parser
+
+    if not os.path.exists(input_file):
+        raise FileNotFoundError(f"输入文件不存在: {input_file}")
+
+    with open(input_file, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    if not isinstance(data, list):
+        raise ValueError("输入文件必须是 JSON 数组（list）")
+
+    max_concurrency = max(1, max_concurrency)
+    total = len(data)
+    semaphore = asyncio.Semaphore(max_concurrency)
+    progress_lock = asyncio.Lock()
+    finished = 0
+
+    async def translate_one(order_idx: int, item: Any) -> tuple[int, Any]:
+        nonlocal finished
+
+        if not isinstance(item, dict):
+            async with progress_lock:
+                finished += 1
+                logger.warning(f"[{finished}/{total}] 非字典数据，已原样保留")
+            return order_idx, item
+
+        item_text = item.get("text")
+        if not isinstance(item_text, str) or not item_text.strip():
+            async with progress_lock:
+                finished += 1
+                logger.warning(f"[{finished}/{total}] 缺少有效 text 字段，已原样保留")
+            return order_idx, item
+
+        try:
+            async with semaphore:
+                output: TranslationOutput = await chain.ainvoke({"text": item_text.strip()})
+            new_item = dict(item)
+            new_item["text"] = output.text.strip()
+            async with progress_lock:
+                finished += 1
+                logger.info(f"[{finished}/{total}] 翻译完成")
+            return order_idx, new_item
+        except Exception as e:
+            # 单条翻译失败不阻塞全量任务，保留原文
+            async with progress_lock:
+                finished += 1
+                logger.error(f"[{finished}/{total}] 翻译失败，保留原文: {e}")
+            return order_idx, item
+
+    tasks = [
+        asyncio.create_task(translate_one(order_idx, item))
+        for order_idx, item in enumerate(data)
+    ]
+    indexed_results = await asyncio.gather(*tasks)
+
+    # 并发执行后按输入索引回填，保证输出顺序与输入一致
+    ordered_results: list[Any | None] = [None] * total
+    for order_idx, translated_item in indexed_results:
+        ordered_results[order_idx] = translated_item
+    translated_data: list[Any] = [item for item in ordered_results if item is not None]
+
+    input_dir = os.path.dirname(input_file)
+    input_name = os.path.basename(input_file)
+    if "." in input_name:
+        stem, ext = input_name.rsplit(".", 1)
+        output_file = os.path.join(input_dir, f"{stem}_english.{ext}")
+    else:
+        output_file = os.path.join(input_dir, f"{input_name}_english.json")
+
+    with open(output_file, "w", encoding="utf-8") as f:
+        json.dump(translated_data, f, ensure_ascii=False, indent=2)
+
+    process_json_file(input_file=output_file, output_file=output_file, indent=2)
+    logger.info(f"英文数据集已保存: {output_file}")
+    return output_file
+
+
+
 # 示例调用
 if __name__ == "__main__":
     # # 替换为你的文件路径
@@ -302,10 +411,14 @@ if __name__ == "__main__":
     # asyncio.run(calc_sectors(dataset_file_path=arg.current_val, max_concurrency=int(concurrency_arg.current_val)))
 
     # 生成用例
-    asyncio.run(create_sector_sentence(sector="emotional", num=50, max_concurrency=10))
+    # asyncio.run(create_sector_sentence(sector="emotional", num=50, max_concurrency=10))
 
     # 去重
     # asyncio.run(remove_duplicates_in_file("/Users/wangweijun/PycharmProjects/i-memory/assets/datasets/validation.json"))
     # asyncio.run(remove_duplicates_in_file("/Users/wangweijun/PycharmProjects/i-memory/assets/datasets/train.json"))
+
+    # 中文转英文
+    # asyncio.run(datasets_to_english("/Users/wangweijun/PycharmProjects/i-memory/assets/bert/datasets/validation.json", max_concurrency=20))
+    asyncio.run(datasets_to_english("/Users/wangweijun/PycharmProjects/i-memory/assets/bert/datasets/train.json", max_concurrency=20))
 
     pass

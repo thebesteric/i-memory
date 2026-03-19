@@ -2,11 +2,10 @@ from typing import List, Optional
 
 import numpy as np
 import redis
-from agile.utils import LogHelper, singleton
+from agile.utils import LogHelper, singleton, timing
 
 from src.core.vector.base_vector_store import BaseVectorStore, VectorRow, VectorSearch
 from src.memory.models.memory_models import IMemoryFilters, IMemoryUserIdentity
-
 
 logger = LogHelper.get_logger()
 
@@ -111,6 +110,7 @@ class RedisVectorStore(BaseVectorStore):
         client = await self._get_client()
         await client.delete(self._key(id))
 
+    @timing
     async def search(self, vector: List[float], sector: str, k: int, filters: IMemoryFilters = None) -> List[VectorSearch]:
         """
         相似度搜索

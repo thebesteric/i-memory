@@ -4,7 +4,7 @@ import os
 import pyrootutils
 from agile.utils import EnvHelper, singleton
 
-from src.core.constants import ModelProvider, VectorStoreProvider
+from src.core.constants import ModelProvider, VectorStoreProvider, EmbedModelProvider
 
 env_helper: EnvHelper | None = None
 
@@ -61,6 +61,7 @@ class EnvConfig:
 
         # 模型提供商（包含向量和记忆相关识别模型）
         self.MODEL_PROVIDER = env_helper.get("IM_MODEL_PROVIDER", ModelProvider.DASHSCOPE.value)
+        self.EMBED_MODEL_PROVIDER = env_helper.get("IM_EMBED_MODEL_PROVIDER", EmbedModelProvider.SYNTHETIC.value)
 
         # 向量存储提供商
         self.VECTOR_STORE = env_helper.get("IM_VECTOR_STORE", VectorStoreProvider.POSTGRES.value)
@@ -91,6 +92,14 @@ class EnvConfig:
         self.DECAY_THREADS = env_helper.get("IM_DECAY_THREADS", 3)
         # 衰减冷阈值
         self.DECAY_COLD_THRESHOLD = env_helper.get("IM_DECAY_COLD_THRESHOLD", 0.25)
+        # 衰减比例（用于自动衰减）
+        self.DECAY_RATIO = env_helper.get("IM_DECAY_RATIO", 0.03)
+        # 自动衰减循环间隔（秒）
+        self.DECAY_INTERVAL_SECONDS = env_helper.get("IM_DECAY_INTERVAL_SECONDS", 300)
+
+        # ================ 记忆分类相关配置 ================
+        # 是否使用 BERT 分类器进行记忆分类
+        self.USE_BERT_CLASSIFIER = env_helper.get("IM_USE_BERT_CLASSIFIER", True)
 
 
 def _load_env_file():

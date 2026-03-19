@@ -6,23 +6,23 @@ import time
 import uuid
 from typing import Any, Dict, List
 
+from agile.db.vector.base.base_embed_model import BaseEmbedModel
 from agile.utils import LogHelper, timing
 
-from src.ai.embed.base_embed_model import BaseEmbedModel
-from src.ai.model_provider import get_embed_model
+from src.core.components import get_sector_classifier, get_vector_store, MEMORIES_CACHE, get_embed_model
 from src.core.config import env
-from src.core.constants import SECTOR_RELATIONSHIPS, HYBRID_PARAMS, MEMORIES_CACHE
+from src.core.constants import SECTOR_RELATIONSHIPS, HYBRID_PARAMS, get_dynamic_sector_weights
 from src.core.db import get_db
 from src.core.dml_ops import dml_ops
 from src.core.extract_essence import ExtractEssence
 from src.core.score import compute_tag_match_score, compute_hybrid_score
-from src.core.sector_classify import SECTOR_CONFIGS, SectorClassifier, ClassifyResult
-from src.core.vector.base_vector_store import vector_store, VectorSearch
+from src.core.sector_classify import SECTOR_CONFIGS, ClassifyResult, SectorClassifier
+from src.core.vector.base_vector_store import VectorSearch, BaseVectorStore
 from src.core.waypoints import Waypoints, Expansion
 from src.memory import user_ops
 from src.memory.decay import Decay
 from src.memory.embed import embed_multi_sector, calc_mean_vec, embed
-from src.memory.models.memory_models import IMemoryFilters, IMemoryItemDebugInfo, IMemoryItemInfo, IMemoryUserIdentity, IMemoryUser
+from src.memory.models.memory_models import IMemoryFilters, IMemoryItemDebugInfo, IMemoryItemInfo, IMemoryUserIdentity, IMemoryUser, QARole
 from src.memory.user_summary import update_user_summary
 from src.ops.dynamic_memory import calc_cross_sector_resonance_score, apply_retrieval_trace_reinforcement_to_memory, \
     propagate_associative_reinforcement_to_linked_nodes
@@ -35,6 +35,9 @@ logger = LogHelper.get_logger()
 waypoints = Waypoints()
 db = get_db()
 decay = Decay(reinforce_on_query=True, regeneration_enabled=True)
+vector_store: BaseVectorStore = get_vector_store()
+sector_classifier: SectorClassifier = get_sector_classifier()
+embed_model: BaseEmbedModel = get_embed_model()
 
 
 @timing
@@ -73,54 +76,31 @@ def compress_vec_for_storage(vec: List[float], target_dim: int) -> List[float]:
     return comp
 
 
-async def add_hsg_memory(content: str, tags: List[str] = None, metadata: Any = None, user_identity: IMemoryUserIdentity = None) -> Dict[str, Any]:
+async def add_hsg_memory(content: str,
+                         tags: List[str] = None,
+                         metadata: Any = None,
+                         user_identity: IMemoryUserIdentity = None,
+                         qa_role: QARole | None = None) -> Dict[str, Any]:
     """
     添加一条 Hierarchical Semantic Graph 记忆（数据库 + 向量存储、按扇区（sectors）分层组织记忆）
     :param content: 记忆内容
     :param tags: 标签
     :param metadata: 元数据
     :param user_identity: 用户身份
+    :param qa_role: QA 角色（human/assistant）
     :return:
     """
-    # 获取嵌入模型
-    embed_model: BaseEmbedModel = get_embed_model()
+    if qa_role and qa_role not in ("human", "assistant"):
+        raise ValueError("qa_role must be one of: human, assistant")
+
+    # 需传 qa_role，问答配对（尝试复用最近一条未配对 human 的 qa_pair_id）
+    qa_pair_id = _resolve_auto_qa_linking(user_identity, qa_role)
+
     # 生成内容的嵌入向量
     vec = await embed_model.embed(content)
 
     # 构建 SQL 查询，查询该用户的记忆，包含租户和项目过滤（如果提供了租户和项目信息），并且只查询有向量的记忆
-    sql_parts = [
-        """
-        SELECT *
-        FROM memories t
-                 LEFT JOIN vectors v on t.id = v.id
-        WHERE t.user_id = %s
-          AND v.v IS NOT NULL
-        """,
-    ]
-
-    user_id = user_identity.user_id
-    tenant_id = user_identity.tenant_id
-    project_id = user_identity.project_id
-
-    # 查询参数列表，初始包含 user_id
-    params = [user_id]
-
-    # 判断租户是否存在
-    if tenant_id:
-        sql_parts.append("AND t.tenant_id = %s")
-        params.append(tenant_id)
-
-    # 判断项目是否存在
-    if project_id:
-        sql_parts.append("AND t.project_id = %s")
-        params.append(project_id)
-
-    # 拼接排序和分页
-    sql_parts.append("ORDER BY t.salience DESC, t.last_seen_at DESC LIMIT 100")
-    final_sql = " ".join(sql_parts)
-
-    # 找到该用户最相似的已有记忆
-    user_memories = db.fetchall(final_sql, tuple(params))
+    user_memories = dml_ops.find_mem_by_user(user_identity, order_by=["t.salience DESC", "t.last_seen_at DESC"], limit=100)
 
     # 初始化最佳相似记忆（相似度，记忆记录）
     best_sim_mem_similarity = tuple()
@@ -141,7 +121,12 @@ async def add_hsg_memory(content: str, tags: List[str] = None, metadata: Any = N
     # 当前时间
     now = datetime.datetime.now()
 
-    # 存在相似记忆 && 相似度 >= 0.9
+    # 用户身份信息
+    user_id = user_identity.user_id
+    tenant_id = user_identity.tenant_id
+    project_id = user_identity.project_id
+
+    # 存在相似记忆 && 相似度 >= 0.95
     if best_sim_mem_similarity and best_sim_mem_similarity[0] >= env.SIMILARITY_THRESHOLD:
         """
         如果发现内容高度相似（相似度 >= 0.95）
@@ -170,7 +155,7 @@ async def add_hsg_memory(content: str, tags: List[str] = None, metadata: Any = N
         if not user:
             await user_ops.add_user(user_identity=user_identity)
 
-    # 对内容分段，判断是否需要分块存储
+    # 对内容分段，判断是否需要分块存储（当内容过长时），并统计总的令牌数
     chunks, total_token = chunk_text(content)
     use_chunks = len(chunks) > 1
 
@@ -181,8 +166,9 @@ async def add_hsg_memory(content: str, tags: List[str] = None, metadata: Any = N
     })
 
     # 文本分类：判断内容所属的主/辅 sector（语义、情感、程序、事件、反思等）
-    cls_ret = await SectorClassifier(content=content, metadata=metadata).classify()
+    cls_ret = await sector_classifier.classify(content=content, metadata=metadata)
     all_secs = [cls_ret.primary] + cls_ret.additional
+
     try:
         current_seg_result = db.fetchone("SELECT current_segment FROM segment FOR UPDATE")
         cur_seg = current_seg_result["current_segment"] if current_seg_result else 0
@@ -194,8 +180,9 @@ async def add_hsg_memory(content: str, tags: List[str] = None, metadata: Any = N
             db.execute("UPDATE segment SET current_segment=%s, updated_at=NOW()", (cur_seg,))
             logger.info(f"[HSG] Rotated to segment [{cur_seg}]")
 
-        # 调用 extract_essence，生成摘要
+        # 调用 extract_essence，生成摘要（内容长度 > 1000，模型调用）
         essence = await ExtractEssence(content=content, max_len=env.SUMMARY_MAX_LENGTH).extract()
+
         # 获取主 sector 的配置
         sec_cfg = SECTOR_CONFIGS[cls_ret.primary]
         # 始化记忆的显著性（salience）分数
@@ -213,9 +200,9 @@ async def add_hsg_memory(content: str, tags: List[str] = None, metadata: Any = N
             segment=cur_seg,
             content=essence,
             primary_sector=cls_ret.primary,
-            sectors=json.dumps(all_secs or []),
-            tags=json.dumps(tags or []),
-            meta=json.dumps(metadata or {}),
+            sectors=json.dumps(all_secs or [], ensure_ascii=False),
+            tags=json.dumps(tags or [], ensure_ascii=False),
+            meta=json.dumps(metadata or {}, ensure_ascii=False),
             created_at=now,
             updated_at=now,
             last_seen_at=now,
@@ -225,14 +212,22 @@ async def add_hsg_memory(content: str, tags: List[str] = None, metadata: Any = N
             mean_dim=None,
             mean_vec=None,
             compressed_vec=None,
-            feedback_score=0
+            feedback_score=0,
+            qa_role=qa_role,
+            qa_pair_id=qa_pair_id
         )
 
         # 调用 embed_multi_sector，对内容进行多 sector 嵌入，生成向量
         emb_res = await embed_multi_sector(mid, content, all_secs, chunks if use_chunks else None)
+        tasks = []
         for r in emb_res:
             # 存储每个 sector 的向量到向量库
-            await vector_store.store_vector(mid, r["sector"], r["vector"], r["dim"], user_identity)
+            task = vector_store.store_vector(mid, r["sector"], r["vector"], r["dim"], user_identity)
+            tasks.append(task)
+
+        # 并发执行所有任务
+        if tasks:
+            await asyncio.gather(*tasks)
 
         # 计算所有 sector 的均值向量
         mean_vec = calc_mean_vec(emb_res, all_secs)
@@ -245,8 +240,10 @@ async def add_hsg_memory(content: str, tags: List[str] = None, metadata: Any = N
         if len(mean_vec) > 128:
             # 压缩均值向量到 128 维
             comp = compress_vec_for_storage(mean_vec, 128)
+            # 将压缩向量序列化为二进制字节流（bytes）
+            comp_mean_buf = vec_to_buf(comp)
             # 更新记忆的压缩向量
-            db.execute("UPDATE memories SET compressed_vec=%s WHERE id=%s", (vec_to_buf(comp), mid))
+            db.execute("UPDATE memories SET compressed_vec=%s WHERE id=%s", (comp_mean_buf, mid))
 
         # 建立 Waypoint 关联，为新记忆建立与其他记忆的关联
         await waypoints.create_single_waypoint(mid, mean_vec, now, user_identity)
@@ -254,7 +251,8 @@ async def add_hsg_memory(content: str, tags: List[str] = None, metadata: Any = N
             # 更新用户摘要
             await update_user_summary(user_identity)
 
-        logger.info(f"[HSG] Added memory {mid} for User: {user_id}, Primary Sector: {cls_ret.primary}, Additional Sectors: {cls_ret.additional}, Salience: {init_sal}")
+        logger.info(
+            f"[HSG] Added memory {mid} for User: {user_id}, Primary Sector: {cls_ret.primary}, Additional Sectors: {cls_ret.additional}, Salience: {init_sal}")
 
         # 返回新记忆的 id、内容、sector、分段数、salience 等信息
         return {
@@ -263,7 +261,9 @@ async def add_hsg_memory(content: str, tags: List[str] = None, metadata: Any = N
             "primary_sector": cls_ret.primary,
             "sectors": all_secs,
             "chunks": len(chunks),
-            "salience": init_sal
+            "salience": init_sal,
+            "qa_role": qa_role,
+            "qa_pair_id": qa_pair_id
         }
     except Exception as e:
         raise e
@@ -289,7 +289,7 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
             return entry
 
         # 判断查询属于哪个扇区
-        query_classify: ClassifyResult = await SectorClassifier(content=query).classify()
+        query_classify: ClassifyResult = await sector_classifier.classify(content=query)
         # 提取查询关键词 token 集合
         query_tokens = canonical_token_set(query)
         # 确定检索扇区范围
@@ -300,14 +300,8 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
         query_embed_with_sectors = await embed_query_for_all_sectors(query, sectors)
 
         # 动态权重调
-        primary_classify = query_classify.primary
-        weight = {
-            "semantic_dimension_weight": 1.2 if primary_classify == "semantic" else 0.8,
-            "emotional_dimension_weight": 1.5 if primary_classify == "emotional" else 0.6,
-            "procedural_dimension_weight": 1.3 if primary_classify == "procedural" else 0.7,
-            "temporal_dimension_weight": 1.4 if primary_classify == "episodic" else 0.7,
-            "reflective_dimension_weight": 1.1 if primary_classify == "reflective" else 0.5,
-        }
+        primary_sector = query_classify.primary
+        dynamic_sector_weights = get_dynamic_sector_weights(primary_sector=primary_sector)
 
         # 存储各扇区检索结果
         sector_result = {}
@@ -373,8 +367,8 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
             if mem["user_id"] != user_id or (tenant_id and mem["tenant_id"] != tenant_id) or (project_id and mem["project_id"] != project_id):
                 continue
 
-            # 多向量融合相似度
-            mvf = await calc_multi_vec_fusion_score(mid, query_embed_with_sectors, weight)
+            # 多向量融合相似度评分
+            mvf = await calc_multi_vec_fusion_score(mid, query_embed_with_sectors, dynamic_sector_weights)
             # 跨扇区共振分数
             csr = await calc_cross_sector_resonance_score(mem["primary_sector"], query_classify.primary, mvf)
 
@@ -382,7 +376,7 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
             best_sim = csr
             for s, rlist in sector_result.items():
                 for vector_search in rlist:
-                    if vector_search.id == mem and vector_search.similarity > best_sim:
+                    if vector_search.id == mid and vector_search.similarity > best_sim:
                         best_sim = vector_search.similarity
 
             # 记忆的扇区
@@ -435,7 +429,10 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
                 path=expansion_mem.path if expansion_mem else [mid],
                 salience=salience,
                 last_seen_at=mem["last_seen_at"],
+                created_at=mem["created_at"],
                 tags=json.loads(mem["tags"] or "[]"),
+                qa_role=mem.get("qa_role"),
+                qa_pair_id=mem.get("qa_pair_id"),
                 metadata=json.loads(mem["meta"] or {})
             )
             # 调试信息
@@ -450,6 +447,10 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
                 )
             # 加入结果列表
             res_list.append(item)
+
+        # QA 模式：prefer/qa 时尝试配对提升
+        if filters.query_mode and filters.query_mode in ("qa", "prefer"):
+            res_list = _promote_qa_assistant_answer(res_list, query_classify.primary)
 
         # 按分数降序
         res_list.sort(key=lambda x: x.score, reverse=True)
@@ -498,14 +499,14 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
         decay.dec_q()
 
 
-async def calc_multi_vec_fusion_score(mid: str, qe: Dict[str, List[float]], w: Dict[str, float]) -> float:
+async def calc_multi_vec_fusion_score(mid: str, qe: Dict[str, List[float]], weights: Dict[str, float]) -> float:
     """
     计算多向量融合相似度评分
     通过对记忆的各扇区向量与查询向量进行余弦相似度计算，并根据权重进行加权平均，得到最终的融合相似度评分
     该评分反映了记忆在多个维度（扇区）上与查询的相关性
     :param mid: 记忆 ID
     :param qe: 查询向量字典，键为扇区名称，值为对应的向量列表
-    :param w: 权重字典，键为权重名称，值为对应的权重值
+    :param weights: 权重字典，键为权重名称，值为对应的权重值
     :return: 融合相似度评分，浮点数
     """
 
@@ -516,12 +517,12 @@ async def calc_multi_vec_fusion_score(mid: str, qe: Dict[str, List[float]], w: D
     # 有效权重总和（分母），用于归一化
     tot = 0.0
     # 权重映射，将权重名称映射到对应的扇区名称
-    weight_mapping = {
-        "semantic": w.get("semantic_dimension_weight", 0),
-        "emotional": w.get("emotional_dimension_weight", 0),
-        "procedural": w.get("procedural_dimension_weight", 0),
-        "episodic": w.get("temporal_dimension_weight", 0),
-        "reflective": w.get("reflective_dimension_weight", 0),
+    weights_mapping = {
+        "semantic": weights.get("semantic_dimension_weight", 0),
+        "emotional": weights.get("emotional_dimension_weight", 0),
+        "procedural": weights.get("procedural_dimension_weight", 0),
+        "episodic": weights.get("episodic_dimension_weight", 0),
+        "reflective": weights.get("reflective_dimension_weight", 0),
     }
 
     for v in vecs:
@@ -532,7 +533,7 @@ async def calc_multi_vec_fusion_score(mid: str, qe: Dict[str, List[float]], w: D
         # 计算记忆向量与查询向量的余弦相似度
         sim = cos_sim(v.vector, qv)
         # 获取该扇区的权重，默认为 0.5
-        wgt = weight_mapping.get(v.sector, 0.5)
+        wgt = weights_mapping.get(v.sector, 0.5)
         # 加权累加相似度
         s += sim * wgt
         # 累加权重
@@ -540,3 +541,122 @@ async def calc_multi_vec_fusion_score(mid: str, qe: Dict[str, List[float]], w: D
 
     # 返回归一化的融合相似度评分
     return s / tot if tot > 0 else 0.0
+
+
+def _promote_qa_assistant_answer(items: List[IMemoryItemInfo], query_sector: str) -> List[IMemoryItemInfo]:
+    """
+    在 prefer/qa 模式下，优先把与高分问题匹配的 assistant 回答提升到顶部。
+    配对关系仅依赖写入时存储的 qa_pair_id，查询方无需传入会话标识。
+    """
+    if not items:
+        return items
+
+    # 从召回结果中找分数最高的 human 记忆
+    best_human = next(
+        (it for it in sorted(items, key=lambda x: x.score, reverse=True)
+         if it.qa_role == "human"),
+        None
+    )
+    if not best_human:
+        return items
+
+    # 尝试查找与该 human 记忆配对的 assistant 记忆
+    pair_row = None
+    if best_human.qa_pair_id:
+        pair_row = db.fetchone(
+            """
+            SELECT *
+            FROM memories
+            WHERE qa_pair_id = %s
+              AND qa_role = 'assistant'
+            ORDER BY created_at DESC LIMIT 1
+            """,
+            (best_human.qa_pair_id,)
+        )
+
+    if not pair_row:
+        logger.info(f"[HSG] No paired assistant answer found for human memory {best_human.id} with qa_pair_id {best_human.qa_pair_id}")
+        return items
+
+    # 已在候选列表中：直接提升分数
+    for item in items:
+        if item.id == pair_row["id"]:
+            item.score = max(item.score, best_human.score + 0.2)
+            item.primary_sector = item.primary_sector or query_sector
+            item_content_preview = item.content if len(item.content) <= 20 else item.content[:20] + "..."
+            logger.info(
+                f"[HSG] Promoted paired assistant memory[{item.id}] content: {item_content_preview} with score {item.score} based on human memory[{best_human.id}]")
+            return items
+
+    # 不在候选列表中：动态追加
+    items.append(IMemoryItemInfo(
+        id=pair_row.get("id"),
+        content=pair_row.get("content"),
+        score=best_human.score + 0.2,
+        primary_sector=pair_row.get("primary_sector") or query_sector,
+        path=[pair_row.get("id")],
+        salience=pair_row.get("salience") or 0.0,
+        last_seen_at=pair_row.get("last_seen_at"),
+        tags=json.loads(pair_row.get("tags") or "[]"),
+        qa_role=pair_row.get("qa_role"),
+        qa_pair_id=pair_row.get("qa_pair_id"),
+        metadata=json.loads(pair_row.get("meta") or "{}")
+    ))
+    return items
+
+
+def _resolve_auto_qa_linking(user_identity: IMemoryUserIdentity,
+                             qa_role: QARole | None) -> str | None:
+    """
+    自动补齐 QA 配对字段：
+    - human：生成新的 qa_pair_id
+    - assistant：复用最近一条“未被 assistant 配对”的 human.qa_pair_id
+    """
+    if qa_role not in ("human", "assistant"):
+        return None
+
+    if qa_role == "human":
+        return str(uuid.uuid4())
+
+    # assistant 自动配对：匹配同身份下最近未配对的 human
+    user_id = user_identity.user_id
+    tenant_id = user_identity.tenant_id
+    project_id = user_identity.project_id
+
+    sql_parts = [
+        """
+        SELECT h.qa_pair_id
+        FROM memories h
+        WHERE h.qa_role = 'human'
+          AND h.user_id = %s
+          AND h.qa_pair_id IS NOT NULL
+        """
+    ]
+    params: list[Any] = [user_id]
+
+    if tenant_id:
+        sql_parts.append("AND h.tenant_id = %s")
+        params.append(tenant_id)
+    if project_id:
+        sql_parts.append("AND h.project_id = %s")
+        params.append(project_id)
+
+    sql_parts.append(
+        """
+        AND NOT EXISTS (
+            SELECT 1
+            FROM memories a
+            WHERE a.qa_role = 'assistant'
+              AND a.qa_pair_id = h.qa_pair_id
+              AND a.user_id = h.user_id
+        )
+        ORDER BY h.created_at DESC
+        LIMIT 1
+        """
+    )
+
+    row = db.fetchone(" ".join(sql_parts), tuple(params))
+    if not row:
+        return str(uuid.uuid4())
+
+    return row.get("qa_pair_id")

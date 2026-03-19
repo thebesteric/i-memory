@@ -1,6 +1,6 @@
 import argparse
 
-from src.ai.model.bert_manager import BertManager, BertIncrModel, LabelConfig, LabelBranchConfig
+from src.ai.model.bert.bert_manager import BertManager, BertIncrModel, LabelConfig, LabelBranchConfig
 
 if __name__ == '__main__':
 

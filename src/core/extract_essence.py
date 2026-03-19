@@ -1,8 +1,8 @@
-from agile.utils import LogHelper
+from agile.utils import LogHelper, timing
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import PromptTemplate
 
-from src.ai.model_provider import get_chat_model
+from src.core.components import get_chat_model
 from src.core.config import env
 
 logger = LogHelper.get_logger()
@@ -59,6 +59,7 @@ class ExtractEssence:
         # 构建执行链
         return prompt_template | llm | output_parser
 
+    @timing
     async def extract(self) -> str:
         """
         使用大模型异步提取文本的精华内容

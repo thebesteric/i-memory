@@ -14,6 +14,8 @@
 
 from typing import List, Dict
 
+from agile.utils import timing
+
 from src.core.dml_ops import dml_ops
 from src.core.sector_classify import SECTOR_KEY_INDEX_MAPPING
 
@@ -162,6 +164,7 @@ async def apply_retrieval_trace_reinforcement_to_memory(mid: str, sal: float) ->
     return min(1.0, sal + ETA_REINFORCEMENT_FACTOR_FOR_TRACE_LEARNING * (1.0 - sal))
 
 
+@timing
 async def propagate_associative_reinforcement_to_linked_nodes(sid: str, salience: float, wps: List[Dict]) -> List[Dict]:
     """
     将检索强化传播到关联节点 - 实现记忆网络中的扩散激活

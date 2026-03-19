@@ -1,5 +1,4 @@
 import os
-import os
 import tempfile
 import unittest
 from typing import cast
@@ -7,7 +6,7 @@ from unittest.mock import patch
 
 import torch
 
-from src.ai.model.bert_manager import BertManager, LabelConfig, LabelBranchConfig, BertDataset, BertIncrModel
+from src.ai.model.bert.bert_manager import BertManager, LabelConfig, LabelBranchConfig, BertDataset, BertIncrModel
 
 
 class DummyDataset:

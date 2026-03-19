@@ -1,8 +1,11 @@
 import datetime
-from typing import Any
+from typing import Any, Literal
 
 from agile.utils.pydantic_extension import BaseModelEnhance
 from pydantic import BaseModel, ConfigDict, Field
+
+QARole = Literal["human", "assistant"]
+QueryMode = Literal["vector", "qa", "prefer"]
 
 
 class IMemoryUserIdentity(BaseModel):
@@ -41,6 +44,7 @@ class IMemoryFilters(BaseModel):
     user_identity: IMemoryUserIdentity = Field(..., description="用户身份信息")
     sectors: list[str] = Field(default_factory=list, description="检索扇区范围")
     min_salience: float = Field(default=0.0, description="最小显著性过滤值")
+    query_mode: QueryMode = Field(default="prefer", description="查询模式：vector/qa/prefer")
     debug: bool = Field(default=False, description="是否启用调试模式")
 
 
@@ -71,7 +75,10 @@ class IMemoryItemInfo(BaseModelEnhance):
     path: list[str] = Field(default_factory=list, description="记忆路径")
     salience: float = Field(default=0.0, description="显著性分数")
     last_seen_at: datetime.datetime | None = Field(default=None, description="最近一次访问时间")
+    created_at: datetime.datetime | None = Field(default=None, description="创建时间")
     tags: list[str] = Field(default_factory=list, description="标签列表")
+    qa_role: QARole | None = Field(default=None, description="QA 角色")
+    qa_pair_id: str | None = Field(default=None, exclude=True, description="内部问答对 ID")
     metadata: dict[str, Any] = Field(default_factory=dict, description="元数据")
     debug: IMemoryItemDebugInfo | None = Field(default=None, description="调试信息")
 

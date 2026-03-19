@@ -39,5 +39,10 @@ def vec_to_buf(v: List[float]) -> bytes:
     return struct.pack(f"{len(v)}f", *v)
 
 def buf_to_vec(buf: bytes) -> List[float]:
+    """
+    将二进制字节流（bytes）转化为一个浮点数列表（向量）序列
+    :param buf:
+    :return:
+    """
     cnt = len(buf) // 4
     return list(struct.unpack(f"{cnt}f", buf))

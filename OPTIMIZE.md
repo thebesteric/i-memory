@@ -11,3 +11,5 @@
 
 
 ## TODO
+- embed_query_for_all_sectors 的 sector 没有参与计算
+- 给返回的记忆添加 created_at 字段

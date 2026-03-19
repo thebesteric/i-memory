@@ -1,27 +1,5 @@
 from enum import Enum
 
-from agile.cache import MemoryCache
-from agile.utils import TimeUnit
-
-# 记忆查询缓存
-MEMORIES_CACHE = MemoryCache(
-    maxsize=2048,
-    default_ttl=60,
-    time_unit=TimeUnit.SECONDS
-)
-
-# 记忆分类缓存（用于存放记忆分类结果，减少重复计算）
-QUERY_CLASSIFY_CACHE = MemoryCache()
-
-# 组件查询缓存（用于存放一些单例的组件）
-COMPONENTS_CACHE = MemoryCache()
-
-# 模型缓存
-MODEL_CACHE = MemoryCache()
-
-# 嵌入模型缓存
-EMBED_MODEL_CACHE = MemoryCache()
-
 # 记忆扇区关联度定义
 SECTOR_RELATIONSHIPS = {
     "semantic": {"procedural": 0.8, "episodic": 0.6, "reflective": 0.7, "emotional": 0.4},
@@ -45,6 +23,16 @@ HYBRID_PARAMS = {
 }
 
 
+def get_dynamic_sector_weights(primary_sector: str):
+    return {
+        "semantic_dimension_weight": 1.2 if primary_sector == "semantic" else 0.8,
+        "emotional_dimension_weight": 1.5 if primary_sector == "emotional" else 0.6,
+        "procedural_dimension_weight": 1.3 if primary_sector == "procedural" else 0.7,
+        "episodic_dimension_weight": 1.4 if primary_sector == "episodic" else 0.7,
+        "reflective_dimension_weight": 1.1 if primary_sector == "reflective" else 0.5,
+    }
+
+
 class ModelProvider(Enum):
     """
     模型提供商枚举
@@ -52,6 +40,18 @@ class ModelProvider(Enum):
     OPENAI = "openai"
     GEMINI = "gemini"
     DASHSCOPE = "dashscope"
+    LOCAL = "local"
+
+
+class EmbedModelProvider(Enum):
+    """
+    嵌入模型提供商枚举
+    """
+    OPENAI = "openai"
+    GEMINI = "gemini"
+    DASHSCOPE = "dashscope"
+    LOCAL = "local"
+    SYNTHETIC = "synthetic"
 
 
 class VectorStoreProvider(Enum):

@@ -18,6 +18,7 @@ project_root = os.path.abspath(os.path.join(current_dir, '../../'))
 sys.path.append(project_root)
 
 from src.core.config import env
+from src.memory.tasks import start_background_tasks, stop_background_tasks
 from src.web.routes import health_router, memory_router, sources_router
 
 logger = LogHelper.get_logger()
@@ -34,11 +35,16 @@ def create_app() -> FastAPI:
         env_mode = os.getenv("ENV_MODE")
         debug = True if env_mode and env_mode in ["", "dev"] else False
         logger.info(
-            f"🚀 Starting iMemory API server on {env.WEB_HOST}:{env.WEB_PORT} with debug: {debug}, using environment mode: {env_mode if env_mode else "local"}")
+            f"🚀 Starting iMemory API server on {env.WEB_HOST}:{env.WEB_PORT} with debug: {debug}, "
+            f"using environment mode: {env_mode if env_mode else 'local'}"
+        )
+        # 启动相关任务
+        app.state.scheduler = start_background_tasks()
 
         yield  # 应用运行阶段
 
         # 关闭阶段：执行资源释放操作
+        await stop_background_tasks(getattr(app.state, "scheduler", None))
         logger.info("🛑 iMemory Server shutting down...")
 
     app = FastAPI(

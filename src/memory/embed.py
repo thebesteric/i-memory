@@ -3,7 +3,7 @@ from typing import List, Dict, Optional, Any
 
 import numpy as np
 
-from src.ai.model_provider import get_embed_model
+from src.core.components import get_embed_model
 from src.core.dml_ops import dml_ops
 
 
@@ -13,7 +13,8 @@ async def embed(txt: str, sector: Optional[str] = None) -> List[float]:
     @param txt: 待嵌入的文本
     @return: 生成的向量列表
     """
-    return await get_embed_model().embed(txt)
+    sector_text = f"[sector:{sector}]\n{txt}" if sector else txt
+    return await get_embed_model().embed(sector_text)
 
 
 async def embed_multi_sector(uid: str, txt: str, secs: List[str], chunks: Optional[List[dict]] = None) -> List[Dict[str, Any]]:
@@ -33,7 +34,7 @@ async def embed_multi_sector(uid: str, txt: str, secs: List[str], chunks: Option
         # 遍历传入的 sector 列表
         for s in secs:
             # 调用 embed 对文本 txt 生成向量
-            v = await embed(txt)
+            v = await embed(txt, sector=s)
             # 将 sector 名称、生成的向量和向量维度加入结果列表
             res.append({"sector": s, "vector": v, "dim": len(v)})
 

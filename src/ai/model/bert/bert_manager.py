@@ -115,7 +115,6 @@ class BertModelInfo(BaseModel):
         self.vocab_size = getattr(config, "vocab_size", None)
         self.max_position_embeddings = getattr(config, "max_position_embeddings", None)
 
-
 class BertManager:
 
     def __init__(self,
@@ -128,7 +127,7 @@ class BertManager:
         """
         self.model_name_or_path = os.fspath(model_name_or_path)
         project_root = pyrootutils.find_root()
-        self.cache_dir = os.fspath(cache_dir) if cache_dir else os.path.join(project_root, "assets", "models", self.model_name_or_path)
+        self.cache_dir = os.fspath(cache_dir) if cache_dir else os.path.join(project_root, "assets", "bert", "models", self.model_name_or_path)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         # 模型和分词器实例，初始为 None，按需加载
@@ -137,8 +136,10 @@ class BertManager:
 
         # 初始化时检查模型是否已本地存在
         self._is_model_local = self._check_model_files_exist()
+        if self._is_model_local:
+            self._model, self._tokenizer = self.load_model()
 
-        logger.info(f"BERT model initialized: {self.model_name_or_path}, "
+        logger.info(f"Bert model initialized: {self.model_name_or_path}, "
                     f"cache_dir={self.cache_dir}, device={self.device}, is_model_local={self._is_model_local}")
 
     def _check_model_files_exist(self) -> bool:
@@ -156,6 +157,7 @@ class BertManager:
                     cache_dir=self.cache_dir,
                     local_files_only=self._is_model_local,
                 ).to(self.device)
+                logger.info(f"Model {self.model_name_or_path} loaded successfully")
             except ImportError as exc:
                 raise RuntimeError(
                     "PyTorch is required to load transformer models. "
@@ -166,7 +168,6 @@ class BertManager:
                     f"Failed to load model '{self.model_name_or_path}' from path '{self.cache_dir}'. "
                     f"Error: {exc}"
                 ) from exc
-            logger.info(f"Model {self.model_name_or_path} loaded successfully")
 
         if self._tokenizer is None:
             self._tokenizer = AutoTokenizer.from_pretrained(

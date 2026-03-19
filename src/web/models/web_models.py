@@ -2,7 +2,7 @@ from typing import Optional, Dict, List, Any
 
 from pydantic import BaseModel, Field
 
-from src.memory.models.memory_models import IMemoryFilters, IMemoryUserIdentity
+from src.memory.models.memory_models import IMemoryFilters, IMemoryUserIdentity, QARole, QueryMode
 
 
 class AddMemoryRequest(BaseModel):
@@ -13,6 +13,7 @@ class AddMemoryRequest(BaseModel):
     user_identity: Optional[IMemoryUserIdentity] = Field(default=None, description="用户身份")
     tags: Optional[List[str]] = Field(default_factory=list, description="标签列表")
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="其他元数据")
+    qa_role: Optional[QARole] = Field(default=None, description="QA 角色，仅允许 human/assistant")
 
 
 class SearchMemoryRequest(BaseModel):
