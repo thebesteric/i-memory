@@ -69,7 +69,7 @@ HSG 的分扇区机制就是为这三点服务。
    - `semantic_dimension_weight`
    - `emotional_dimension_weight`
    - `procedural_dimension_weight`
-   - `temporal_dimension_weight`
+   - `episodic_dimension_weight`
    - `reflective_dimension_weight`
 4. **多向量融合**：`calc_multi_vec_fusion_score(...)`。
 5. **扇区不匹配惩罚**：`SECTOR_RELATIONSHIPS`（`src/core/constants.py`）控制跨扇区加减权。

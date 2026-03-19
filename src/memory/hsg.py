@@ -11,7 +11,7 @@ from agile.utils import LogHelper, timing
 
 from src.core.components import get_sector_classifier, get_vector_store, MEMORIES_CACHE, get_embed_model
 from src.core.config import env
-from src.core.constants import SECTOR_RELATIONSHIPS, HYBRID_PARAMS
+from src.core.constants import SECTOR_RELATIONSHIPS, HYBRID_PARAMS, get_dynamic_sector_weights
 from src.core.db import get_db
 from src.core.dml_ops import dml_ops
 from src.core.extract_essence import ExtractEssence
@@ -304,14 +304,8 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
         query_embed_with_sectors = await embed_query_for_all_sectors(query, sectors)
 
         # 动态权重调
-        primary_classify = query_classify.primary
-        weight = {
-            "semantic_dimension_weight": 1.2 if primary_classify == "semantic" else 0.8,
-            "emotional_dimension_weight": 1.5 if primary_classify == "emotional" else 0.6,
-            "procedural_dimension_weight": 1.3 if primary_classify == "procedural" else 0.7,
-            "temporal_dimension_weight": 1.4 if primary_classify == "episodic" else 0.7,
-            "reflective_dimension_weight": 1.1 if primary_classify == "reflective" else 0.5,
-        }
+        primary_sector = query_classify.primary
+        dynamic_sector_weights = get_dynamic_sector_weights(primary_sector=primary_sector)
 
         # 存储各扇区检索结果
         sector_result = {}
@@ -378,7 +372,7 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
                 continue
 
             # 多向量融合相似度评分
-            mvf = await calc_multi_vec_fusion_score(mid, query_embed_with_sectors, weight)
+            mvf = await calc_multi_vec_fusion_score(mid, query_embed_with_sectors, dynamic_sector_weights)
             # 跨扇区共振分数
             csr = await calc_cross_sector_resonance_score(mem["primary_sector"], query_classify.primary, mvf)
 
@@ -508,14 +502,14 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
         decay.dec_q()
 
 
-async def calc_multi_vec_fusion_score(mid: str, qe: Dict[str, List[float]], w: Dict[str, float]) -> float:
+async def calc_multi_vec_fusion_score(mid: str, qe: Dict[str, List[float]], weights: Dict[str, float]) -> float:
     """
     计算多向量融合相似度评分
     通过对记忆的各扇区向量与查询向量进行余弦相似度计算，并根据权重进行加权平均，得到最终的融合相似度评分
     该评分反映了记忆在多个维度（扇区）上与查询的相关性
     :param mid: 记忆 ID
     :param qe: 查询向量字典，键为扇区名称，值为对应的向量列表
-    :param w: 权重字典，键为权重名称，值为对应的权重值
+    :param weights: 权重字典，键为权重名称，值为对应的权重值
     :return: 融合相似度评分，浮点数
     """
 
@@ -526,12 +520,12 @@ async def calc_multi_vec_fusion_score(mid: str, qe: Dict[str, List[float]], w: D
     # 有效权重总和（分母），用于归一化
     tot = 0.0
     # 权重映射，将权重名称映射到对应的扇区名称
-    weight_mapping = {
-        "semantic": w.get("semantic_dimension_weight", 0),
-        "emotional": w.get("emotional_dimension_weight", 0),
-        "procedural": w.get("procedural_dimension_weight", 0),
-        "episodic": w.get("temporal_dimension_weight", 0),
-        "reflective": w.get("reflective_dimension_weight", 0),
+    weights_mapping = {
+        "semantic": weights.get("semantic_dimension_weight", 0),
+        "emotional": weights.get("emotional_dimension_weight", 0),
+        "procedural": weights.get("procedural_dimension_weight", 0),
+        "episodic": weights.get("episodic_dimension_weight", 0),
+        "reflective": weights.get("reflective_dimension_weight", 0),
     }
 
     for v in vecs:
@@ -542,7 +536,7 @@ async def calc_multi_vec_fusion_score(mid: str, qe: Dict[str, List[float]], w: D
         # 计算记忆向量与查询向量的余弦相似度
         sim = cos_sim(v.vector, qv)
         # 获取该扇区的权重，默认为 0.5
-        wgt = weight_mapping.get(v.sector, 0.5)
+        wgt = weights_mapping.get(v.sector, 0.5)
         # 加权累加相似度
         s += sim * wgt
         # 累加权重

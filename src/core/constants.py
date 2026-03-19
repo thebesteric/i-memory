@@ -23,6 +23,16 @@ HYBRID_PARAMS = {
 }
 
 
+def get_dynamic_sector_weights(primary_sector: str):
+    return {
+        "semantic_dimension_weight": 1.2 if primary_sector == "semantic" else 0.8,
+        "emotional_dimension_weight": 1.5 if primary_sector == "emotional" else 0.6,
+        "procedural_dimension_weight": 1.3 if primary_sector == "procedural" else 0.7,
+        "episodic_dimension_weight": 1.4 if primary_sector == "episodic" else 0.7,
+        "reflective_dimension_weight": 1.1 if primary_sector == "reflective" else 0.5,
+    }
+
+
 class ModelProvider(Enum):
     """
     模型提供商枚举
