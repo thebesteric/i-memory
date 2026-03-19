@@ -75,6 +75,7 @@ class IMemoryItemInfo(BaseModelEnhance):
     path: list[str] = Field(default_factory=list, description="记忆路径")
     salience: float = Field(default=0.0, description="显著性分数")
     last_seen_at: datetime.datetime | None = Field(default=None, description="最近一次访问时间")
+    created_at: datetime.datetime | None = Field(default=None, description="创建时间")
     tags: list[str] = Field(default_factory=list, description="标签列表")
     qa_role: QARole | None = Field(default=None, description="QA 角色")
     qa_pair_id: str | None = Field(default=None, exclude=True, description="内部问答对 ID")

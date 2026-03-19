@@ -202,8 +202,8 @@ HSG 的分扇区机制就是为这三点服务。
 
 ## 8. FAQ
 
-### Q1：为什么查询向量看起来没有按 sector 分别计算？
-A：在 `embed_query_for_all_sectors` 中，当前实现对查询只 embed 一次，再复用到各扇区检索。注释已说明“sector 并没有参与计算”。这是一种性能与复杂度折中，后续可切换为真正按扇区编码。
+### Q1：查询向量是按 sector 分别计算的吗？
+A：是。`embed_query_for_all_sectors` 会并发调用 `embed(query, sector)`，为每个扇区生成独立查询向量；`embed` 内部会把 sector 信息注入文本后再进行向量化。因此各扇区向量不再是同一份副本。
 
 ### Q2：既然已有 `primary_sector`，为什么还要 `additional sectors`？
 A：现实内容往往多维。`primary` 用于主导衰减与主语义归类，`additional` 保留辅语义入口，防止检索信息损失。

@@ -43,6 +43,17 @@ class ModelProvider(Enum):
     LOCAL = "local"
 
 
+class EmbedModelProvider(Enum):
+    """
+    嵌入模型提供商枚举
+    """
+    OPENAI = "openai"
+    GEMINI = "gemini"
+    DASHSCOPE = "dashscope"
+    LOCAL = "local"
+    SYNTHETIC = "synthetic"
+
+
 class VectorStoreProvider(Enum):
     """
     向量存储后端枚举

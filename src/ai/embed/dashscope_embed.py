@@ -7,9 +7,10 @@ from src.core.config import env
 @singleton
 class DashScopeEmbed(OpenAIEmbed):
 
-    def __init__(self, api_key: str = None):
+    def __init__(self, api_key: str = None, dim: int = 1536):
         super().__init__(
             api_key=api_key or env.DASHSCOPE_API_KEY,
             base_url=env.DASHSCOPE_BASE_URL,
-            model=env.DASHSCOPE_EMBEDDING_MODEL
+            model=env.DASHSCOPE_EMBEDDING_MODEL,
+            dim=dim
         )

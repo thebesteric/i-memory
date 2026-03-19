@@ -8,8 +8,8 @@ from src.ai.model.embed.embed_manager import EmbedManager
 
 class LocalEmbed(BaseEmbedModel):
 
-    def __init__(self, model: str = None):
-        super().__init__()
+    def __init__(self, model: str = None, dim: int = 1536):
+        super().__init__(dim=dim)
         self.model = model
         self.client = EmbedManager(model_name_or_path=model)
 

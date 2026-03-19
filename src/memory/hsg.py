@@ -43,12 +43,8 @@ embed_model: BaseEmbedModel = get_embed_model()
 @timing
 async def embed_query_for_all_sectors(query: str, sectors: List[str]) -> Dict[str, List[float]]:
     # 并发生成各扇区查询向量，减少多扇区检索的总等待时间
-    # vectors = await asyncio.gather(*(embed(query, sector) for sector in sectors))
-    # return {sector: vector for sector, vector in zip(sectors, vectors)}
-
-    # sector 并没有参与计算，所以直接 embed 一次即可
-    vector = await embed(query, None)
-    return {sector: vector for sector in sectors}
+    vectors = await asyncio.gather(*(embed(query, sector) for sector in sectors))
+    return {sector: vector for sector, vector in zip(sectors, vectors)}
 
 
 def compress_vec_for_storage(vec: List[float], target_dim: int) -> List[float]:
@@ -433,6 +429,7 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
                 path=expansion_mem.path if expansion_mem else [mid],
                 salience=salience,
                 last_seen_at=mem["last_seen_at"],
+                created_at=mem["created_at"],
                 tags=json.loads(mem["tags"] or "[]"),
                 qa_role=mem.get("qa_role"),
                 qa_pair_id=mem.get("qa_pair_id"),

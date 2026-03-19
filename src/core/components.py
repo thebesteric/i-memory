@@ -9,10 +9,8 @@ from langchain_core.language_models import BaseChatModel
 from langchain_openai import ChatOpenAI
 from pymilvus import FieldSchema, DataType
 
-from src.ai.embed.local_embed import LocalEmbed
-from src.ai.model.embed.embed_manager import EmbedManager
 from src.core.config import env
-from src.core.constants import VectorStoreProvider, ModelProvider
+from src.core.constants import VectorStoreProvider, ModelProvider, EmbedModelProvider
 
 from src.core.vector.base_vector_store import BaseVectorStore
 
@@ -120,40 +118,51 @@ def get_embed_model() -> BaseEmbedModel:
     根据配置获取嵌入模型实例
     :return:
     """
-    embed_model_provider = env.EMBED_MODEL_PROVIDER or ModelProvider.OPENAI.value
+    embed_model_provider = env.EMBED_MODEL_PROVIDER or EmbedModelProvider.OPENAI.value
     # OpenAI 嵌入模型
-    if embed_model_provider == ModelProvider.OPENAI.value:
+    if embed_model_provider == EmbedModelProvider.OPENAI.value:
         from src.ai.embed.openai_embed import OpenAIEmbed
         _embed_model = EMBED_MODEL_CACHE.get_or_set(
-            ModelProvider.OPENAI.value,
-            lambda: OpenAIEmbed(),
+            EmbedModelProvider.OPENAI.value,
+            lambda: OpenAIEmbed(dim=env.VECTOR_DIM),
             on_set=lambda k, v: logger.info(f"Using OpenAI embedding model: {v.model}")
         )
         return _embed_model
     # Gemini 嵌入模型
-    if embed_model_provider == ModelProvider.GEMINI.value:
+    if embed_model_provider == EmbedModelProvider.GEMINI.value:
         from src.ai.embed.gemini_embed import GeminiEmbed
         _embed_model = EMBED_MODEL_CACHE.get_or_set(
-            ModelProvider.GEMINI.value,
-            lambda: GeminiEmbed(),
+            EmbedModelProvider.GEMINI.value,
+            lambda: GeminiEmbed(dim=env.VECTOR_DIM),
             on_set=lambda k, v: logger.info(f"Using Gemini embedding model: {v.model}")
         )
         return _embed_model
     # DashScope 嵌入模型
-    if embed_model_provider == ModelProvider.DASHSCOPE.value:
+    if embed_model_provider == EmbedModelProvider.DASHSCOPE.value:
         from src.ai.embed.dashscope_embed import DashScopeEmbed
         _embed_model = EMBED_MODEL_CACHE.get_or_set(
-            ModelProvider.DASHSCOPE.value,
-            lambda: DashScopeEmbed(),
+            EmbedModelProvider.DASHSCOPE.value,
+            lambda: DashScopeEmbed(dim=env.VECTOR_DIM),
             on_set=lambda k, v: logger.info(f"Using DashScope embedding model: {v.model}")
         )
         return _embed_model
-    # Local 嵌入模型
-    if embed_model_provider == ModelProvider.LOCAL.value:
+    # 本地嵌入模型
+    if embed_model_provider == EmbedModelProvider.LOCAL.value:
+        from src.ai.embed.local_embed import LocalEmbed
+        from src.ai.model.embed.embed_manager import EmbedManager
         _embed_model = EMBED_MODEL_CACHE.get_or_set(
-            ModelProvider.LOCAL.value,
-            lambda: LocalEmbed(model=EmbedManager.DEFAULT_MODEL_NAME_OR_PATH),
+            EmbedModelProvider.LOCAL.value,
+            lambda: LocalEmbed(model=EmbedManager.DEFAULT_MODEL_NAME_OR_PATH, dim=env.VECTOR_DIM),
             on_set=lambda k, v: logger.info(f"Using Local Embed model: {v.model}")
+        )
+        return _embed_model
+    # 合成嵌入模型
+    if embed_model_provider == EmbedModelProvider.SYNTHETIC.value:
+        from src.ai.embed.synthetic_embed import SyntheticEmbed
+        _embed_model = EMBED_MODEL_CACHE.get_or_set(
+            EmbedModelProvider.SYNTHETIC.value,
+            lambda: SyntheticEmbed(dim=env.VECTOR_DIM),
+            on_set=lambda k, v: logger.info(f"Using Synthetic Embed model: {v.model}")
         )
         return _embed_model
 

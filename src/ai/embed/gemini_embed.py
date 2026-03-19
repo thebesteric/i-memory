@@ -10,8 +10,8 @@ from src.core.config import env
 @singleton
 class GeminiEmbed(BaseEmbedModel):
 
-    def __init__(self, api_key: str = None):
-        super().__init__()
+    def __init__(self, api_key: str = None, dim: int = 1536):
+        super().__init__(dim=dim)
         self.api_key = api_key or env.GEMINI_API_KEY
         self.base_url = env.GEMINI_BASE_URL
         self.model = env.GEMINI_EMBEDDING_MODEL
@@ -24,13 +24,12 @@ class GeminiEmbed(BaseEmbedModel):
     async def embed_batch(self, texts: List[str], model: str = None, dim: int = None) -> List[List[float]]:
         if not self.api_key: raise ValueError("Gemini key missing")
         self.model = model or self.model
-        if "models/" not in self.model:
-            m = f"models/{self.model}"
-        url = f"{self.base_url}/{self.model}:batchEmbedContents?key={self.api_key}"
+        model_name = self.model if self.model.startswith("models/") else f"models/{self.model}"
+        url = f"{self.base_url}/{model_name}:batchEmbedContents?key={self.api_key}"
         reqs = []
         for t in texts:
             reqs.append({
-                "model": self.model,
+                "model": model_name,
                 "content": {"parts": [{"text": t}]},
                 "taskType": "SEMANTIC_SIMILARITY",
                 "outputDimensionality": dim or self.dim

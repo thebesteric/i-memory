@@ -10,8 +10,8 @@ from src.core.config import env
 @singleton
 class OpenAIEmbed(BaseEmbedModel):
 
-    def __init__(self, api_key: str = None, base_url: str = None, model: str = None):
-        super().__init__()
+    def __init__(self, api_key: str = None, base_url: str = None, model: str = None, dim: int = 1536):
+        super().__init__(dim=dim)
         self.api_key = api_key or env.OPENAI_API_KEY
         self.base_url = base_url or env.OPENAI_BASE_URL
         self.model = model or env.OPENAI_EMBEDDING_MODEL

@@ -13,7 +13,8 @@ async def embed(txt: str, sector: Optional[str] = None) -> List[float]:
     @param txt: 待嵌入的文本
     @return: 生成的向量列表
     """
-    return await get_embed_model().embed(txt)
+    sector_text = f"[sector:{sector}]\n{txt}" if sector else txt
+    return await get_embed_model().embed(sector_text)
 
 
 async def embed_multi_sector(uid: str, txt: str, secs: List[str], chunks: Optional[List[dict]] = None) -> List[Dict[str, Any]]:

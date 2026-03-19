@@ -1,0 +1,235 @@
+{
+  "memories": [
+    {
+      "id": "3f2c9db0-6247-426b-a6ce-c2a3d78547cb",
+      "text": "它是本地部署的AI智能体执行框架，核心是执行任务，不是只聊天。",
+      "sector": "semantic"
+    },
+    {
+      "id": "9bc4d426-8cd8-41b0-b8f6-e998cbec0b2f",
+      "text": "Windows、macOS、Linux 全平台都能跑。",
+      "sector": "procedural"
+    },
+    {
+      "id": "b4a3cf21-8559-402d-8548-48dfc82cb8bd",
+      "text": "不用，直接在Telegram、钉钉等50多个主流IM里发指令就行。",
+      "sector": "reflective"
+    },
+    {
+      "id": "bdede4ff-551d-4d7f-a37a-8e453bd10e9c",
+      "text": "完全模型无关，GPT、通义千问、本地Ollama都能接。",
+      "sector": "reflective"
+    },
+    {
+      "id": "27fe8a12-16f0-4768-aa02-3f86c2b63416",
+      "text": "核心是Gateway、Agent、Skills、Memory、Security。",
+      "sector": "semantic"
+    },
+    {
+      "id": "8caf8f26-0223-4a51-85f7-80ac9bcc32a7",
+      "text": "奥地利工程师Peter Steinberger，曾用名Clawdbot、Moltbot。",
+      "sector": "semantic"
+    },
+    {
+      "id": "76d5d30c-3723-4862-823c-6e0b52e0afb9",
+      "text": "2025年11月正式开源，MIT协议，个人企业都能用。",
+      "sector": "semantic"
+    },
+    {
+      "id": "bfc0dceb-459a-4df7-8c03-375314230309",
+      "text": "核心是本地运行+真实执行+多渠道接入；数据存本地，还有白名单和沙箱机制。",
+      "sector": "semantic"
+    },
+    {
+      "id": "2a8d3122-924b-4897-a530-b0166de90157",
+      "text": "都适合，个人办公、企业自动化、开发辅助全覆盖。",
+      "sector": "reflective"
+    },
+    {
+      "id": "406e5a12-78fa-4935-ad24-7b80f023d44d",
+      "text": "比传统RPA省流程，比AutoGPT更稳定、轻量、易落地。",
+      "sector": "procedural"
+    },
+    {
+      "id": "b5a1d52d-2485-4c3c-bcdf-470102091dea",
+      "text": "能，支持国产模型，官方和社区都有中文教程。",
+      "sector": "reflective"
+    },
+    {
+      "id": "5159f013-52b2-4958-9b5f-f546cfd8143b",
+      "text": "有一键脚本，新手半小时搞定，低配电脑也能跑。",
+      "sector": "procedural"
+    },
+    {
+      "id": "5862d097-1eb2-40b5-8a01-2f6fa173f91c",
+      "text": "个人开源免费，企业有付费版，提供技术支持。",
+      "sector": "procedural"
+    },
+    {
+      "id": "59740f62-9947-47d8-b705-2653fdb004da",
+      "text": "复杂逻辑偶尔出错，需要人工确认。",
+      "sector": "semantic"
+    },
+    {
+      "id": "84e6f44e-dd5c-4e74-8dcf-cb7c608ed5bf",
+      "text": "Docker一行命令部署，配置API Key和Token；测试可新建test文件夹。",
+      "sector": "procedural"
+    },
+    {
+      "id": "2c79a4d6-b19a-4fc1-a88a-1e1d019bc904",
+      "text": "多Agent协同、自定义技能、定时任务等。",
+      "sector": "semantic"
+    },
+    {
+      "id": "7b93e1e0-07c4-4661-84c3-160cef0cde3b",
+      "text": "本地开源、模型无关、多渠道、强执行的AI智能体。",
+      "sector": "semantic"
+    }
+  ],
+  "queries": [
+    {
+      "id": "q_4a6eeb37-a2d7-4a29-9d78-bdacbc3cb603",
+      "text": "OpenClaw是什么，和普通大模型区别在哪？",
+      "sector": "reflective",
+      "gold_ids": [
+        "3f2c9db0-6247-426b-a6ce-c2a3d78547cb"
+      ]
+    },
+    {
+      "id": "q_1e9531f8-9305-4658-b4bb-2b4d50f8eca7",
+      "text": "支持哪些平台？",
+      "sector": "reflective",
+      "gold_ids": [
+        "9bc4d426-8cd8-41b0-b8f6-e998cbec0b2f"
+      ]
+    },
+    {
+      "id": "q_eafe6e0e-f088-413b-b74c-f9b7d87d4a84",
+      "text": "交互方式呢？要装专门客户端吗？",
+      "sector": "reflective",
+      "gold_ids": [
+        "b4a3cf21-8559-402d-8548-48dfc82cb8bd"
+      ]
+    },
+    {
+      "id": "q_daaee72b-4b16-4953-bd87-9dba3386378a",
+      "text": "它是模型绑定的吗？",
+      "sector": "reflective",
+      "gold_ids": [
+        "bdede4ff-551d-4d7f-a37a-8e453bd10e9c"
+      ]
+    },
+    {
+      "id": "q_16ccc7df-b138-4f0c-ac73-36e340fad9b0",
+      "text": "架构大概分几块？",
+      "sector": "reflective",
+      "gold_ids": [
+        "27fe8a12-16f0-4768-aa02-3f86c2b63416"
+      ]
+    },
+    {
+      "id": "q_40be66c9-8997-4467-94dd-6e532bd57c0d",
+      "text": "谁开发的？曾用名是什么？",
+      "sector": "reflective",
+      "gold_ids": [
+        "8caf8f26-0223-4a51-85f7-80ac9bcc32a7"
+      ]
+    },
+    {
+      "id": "q_caefc064-d89f-4ba0-ac39-3fa140aea308",
+      "text": "什么时候开源的？协议是啥？",
+      "sector": "reflective",
+      "gold_ids": [
+        "76d5d30c-3723-4862-823c-6e0b52e0afb9"
+      ]
+    },
+    {
+      "id": "q_df21c283-c7ee-4a65-b1c7-92f1857d0b9a",
+      "text": "核心优势是什么？隐私性强吗？",
+      "sector": "reflective",
+      "gold_ids": [
+        "bfc0dceb-459a-4df7-8c03-375314230309"
+      ]
+    },
+    {
+      "id": "q_5cfd4d72-f71d-44ed-90d2-09eeaa2ea0dc",
+      "text": "适合个人、企业还是开发者？",
+      "sector": "reflective",
+      "gold_ids": [
+        "2a8d3122-924b-4897-a530-b0166de90157"
+      ]
+    },
+    {
+      "id": "q_4dab6126-0909-4470-9182-8d32bbe0334b",
+      "text": "和传统RPA、AutoGPT有何区别？",
+      "sector": "reflective",
+      "gold_ids": [
+        "406e5a12-78fa-4935-ad24-7b80f023d44d"
+      ]
+    },
+    {
+      "id": "q_ef49ce88-3c83-4d85-944c-aacb7ed9d7d6",
+      "text": "国内能正常用吗？有中文文档吗？",
+      "sector": "reflective",
+      "gold_ids": [
+        "b5a1d52d-2485-4c3c-bcdf-470102091dea"
+      ]
+    },
+    {
+      "id": "q_e912d4fd-a783-4f65-8bbb-aa3a0ae99d1e",
+      "text": "部署难度大吗？低配电脑能跑吗？",
+      "sector": "reflective",
+      "gold_ids": [
+        "5159f013-52b2-4958-9b5f-f546cfd8143b"
+      ]
+    },
+    {
+      "id": "q_7f3cab07-0112-4950-aa1f-f1559fe8ee9f",
+      "text": "个人用免费吗？有付费版吗？",
+      "sector": "reflective",
+      "gold_ids": [
+        "5862d097-1eb2-40b5-8a01-2f6fa173f91c"
+      ]
+    },
+    {
+      "id": "q_b088e93a-3458-44d5-840a-12a8774979c2",
+      "text": "有明显缺点吗？",
+      "sector": "reflective",
+      "gold_ids": [
+        "59740f62-9947-47d8-b705-2653fdb004da"
+      ]
+    },
+    {
+      "id": "q_9d4f4f1f-1aca-40df-aeea-c9a7a416dd10",
+      "text": "如何部署和测试？",
+      "sector": "reflective",
+      "gold_ids": [
+        "84e6f44e-dd5c-4e74-8dcf-cb7c608ed5bf"
+      ]
+    },
+    {
+      "id": "q_9b1e74bd-9301-44bd-b3c6-5b0c03c9719d",
+      "text": "进阶玩法有哪些？",
+      "sector": "reflective",
+      "gold_ids": [
+        "2c79a4d6-b19a-4fc1-a88a-1e1d019bc904"
+      ]
+    },
+    {
+      "id": "q_210624f2-9c6a-4c06-bb93-d8afef8d9154",
+      "text": "它的定位是什么？",
+      "sector": "reflective",
+      "gold_ids": [
+        "7b93e1e0-07c4-4661-84c3-160cef0cde3b"
+      ]
+    }
+  ],
+  "meta": {
+    "source": "memories table",
+    "dsn": "postgresql://***",
+    "mode": "answer_only",
+    "memories_count": 17,
+    "queries_count": 17,
+    "dropped_pairs_no_gold": 0
+  }
+}
