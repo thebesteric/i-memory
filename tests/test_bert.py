@@ -36,7 +36,7 @@ class TestBertManager(unittest.TestCase):
         print(f"First sample: {dataset[0]}")
 
     def test_dataset_json(self):
-        dataset_path = "/assets/bert/datasets"
+        dataset_path = "/Users/wangweijun/PycharmProjects/i-memory/assets/bert/datasets"
         # dataset = self.manager.load_dataset(dataset_path, load_type="json", split="validation")
         dataset = self.manager.load_dataset(dataset_path, load_type="json", split="train")
         print(f"Dataset loaded from JSON: {dataset}")

@@ -1548,5 +1548,1555 @@
     "text": "在异国医院等待检查报告时，窗外鸽子掠过灰云，我忽然不那么怕了：恐惧仍在，但心已学会与它并坐饮茶。",
     "primary": 4,
     "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "I still remember my first date with my husband—he took me out for Western food, and I embarrassed myself because I didn’t know how to use a knife and fork.",
+    "primary": 0,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "One evening last winter, my family and I were strolling by the West Lake when we saw the breathtaking scenery of the Broken Bridge covered in lingering snow—momentarily, it felt as though we had stepped into a painting.",
+    "primary": 0,
+    "labels": [1,0,0,1,0]
+  },
+  {
+    "text": "Last Saturday afternoon at 3 p.m., I encountered a lost little girl while shopping for vegetables at the market and stayed with her for half an hour until her mother arrived.",
+    "primary": 0,
+    "labels": [1,0,0,1,0]
+  },
+  {
+    "text": "I remember how, when I was a child, my grandmother would always tell me stories about her youth on summer evenings, fanning me with a palm-leaf fan until I fell asleep.",
+    "primary": 0,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "On the subway yesterday morning at 8 a.m., I saw a young person offer their seat to an elderly person, who insisted on not taking it; the two of them politely declined and offered the seat back and forth for quite some time.",
+    "primary": 0,
+    "labels": [1,0,0,1,0]
+  },
+  {
+    "text": "I remember crying secretly at my desk while reading the letter our homeroom teacher had written to each of us three days before the college entrance exam.",
+    "primary": 0,
+    "labels": [1,0,0,1,0]
+  },
+  {
+    "text": "Last year during the National Day holiday, I went to Mount Huangshan and got up at 3 a.m. to watch the sunrise; when the sun rose above the sea of clouds, everyone in the crowd cheered.",
+    "primary": 0,
+    "labels": [1,0,0,1,0]
+  },
+  {
+    "text": "Yesterday evening, at the entrance of the residential community, I saw an elderly couple walking hand in hand after grocery shopping; the grandfather was even carrying the grandmother’s bag.",
+    "primary": 0,
+    "labels": [1,0,0,1,0]
+  },
+  {
+    "text": "Last week, I went to Happy Valley with friends; I kept my eyes closed and screamed the entire time while riding the roller coaster, and my legs were wobbly afterward.",
+    "primary": 0,
+    "labels": [1,0,0,1,0]
+  },
+  {
+    "text": "I still remember the first time I met my future in-laws—I was so nervous that I spilled tea on the table, and my future mother-in-law laughed and said, 'It’s all right, it’s all right.'",
+    "primary": 0,
+    "labels": [1,0,0,1,0]
+  },
+  {
+    "text": "Last spring, I went to Wuyuan to see the rapeseed flowers; the golden expanse stretching across the mountains and fields made me unable to resist running along the field ridges.",
+    "primary": 0,
+    "labels": [1,0,0,1,0]
+  },
+  {
+    "text": "Last Friday night, I worked overtime until 11 p.m. When I hailed a taxi, the driver learned that I hadn’t had dinner and generously shared half of his bread with me.",
+    "primary": 0,
+    "labels": [1,0,0,1,0]
+  },
+  {
+    "text": "I still remember the day we graduated from university—throwing our bachelor’s caps into the air, and someone saying during the group photo that we should get together more often; yet, many of us never saw each other again.",
+    "primary": 0,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "I still remember in third grade of elementary school, when I participated in a speech contest for the first time—I suddenly forgot my lines upon stepping onto the stage and stood there, stunned, for a long time.",
+    "primary": 0,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "Last summer, I went to Qingdao and had barbecued food and beer with friends on the beach at night, chatting until dawn while listening to the sound of the waves.",
+    "primary": 0,
+    "labels": [1,0,0,1,0]
+  },
+  {
+    "text": "I still remember the first time I bathed my son—he cried, and I panicked too, until the postpartum nanny stepped in to save the day.",
+    "primary": 0,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "Last autumn, I visited Xiangshan Mountain, where the maple leaves covering the hills were blazing red; I collected many beautiful leaves to use as bookmarks.",
+    "primary": 0,
+    "labels": [1,0,0,1,0]
+  },
+  {
+    "text": "Last week, I went to the cinema to watch 'The Wandering Earth 2'; when the space station exploded at the end, the entire theater fell silent.",
+    "primary": 0,
+    "labels": [1,0,0,1,0]
+  },
+  {
+    "text": "Last week, I went to the library to return some borrowed books and discovered they were overdue by half a month, so I had to pay a 30-yuan fine—my heart ached.",
+    "primary": 0,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "I still remember my first flight—I deliberately chose a window seat and gripped the armrest tightly during takeoff, too nervous to let go.",
+    "primary": 0,
+    "labels": [1,0,0,1,0]
+  },
+  {
+    "text": "Last Spring Festival, when I returned home, the aroma of my mother’s simmered pork rib soup greeted me the moment I stepped through the door—that was the scent of home.",
+    "primary": 0,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "Last week, I went to a karaoke bar with friends, and halfway through singing the song 'Friends,' all of us had tears in our eyes.",
+    "primary": 0,
+    "labels": [1,0,0,1,0]
+  },
+  {
+    "text": "I still remember receiving my first love letter in junior high school—I blushed and my heart raced as I hid under the covers and read it over and over; the next day, I even made a special effort to dress up.",
+    "primary": 0,
+    "labels": [1,0,0,1,0]
+  },
+  {
+    "text": "Last week, on the subway, I saw a girl sleeping against her boyfriend’s shoulder, and he remained perfectly still for fear of waking her up.",
+    "primary": 0,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "I still remember my first marathon: I got a leg cramp at the 30-kilometer mark, and an older man helped me stretch before I continued running.",
+    "primary": 0,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "One morning last winter, I pulled back the curtains and discovered it was snowing outside—I got so excited that I immediately got dressed and rushed downstairs.",
+    "primary": 0,
+    "labels": [1,0,0,1,0]
+  },
+  {
+    "text": "Last week, I went to the hair salon, and the stylist cut my bangs too short—I couldn’t help but laugh and cry at my reflection in the mirror.",
+    "primary": 0,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "I remember that when I lived on campus in high school, my mother would cook my favorite braised pork ribs every weekend when I went home.",
+    "primary": 0,
+    "labels": [1,0,0,1,0]
+  },
+  {
+    "text": "One afternoon last autumn, I rode a shared bicycle around the city by myself, wandering aimlessly and feeling utterly free.",
+    "primary": 0,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "I was sitting in the third row of the classroom, taking notes, when I saw in my textbook that the Tang Dynasty was established in 618 CE.",
+    "primary": 0,
+    "labels": [1,1,0,0,0]
+  },
+  {
+    "text": "Yesterday, I looked it up in the library: the overall chemical equation for photosynthesis is 6CO₂ + 6H₂O → C₆H₁₂O₆ + 6O₂; at that moment, sunlight streamed through the window onto the page.",
+    "primary": 0,
+    "labels": [1,1,0,1,0]
+  },
+  {
+    "text": "This morning on the bus, I memorized the English word 'perseverance'—its meaning is perseverance—and reflecting on my own exam preparation experience, I felt highly motivated.",
+    "primary": 0,
+    "labels": [1,1,0,1,1]
+  },
+  {
+    "text": "Last night, while organizing my notes in the study, I remembered that the Xinhai Revolution took place in 1911; the desk lamp’s light was somewhat dim at the time.",
+    "primary": 0,
+    "labels": [1,1,0,0,0]
+  },
+  {
+    "text": "Last week, during my visit to the zoo, I learned that giraffes sleep for only about two hours per day. The zookeepers taught us how to observe giraffes eating, and I found it fascinating to watch them eat leaves.",
+    "primary": 0,
+    "labels": [1,1,1,1,0]
+  },
+  {
+    "text": "Yesterday, while reading a book at the bookstore, I remembered that Cao Xueqin was the author of 'Dream of the Red Chamber'; I was sitting by the window at the time, and the breeze gently turned the pages.",
+    "primary": 0,
+    "labels": [1,1,0,0,0]
+  },
+  {
+    "text": "Late at night, while solving practice problems in my bedroom, I memorized Ohm’s law formula, I = U/R, and felt determined as I reflected on my preparation for the electrician certification exam.",
+    "primary": 0,
+    "labels": [1,1,0,1,1]
+  },
+  {
+    "text": "My first time making cold-process soap—carefully weighing each ingredient according to the recipe. When I unmolded it and saw the beautiful texture, I was overjoyed like a child.",
+    "primary": 0,
+    "labels": [1,0,1,1,1]
+  },
+  {
+    "text": "For the first time, I learned pour-over brewing under a barista’s guidance; as hot water slowly infused the coffee grounds and released their aroma, I felt deeply focused and thoroughly enjoyed the experience.",
+    "primary": 0,
+    "labels": [1,0,1,1,1]
+  },
+  {
+    "text": "Yesterday, a friend came over to my place, and I made a plate of sushi following the steps. Everyone loved it, and I felt delighted.",
+    "primary": 0,
+    "labels": [1,0,1,1,0]
+  },
+  {
+    "text": "It was my first time setting up a personal blog. Following the tutorial step by step, I felt so excited that I nearly jumped for joy the moment I entered my domain name in the browser and saw my website appear.",
+    "primary": 0,
+    "labels": [1,0,1,1,1]
+  },
+  {
+    "text": "Today I made sour cabbage fish using this method—the fish slices were tender and smooth, not falling apart, and the broth was tangy and spicy, stimulating the appetite. My family said I could open a restaurant.",
+    "primary": 0,
+    "labels": [1,0,1,1,1]
+  },
+  {
+    "text": "The first time walking down the familiar street after the breakup—every corner brims with memories, and each step feels incredibly difficult.",
+    "primary": 0,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "My first successful performance on stage left me so moved that I wanted to cry when the audience applauded during the curtain call.",
+    "primary": 0,
+    "labels": [1,0,0,1,0]
+  },
+  {
+    "text": "Upon hearing the news that my first love got married, I dug up old photos and looked at them for a long time—I couldn’t quite describe what I was feeling.",
+    "primary": 0,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "After working overtime for a month, the project succeeded, and at the celebration dinner, I drank too much and burst into tears while hugging a colleague like a child.",
+    "primary": 0,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "Last week, I strolled through the alleys of the ancient town; the bluestone pavement and historic buildings evoked a sense of antiquity and tranquility. The architectural style of the ancient town, shaped by regional culture, is an objective fact in architectural studies.",
+    "primary": 0,
+    "labels": [1,1,0,1,0]
+  },
+  {
+    "text": "After carefully troubleshooting the home projector step by step, I watched classic movies with my family, feeling warm and happy.",
+    "primary": 0,
+    "labels": [1,0,1,1,0]
+  },
+  {
+    "text": "Seeing snow for the first time, I rushed into the snow like a child, jumping and bouncing around.",
+    "primary": 0,
+    "labels": [1,0,0,1,0]
+  },
+  {
+    "text": "Hearing my child call me 'Mom' for the first time filled me with such happiness that I burst into tears on the spot.",
+    "primary": 0,
+    "labels": [1,0,0,1,0]
+  },
+  {
+    "text": "Coming home late at night, I found the lights still on—my family hadn’t gone to bed yet, waiting for me, and my heart swelled with warmth, almost bringing tears to my eyes.",
+    "primary": 0,
+    "labels": [1,0,0,1,0]
+  },
+  {
+    "text": "I followed a tutorial to fold origami cranes and filled a jar with them to give to a friend who was ill; seeing my friend’s joyful smile filled me with warmth and satisfaction.",
+    "primary": 0,
+    "labels": [1,0,1,1,1]
+  },
+  {
+    "text": "My first solo trip: witnessing a breathtaking sunrise in an unfamiliar city, standing atop a mountain and feeling the gentle breeze—my heart brimming with freedom and joy, utterly relaxed.",
+    "primary": 0,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "Learning that the universe's diameter is approximately 93 billion light-years left me awestruck by humanity's insignificance.",
+    "primary": 1,
+    "labels": [0,1,0,1,1]
+  },
+  {
+    "text": "While organizing my notes yesterday, I confirmed that a solution with a pH value less than 7 is acidic, equal to 7 is neutral, and greater than 7 is basic—a concept I verified during chemistry lab experiments and found highly practical.",
+    "primary": 1,
+    "labels": [0,1,0,0,1]
+  },
+  {
+    "text": "Statutory holidays include New Year's Day, Spring Festival, Qingming Festival, Labor Day, Dragon Boat Festival, Mid-Autumn Festival, and National Day, with the Spring Festival having the longest holiday period.",
+    "primary": 1,
+    "labels": [0,1,0,0,0]
+  },
+  {
+    "text": "The three elements of sound are pitch, loudness, and timbre: pitch is determined by frequency, loudness by amplitude, and timbre by the material and structure of the sound-producing object.",
+    "primary": 1,
+    "labels": [0,1,0,0,0]
+  },
+  {
+    "text": "Yesterday, while memorizing classical poems, I remembered that 'Thoughts on a Quiet Night' was written by the Tang Dynasty poet Li Bai, whose courtesy name was Taibai and whose pseudonym was Qinglian Jushi. After memorizing it, I explained the poem to my younger sister, and she quickly grasped its artistic conception.",
+    "primary": 1,
+    "labels": [1,1,0,0,1]
+  },
+  {
+    "text": "The basic steps for brewing tea are warming the teacup, placing the tea leaves, steeping, pouring out the tea infusion, and serving. Different types of tea require different water temperatures; green tea is best brewed at around 80°C, and the green tea I brewed has a clean, mellow flavor.",
+    "primary": 1,
+    "labels": [0,1,1,0,1]
+  },
+  {
+    "text": "The five fundamental components of a computer are the arithmetic logic unit (ALU), the control unit, memory, input devices, and output devices; the CPU comprises the ALU and the control unit.",
+    "primary": 1,
+    "labels": [0,1,0,0,0]
+  },
+  {
+    "text": "Last week, I visited a museum and learned that the oracle bone script of the Shang Dynasty is the earliest known mature form of Chinese characters. After the visit, I felt deeply impressed by the profoundness and richness of Chinese culture.",
+    "primary": 1,
+    "labels": [1,1,0,1,1]
+  },
+  {
+    "text": "Last week, while conducting an experiment in the lab, I memorized the definition of pH: the negative logarithm of the hydrogen ion concentration. The procedure involved first calibrating the pH test paper and then applying the solution to be tested. I was delighted when I successfully measured the solution's pH as 7.",
+    "primary": 1,
+    "labels": [1,1,1,1,1]
+  },
+  {
+    "text": "Learning that Earth rotates once every 24 hours and revolves around the Sun once approximately every 365.24 days, I reflected on the fundamental cause of the seasonal changes.",
+    "primary": 1,
+    "labels": [0,1,0,0,1]
+  },
+  {
+    "text": "The sum of the interior angles of a triangle is always 180 degrees, a fundamental theorem of plane geometry.",
+    "primary": 1,
+    "labels": [0,1,0,0,0]
+  },
+  {
+    "text": "The method for converting binary numbers to decimal numbers is weighted summation by bit position, a core concept in introductory programming.",
+    "primary": 1,
+    "labels": [0,1,1,0,0]
+  },
+  {
+    "text": "Learning that Mount Everest's latest height is 8,848.86 meters filled me with awe at nature's grandeur.",
+    "primary": 1,
+    "labels": [0,1,0,1,1]
+  },
+  {
+    "text": "After studying Maslow's hierarchy of needs, I concluded that human needs progress gradually from physiological needs to self-actualization.",
+    "primary": 1,
+    "labels": [0,1,0,0,1]
+  },
+  {
+    "text": "The chemical formula of water is H₂O, a fact that helped me understand why the volume ratio of hydrogen to oxygen gas in electrolysis experiments is 2:1.",
+    "primary": 1,
+    "labels": [0,1,0,0,0]
+  },
+  {
+    "text": "The essence of photosynthesis is that plants use chlorophyll to convert light energy into chemical energy, prompting me to reconsider the starting point of energy flow in ecosystems.",
+    "primary": 1,
+    "labels": [0,1,0,0,1]
+  },
+  {
+    "text": "In Python, lists are mutable sequence types, and their append() method has a time complexity of O(1), which deepened my understanding of efficiency trade-offs in data structures.",
+    "primary": 1,
+    "labels": [0,1,0,0,1]
+  },
+  {
+    "text": "Earth's rotation period is approximately 23 hours, 56 minutes, and 4 seconds (a sidereal day), and this precise value explains why sidereal time does not perfectly align with solar time.",
+    "primary": 1,
+    "labels": [0,1,0,0,0]
+  },
+  {
+    "text": "Mendel discovered the law of segregation through his pea hybridization experiments, a scientific fact that made me realize the crucial role of quantitative observation in establishing genetic laws.",
+    "primary": 1,
+    "labels": [0,1,0,0,1]
+  },
+  {
+    "text": "'Synonyms' refer to words that have the same or similar meanings, such as 'kuàilè' (happy) and 'yúkuài' (pleased).",
+    "primary": 1,
+    "labels": [0,1,0,0,0]
+  },
+  {
+    "text": "Common characteristics of mammals include warm-bloodedness, the presence of hair or fur, and milk production by females to nourish their young.",
+    "primary": 1,
+    "labels": [0,1,0,0,0]
+  },
+  {
+    "text": "Dream of the Red Chamber is a chapter-based novel written by the Qing Dynasty author Cao Xueqin, representing the pinnacle of classical Chinese fiction.",
+    "primary": 1,
+    "labels": [0,1,0,0,0]
+  },
+  {
+    "text": "A prime number is a positive integer greater than 1 that is divisible only by 1 and itself, such as 2, 3, 5, and 7.",
+    "primary": 1,
+    "labels": [0,1,0,0,0]
+  },
+  {
+    "text": "The United Nations was founded in 1945, with its headquarters in New York, United States, and currently has 193 member states.",
+    "primary": 1,
+    "labels": [0,1,0,0,0]
+  },
+  {
+    "text": "In Python, lists are mutable sequence types, and their append() method has a time complexity of O(1), which makes me design operations inside loops more carefully.",
+    "primary": 1,
+    "labels": [0,1,1,0,1]
+  },
+  {
+    "text": "Newton's first law states that an object in an inertial reference frame remains at rest or moves with constant velocity in a straight line, thereby clarifying the common misconception that 'force is required to maintain motion.'",
+    "primary": 1,
+    "labels": [0,1,0,0,0]
+  },
+  {
+    "text": "Approximately 99.9% of human DNA sequences are identical across individuals, a genetic consensus that underscores the biological insignificance of racial differences.",
+    "primary": 1,
+    "labels": [0,1,0,0,0]
+  },
+  {
+    "text": "The core features of blockchain—decentralization, immutability, and consensus mechanisms—have reshaped my understanding of how 'trust' is constructed in digital society.",
+    "primary": 1,
+    "labels": [0,1,0,0,1]
+  },
+  {
+    "text": "The Riemann Hypothesis asserts that the real part of every nontrivial zero equals 1/2; although unproven, it has served as the conditional foundation for over a thousand mathematical propositions.",
+    "primary": 1,
+    "labels": [0,1,0,0,0]
+  },
+  {
+    "text": "The Chinese idiom 'a narrow strip of water like a sash' literally refers to a body of water as narrow as a sash, and metaphorically signifies neighboring countries that are geographically close and bound by deep friendship—illustrating the systematic nature of semantic extension.",
+    "primary": 1,
+    "labels": [0,1,0,0,0]
+  },
+  {
+    "text": "Within a black hole's event horizon, the escape velocity exceeds the speed of light; thus, not even light can escape—a conclusion rigorously derived from solutions to the field equations of general relativity.",
+    "primary": 1,
+    "labels": [0,1,0,0,0]
+  },
+  {
+    "text": "Article 33 of the Constitution of the People's Republic of China stipulates, 'All persons holding the nationality of the People's Republic of China are citizens of the People's Republic of China,' which serves as the statutory foundation for defining citizenship.",
+    "primary": 1,
+    "labels": [0,1,0,0,0]
+  },
+  {
+    "text": "The sum of the interior angles of a triangle is always equal to 180 degrees, a fundamental theorem of Euclidean plane geometry.",
+    "primary": 1,
+    "labels": [0,1,0,0,0]
+  },
+  {
+    "text": "Inflation is a monetary phenomenon characterized by a sustained and widespread increase in the overall price level within an economy.",
+    "primary": 1,
+    "labels": [0,1,0,0,0]
+  },
+  {
+    "text": "I have learned the correct procedure for washing fruits: soak them first, then rinse them, which helps remove over 90% of pesticide residues—this has made me realize the importance of food safety details.",
+    "primary": 1,
+    "labels": [0,1,1,0,1]
+  },
+  {
+    "text": "Having learned that the speed of sound in air is approximately 340 meters per second, one can reflect on why lightning is seen before thunder is heard.",
+    "primary": 1,
+    "labels": [0,1,0,0,1]
+  },
+  {
+    "text": "Hydrogen's atomic number in the periodic table is 1, and it has only one electron outside its nucleus.",
+    "primary": 1,
+    "labels": [0,1,0,0,0]
+  },
+  {
+    "text": "The correct steps for brewing coffee are grinding the beans first and then extracting them; the roast level of coffee beans, which determines flavor, is fundamental coffee knowledge.",
+    "primary": 1,
+    "labels": [0,1,1,0,0]
+  },
+  {
+    "text": "Learning that the giant panda's primary food is arrow bamboo—and that it consumes 12 to 38 kilograms of it daily—makes me find the giant panda both adorable and unique.",
+    "primary": 1,
+    "labels": [0,1,0,1,0]
+  },
+  {
+    "text": "After studying the theory of market supply and demand relationships, I concluded that the fundamental cause of price fluctuations is an imbalance between supply and demand.",
+    "primary": 1,
+    "labels": [0,1,0,0,1]
+  },
+  {
+    "text": "During lunch break, I took a walk around the playground and memorized the first 10 digits of pi—3.1415926535—and was deeply impressed by the rigor of mathematics.",
+    "primary": 1,
+    "labels": [1,1,0,1,1]
+  },
+  {
+    "text": "The solar system has eight planets, ordered by increasing distance from the Sun: Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, and Neptune.",
+    "primary": 1,
+    "labels": [0,1,0,0,0]
+  },
+  {
+    "text": "The summation function in Excel is SUM(). To use it, select a cell and enter =SUM(range). This is a fundamental concept in office software.",
+    "primary": 1,
+    "labels": [0,1,1,0,0]
+  },
+  {
+    "text": "Learning that the blue whale is the largest animal on Earth—reaching up to 33 meters in length and weighing approximately 181 tons—sparked my curiosity about marine life.",
+    "primary": 1,
+    "labels": [0,1,0,1,0]
+  },
+  {
+    "text": "After studying the SWOT analysis model, I concluded that formulating a corporate strategy requires a comprehensive consideration of strengths, weaknesses, opportunities, and threats.",
+    "primary": 1,
+    "labels": [0,1,0,0,1]
+  },
+  {
+    "text": "I have learned the correct toothbrushing technique: the Bass method requires brushing the gingival sulcus at a 45-degree angle. Knowing that proper brushing can reduce the risk of periodontal disease by 80% has made me pay closer attention to the details of oral care.",
+    "primary": 1,
+    "labels": [0,1,1,0,1]
+  },
+  {
+    "text": "Now that we know gold’s melting point is 1,064°C, we can reflect on the physical property advantages that make gold a precious metal.",
+    "primary": 1,
+    "labels": [0,1,0,0,1]
+  },
+  {
+    "text": "The basic strokes of Chinese characters include eight types: dot, horizontal stroke, vertical stroke, left-falling stroke, right-falling stroke, turning stroke, hook, and rising stroke.",
+    "primary": 1,
+    "labels": [0,1,0,0,0]
+  },
+  {
+    "text": "The steps for brewing pour-over coffee are preheating the cup, grinding the beans, blooming, and pouring water. Understanding the required grind size for different coffee beans is essential knowledge for coffee enthusiasts.",
+    "primary": 1,
+    "labels": [0,1,1,0,0]
+  },
+  {
+    "text": "Learning that the Amazon rainforest covers an area of approximately 5.5 million square kilometers gave me a profound appreciation for the importance of Earth's ecosystems.",
+    "primary": 1,
+    "labels": [0,1,0,1,1]
+  },
+  {
+    "text": "The CPR procedure is as follows: first, assess the person's consciousness and breathing; then call for help; finally, perform cycles of 30 chest compressions followed by 2 rescue breaths.",
+    "primary": 1,
+    "labels": [0,1,1,0,0]
+  },
+  {
+    "text": "When learning photography, you must first master the three elements of exposure: aperture controls depth of field, shutter speed freezes moments in time, and ISO controls sensitivity to light; then, select an appropriate combination based on the shooting scenario.",
+    "primary": 1,
+    "labels": [0,1,1,0,0]
+  },
+  {
+    "text": "Standard CPR procedure: First, ensure the scene is safe; then tap the person's shoulders to assess consciousness; call for help and dial 120; finally, perform cycles of 30 chest compressions followed by 2 rescue breaths.",
+    "primary": 1,
+    "labels": [0,1,1,0,0]
+  },
+  {
+    "text": "Memorized key knowledge about China's Four Great Classical Novels, correctly answered related questions in a knowledge quiz, and earned points for the team, filling me with pride and joy.",
+    "primary": 1,
+    "labels": [1,1,0,1,1]
+  },
+  {
+    "text": "The yogurt-making process involves heating milk to 40–45°C, adding probiotics, and fermenting it at a constant temperature for 6–8 hours—this leverages the principle of anaerobic respiration by lactic acid bacteria. The yogurt I made has an excellent texture.",
+    "primary": 2,
+    "labels": [0,1,1,1,0]
+  },
+  {
+    "text": "I learned that common image masking methods in Photoshop include the Lasso Tool, Pen Tool, and Channel Masking. I used the Pen Tool to mask the product image, achieving a very clear result.",
+    "primary": 2,
+    "labels": [1,1,1,1,0]
+  },
+  {
+    "text": "I have mastered the standard clothing-folding procedure: first lay the garment flat, then fold it in half. I now understand that proper storage can save 30% of closet space, which has made me realize the importance of organization.",
+    "primary": 2,
+    "labels": [0,1,1,0,1]
+  },
+  {
+    "text": "When making dumplings, first roll out the dough wrappers and then fill them; pinch the edges tightly to prevent the filling from leaking out during boiling.",
+    "primary": 2,
+    "labels": [0,0,1,0,0]
+  },
+  {
+    "text": "After logging into the bank’s mobile app, I sequentially tapped ‘Transfer’ → ‘Enter Recipient’ → ‘Verify Amount’ → ‘Fingerprint Confirmation’—the entire process took less than 90 seconds, and I suddenly realized that digital processes are quietly reshaping the way trust is established.",
+    "primary": 2,
+    "labels": [0,1,1,0,1]
+  },
+  {
+    "text": "Assembling an IKEA bookshelf requires tightening the screws in the sequence shown in the diagram: A1 → B3 → C7. The hesitation I experienced at step three made me realize that clear procedural steps depend on precise symbolic representation.",
+    "primary": 2,
+    "labels": [0,1,1,0,1]
+  },
+  {
+    "text": "Three essential steps before debugging Python code: read the error message → locate the line number → check indentation and parentheses. After fixing an issue once, it suddenly dawned on me: a rigorous process is the invisible guardrail for free creation.",
+    "primary": 2,
+    "labels": [0,1,1,1,1]
+  },
+  {
+    "text": "When editing short videos, I strictly follow the five-step workflow of 'rough cut → fine cut → music scoring → color grading → export.' After my final video received praise, I realized that this workflow is not a constraint but rather a track that helps turn inspiration into reality.",
+    "primary": 2,
+    "labels": [0,1,1,1,1]
+  },
+  {
+    "text": "Making coffee using the cold brew method: a 1:8 coffee-to-water ratio, steeped at room temperature for 12 hours, then slowly filtered for 45 minutes—when that first rich, velvety sip glides across my tongue, I grasp the value of time as a silent, essential step in the process.",
+    "primary": 2,
+    "labels": [0,1,1,1,1]
+  },
+  {
+    "text": "When repairing a bicycle tire, I first pry off the tire, locate the leak, sand the area with sandpaper, apply glue, attach the patch, and inflate to test. After succeeding on the fifth attempt, I learned to break down failure into iterative, micro-level steps.",
+    "primary": 2,
+    "labels": [1,0,1,1,1]
+  },
+  {
+    "text": "Pour-over coffee is prepared using a three-stage pouring technique: 30 g of water for a 30-second bloom, followed by two evenly spaced, circular pours of 100 g each; the sound of the flowing water blends with the aroma, allowing me to experience the Zen-like focus inherent in repetition.",
+    "primary": 2,
+    "labels": [1,0,1,1,1]
+  },
+  {
+    "text": "Baking chiffon cake requires strict adherence to scientific procedures: 'whisk egg whites until stiff peaks form,' 'fold the batter no more than 20 times,' and 'tap the mold and invert the cake immediately after baking.' After one collapse, I had an epiphany: scientific processes allow no romantic compromises.",
+    "primary": 2,
+    "labels": [0,1,1,1,1]
+  },
+  {
+    "text": "Preheat the oven to 180°C, arrange the marinated chicken wings in a single layer on a baking tray, and bake them on the middle rack for 25 minutes, flipping halfway through—this taught me the crucial role of patient waiting in enhancing flavor.",
+    "primary": 2,
+    "labels": [0,1,1,0,1]
+  },
+  {
+    "text": "After logging into the bank’s mobile app, I sequentially tapped ‘Transfer’ → ‘Enter Recipient’ → ‘Verify Amount’ → ‘Fingerprint Authentication’; the entire process took less than 90 seconds, and I suddenly realized that digital processes are quietly reshaping the way trust is established.",
+    "primary": 2,
+    "labels": [1,0,1,0,1]
+  },
+  {
+    "text": "Warming the teacup first, adding the tea leaves, pouring in water at 85°C, steeping for 90 seconds, and then decanting the tea—this sequence has become second nature, and each time the warm, fragrant steam rises, it evokes the warmth of my grandmother teaching me.",
+    "primary": 2,
+    "labels": [1,0,1,1,1]
+  },
+  {
+    "text": "Before receiving the flu vaccine, individuals must sign an informed consent form, register their information, expose their upper arm, and press a cotton swab against the injection site for three minutes; the entire process is quiet and orderly, giving me a sense of the precise collaborative logic underpinning public health.",
+    "primary": 2,
+    "labels": [1,1,1,1,1]
+  },
+  {
+    "text": "Handling customer complaints follows a five-step process: 'listen without interruption → empathize to demonstrate understanding → verify facts → provide solutions → follow up to close the loop.' After successfully retaining a churned user on one occasion, I realized that the process itself embodies the warmth of service.",
+    "primary": 2,
+    "labels": [1,1,1,1,1]
+  },
+  {
+    "text": "To practice calligraphy, begin by copying the character 'Yong' from the 'Orchid Pavilion Preface'—dot, horizontal stroke, vertical stroke, hook, turn, lift, and捺 (na); repeat eight times daily. On the seventh day, the brush tip suddenly flows naturally—the muscle memory is, in fact, a philosophical note written by the body.",
+    "primary": 2,
+    "labels": [0,1,1,0,1]
+  },
+  {
+    "text": "When I was a child, I watched my mother make dumplings; she taught me to hold the dough wrapper in my left hand and place the filling with my right hand, then fold it in half and pinch pleats along the edges—when boiled, they looked as beautiful as ingots.",
+    "primary": 2,
+    "labels": [1,0,1,1,1]
+  },
+  {
+    "text": "The mnemonic for using a fire extinguisher is 'Lift, Pull, Grip, Squeeze': lift the extinguisher, pull the safety pin, grip the nozzle, and squeeze the handle to discharge the agent at the base of the flames.",
+    "primary": 2,
+    "labels": [0,1,1,0,0]
+  },
+  {
+    "text": "When baking a chocolate cake, first beat the butter and sugar until light and fluffy, then gradually add the egg mixture while stirring until well combined, and finally sift in the low-gluten flour and cocoa powder and gently fold until evenly mixed.",
+    "primary": 2,
+    "labels": [0,0,1,0,0]
+  },
+  {
+    "text": "Yesterday, I made tiramisu for the first time following a recipe—strictly separating egg yolks and whites, whipping mascarpone cheese, mixing in coffee liquid, and layering the components. The finished dessert amazed my entire family.",
+    "primary": 2,
+    "labels": [1,1,1,1,1]
+  },
+  {
+    "text": "When changing the engine oil, first warm up the engine to allow the oil to flow, then loosen the drain plug to drain the old oil, replace the oil filter, and finally tighten the drain plug to the specified torque and add new oil.",
+    "primary": 2,
+    "labels": [0,0,1,0,0]
+  },
+  {
+    "text": "Yesterday, I photographed the sunset: first, I lowered the ISO to ensure image quality; second, I used a small aperture to increase depth of field; and finally, I employed exposure bracketing to preserve details—resulting in photos I was especially pleased with.",
+    "primary": 2,
+    "labels": [1,1,1,1,1]
+  },
+  {
+    "text": "While attending first-aid training, I repeatedly practiced chest compression depth and frequency on a manikin; the moment I passed the assessment and received my certification, I felt especially reassured.",
+    "primary": 2,
+    "labels": [1,1,1,1,1]
+  },
+  {
+    "text": "Making handmade soap requires precise control of the ratio of sodium hydroxide to water; the oil-alkali mixture must be maintained at approximately 40°C during blending, and stirring must continue until the mixture reaches a thick, viscous consistency before pouring it into molds.",
+    "primary": 2,
+    "labels": [0,1,1,0,0]
+  },
+  {
+    "text": "Steps for assembling a simple bookshelf: First, count the panels and accessories, identify each component by referring to the instruction manual, secure the side panels to the shelves using a screwdriver, and finally install the back panel and anti-slip pads to ensure overall stability.",
+    "primary": 2,
+    "labels": [0,0,1,0,0]
+  },
+  {
+    "text": "When brewing green tea, first cool the boiling water to about 80°C, then slowly pour it along the side of the cup to avoid scalding the tender leaves.",
+    "primary": 2,
+    "labels": [0,1,1,0,0]
+  },
+  {
+    "text": "Brewing pour-over coffee involves several key steps: folding the filter paper, rinsing the filter paper, grinding the coffee beans, blooming, and pouring water—each step influencing the final flavor.",
+    "primary": 2,
+    "labels": [0,1,1,0,0]
+  },
+  {
+    "text": "During subway security checks, I automatically remove my laptop, unbuckle my belt, and raise both arms to cooperate with the scanning process—a routine that now requires no conscious thought, yet prompts me to reflect on the security pact underlying standardized procedures.",
+    "primary": 2,
+    "labels": [0,0,1,0,1]
+  },
+  {
+    "text": "Handling customer complaints follows a five-step process: 'listen without interruption → empathize to demonstrate understanding → verify facts → provide solutions → follow up to close the loop.' After successfully retaining a churned user on one occasion, I realized that the process itself embodies the warmth of service.",
+    "primary": 2,
+    "labels": [0,1,1,1,1]
+  },
+  {
+    "text": "When installing a Linux system, first create a bootable USB drive, enter the BIOS to set the USB drive as the boot device, then partition and format the disk, and finally complete the system installation and configuration following the on-screen wizard.",
+    "primary": 2,
+    "labels": [0,0,1,0,0]
+  },
+  {
+    "text": "Key steps for making sushi: cool the sushi rice by mixing in sushi vinegar; leave a border when laying out the nori seaweed; press firmly with a bamboo mat while rolling; and moisten the knife with water before cutting.",
+    "primary": 2,
+    "labels": [0,0,1,0,0]
+  },
+  {
+    "text": "Learning the breaststroke requires a step-by-step approach: first practice the kicking motion at the poolside, then use a kickboard to practice breathing, and finally coordinate arm strokes with leg kicks to form a complete stroke cycle.",
+    "primary": 2,
+    "labels": [0,0,1,0,0]
+  },
+  {
+    "text": "Steps to remove a watermark in Photoshop: First, select the watermark area using the Lasso Tool; then apply Content-Aware Fill; finally, use the Clone Stamp Tool to refine the edges.",
+    "primary": 2,
+    "labels": [0,0,1,0,0]
+  },
+  {
+    "text": "The correct method for seasoning a steak: First, pat the surface dry with kitchen paper, then season both sides generously with coarse salt and black pepper. Rub the steak with olive oil and let it rest at room temperature for 20 minutes before pan-searing.",
+    "primary": 2,
+    "labels": [0,0,1,0,0]
+  },
+  {
+    "text": "Basic website setup process: First, purchase a domain name and a server, then point the domain name to the server's IP address, install the web environment, and finally upload and configure the program files.",
+    "primary": 2,
+    "labels": [0,1,1,0,0]
+  },
+  {
+    "text": "Key steps for making sour pickled cabbage fish: Slice the fish fillets evenly thin, marinate them with egg white and starch, stir-fry the sour pickled cabbage until fragrant, then add broth and bring to a boil; finally, add the fish fillets and cook just until they change color, then immediately remove from heat.",
+    "primary": 2,
+    "labels": [0,0,1,0,0]
+  },
+  {
+    "text": "Steps for learning calligraphy: Begin with practicing basic strokes and mastering the central-brush technique, then copy standard script models to learn character structure, and finally practice running script’s connected strokes after gaining proficiency.",
+    "primary": 2,
+    "labels": [0,0,1,0,0]
+  },
+  {
+    "text": "Steps for bathing a newborn: First, adjust the water temperature to around 38°C; then, support the baby’s head and neck with your hand; wash the eyes and face first, followed by the skin folds of the body, and finally the back.",
+    "primary": 2,
+    "labels": [0,0,1,0,0]
+  },
+  {
+    "text": "The proper pour-over coffee brewing process: First, fold the filter paper and rinse it with hot water. Then, add the coffee grounds and level them. Pour water for the initial bloom and let it steep for 30 seconds, followed by two separate circular pours.",
+    "primary": 2,
+    "labels": [0,0,1,0,0]
+  },
+  {
+    "text": "Steps to create an Excel PivotTable: First, select the data source; then insert a PivotTable; next, drag fields into the Rows, Columns, and Values areas; finally, adjust the formatting and refresh the data.",
+    "primary": 2,
+    "labels": [0,0,1,0,0]
+  },
+  {
+    "text": "Steps to make homemade yogurt: Heat milk to about 40°C, add yogurt starter powder and stir thoroughly, then ferment at a constant temperature in a yogurt maker for 8–10 hours, and finally refrigerate to halt fermentation.",
+    "primary": 2,
+    "labels": [0,0,1,0,0]
+  },
+  {
+    "text": "Steps to learn the ukulele: First, learn the note names of the four strings; then practice the C major scale; next, learn chord fingerings; and finally, practice simple songs with singing and playing.",
+    "primary": 2,
+    "labels": [0,0,1,0,0]
+  },
+  {
+    "text": "Steps for painting interior walls with latex paint: First, remove the old wall coating; then apply two coats of putty to level the surface; sand the surface smooth; apply one coat of primer; and finally apply two coats of topcoat paint.",
+    "primary": 2,
+    "labels": [0,0,1,0,0]
+  },
+  {
+    "text": "How to make jam: Cut the fruit into pieces, mix with sugar, and let it marinate until juice is released. Simmer gently over low heat while stirring continuously until thickened; when a drop of the mixture is placed in cold water and does not disperse, it is ready to be bottled.",
+    "primary": 2,
+    "labels": [0,0,1,0,0]
+  },
+  {
+    "text": "Preheat the oven to 180°C. Arrange the marinated chicken wings in a single layer on a baking tray, bake for 25 minutes, then flip and bake for another 20 minutes—the aroma reminds me of my grandmother’s kitchen.",
+    "primary": 2,
+    "labels": [1,1,1,1,0]
+  },
+  {
+    "text": "After logging into the bank's mobile app, I sequentially tapped 'Transfer' → 'Enter Account Number' → 'Confirm Amount' → 'Fingerprint Verification.' I felt a slight nervousness at first, but gradually grew more confident.",
+    "primary": 2,
+    "labels": [0,0,1,1,1]
+  },
+  {
+    "text": "The steps for repotting a pothos plant are: gently tapping the old pot to loosen the soil, trimming away any rotten roots, adding fresh soil to the new pot, planting the pothos and pressing the soil firmly around it, and thoroughly watering it to settle the roots. Watching the new leaves unfurl, I came to appreciate the value of patience.",
+    "primary": 2,
+    "labels": [0,0,1,1,1]
+  },
+  {
+    "text": "To brew pour-over coffee, first preheat the brewing vessel, then pour 92°C water over the grounds, allow a 30-second bloom, and finally slowly pour water in concentric circles until reaching 300 ml; the rising aroma evokes a sense of morning tranquility.",
+    "primary": 2,
+    "labels": [0,1,1,1,0]
+  },
+  {
+    "text": "When organizing a project using mind mapping, I first write the central theme, then add keywords in three levels of branches, and finally use colors to indicate priority—this process helps me identify my own blind spots in thinking more clearly.",
+    "primary": 2,
+    "labels": [0,1,1,0,1]
+  },
+  {
+    "text": "While cycling, I leaned my body forward, held the handlebars lightly with both hands, and kept my eyes focused on a point 10 meters ahead. After successfully riding independently for the first time, my heart raced with excitement.",
+    "primary": 2,
+    "labels": [1,0,1,1,1]
+  },
+  {
+    "text": "Repairing a smartphone screen requires first powering off the device, heating the frame to soften the adhesive, using a suction cup to lift the front panel, disconnecting the flex cables, replacing the screen, and reassembling the device—each step deepens my appreciation for precision manufacturing.",
+    "primary": 2,
+    "labels": [0,1,1,0,1]
+  },
+  {
+    "text": "When installing the bookshelf, first mark and drill holes, then install expansion screws, secure the frame, and finally slot in the shelves and level them; as I tightened the last screw, I felt a solid sense of accomplishment.",
+    "primary": 2,
+    "labels": [0,0,1,1,1]
+  },
+  {
+    "text": "Preheat the oven to 180°C, arrange the marinated chicken wings in a single layer on a baking tray, bake for 25 minutes, then flip and bake for another 15 minutes—this process taught me that patience is key to developing flavor.",
+    "primary": 2,
+    "labels": [0,0,1,0,1]
+  },
+  {
+    "text": "Clean your coffee maker using the five-step method: power off → remove the filter mesh → run a white vinegar cycle → rinse with clean water → air-dry and reassemble. After each cleaning, the machine grows quieter, and I gradually come to appreciate the sense of security that order brings.",
+    "primary": 2,
+    "labels": [0,0,1,1,1]
+  },
+  {
+    "text": "When changing a baby's diaper, first lay down a waterproof changing pad, remove the soiled diaper, wipe the baby's bottom with a wet wipe from front to back, apply diaper rash cream, and then put on a fresh diaper—gentler, more confident movements help the baby relax and strengthen my confidence in my caregiving abilities.",
+    "primary": 2,
+    "labels": [0,0,1,1,1]
+  },
+  {
+    "text": "Standard steps for repairing a bicycle chain: clean → inspect for wear → remove the chain → align the pins → press in → lubricate → test shifting; at the moment of completion, the chain rotates smoothly, as if reassembling itself from scattered pieces.",
+    "primary": 2,
+    "labels": [0,1,1,1,1]
+  },
+  {
+    "text": "Six steps for brewing pour-over coffee: grind the beans to a medium-fine consistency → preheat the brewer → pour water to saturate the grounds and let them bloom for 30 seconds → pour water in stages → control the flow rate → time the entire brew for 2 minutes and 30 seconds; the sound of flowing water blends with the aroma, and suddenly time takes on a tangible form.",
+    "primary": 2,
+    "labels": [0,0,1,1,0]
+  },
+  {
+    "text": "CPR procedure: assess consciousness → call for help → locate the compression site → interlock hands → compress vertically 5–6 cm → at a rate of 100–120 compressions per minute → coordinate with rescue breaths; on the thirtieth compression, I heard my heartbeat synchronize with the metronome.",
+    "primary": 2,
+    "labels": [0,1,1,0,0]
+  },
+  {
+    "text": "A Four-Step Method for Organizing Digital Folders: Clear your desktop → Create first-level directories by project → Set up second-level subfolders by date or type → Batch rename files with prefixes. As the navigation bar becomes clear, anxiety quietly recedes.",
+    "primary": 2,
+    "labels": [0,0,1,1,1]
+  },
+  {
+    "text": "Repotting pothos: Gently tap the pot's sides to loosen the soil → trim off black, rotten roots → place a layer of clay pebbles at the bottom of the new pot → fill with nutrient-rich soil → plant and firm the soil → water thoroughly to settle the roots. New leaves unfurl the very next day, as if life is responding to the rhythm of being treated with care.",
+    "primary": 2,
+    "labels": [0,0,1,1,1]
+  },
+  {
+    "text": "Use mind maps to organize the paper's structure: central topic → main branches (arguments) → sub-branches (evidence) → icons indicating credibility → colors distinguishing logical relationships; when a chaotic train of thought suddenly crystallizes into a clear structure, I experience an intellectual lightness.",
+    "primary": 2,
+    "labels": [0,1,1,1,1]
+  },
+  {
+    "text": "The cold brew coffee process: coarsely grind coffee beans → steep in cold water at a 1:8 coffee-to-water ratio → refrigerate for 12 hours → slowly filter → store refrigerated; the waiting itself becomes a ritual, and the pleasant aftertaste only truly emerges once the bitterness has settled.",
+    "primary": 2,
+    "labels": [0,1,1,1,1]
+  },
+  {
+    "text": "Steps to install a home NAS: select hard drives → assemble the system → connect the power and network cables → access the initial IP address via a web browser → set up the administrator account → create shared folders → configure automatic backup; the first time I remotely retrieved photos from three years ago, I touched the warm chassis—like touching memory made tangible.",
+    "primary": 2,
+    "labels": [1,1,1,1,1]
+  },
+  {
+    "text": "The Five-Step Method for Sewing on a Button: Select thread and thread the needle, then tie a knot → Start stitching from the fabric's underside → Insert the needle through the buttonhole → Wrap the thread around the shank four times → Finish with a knot and trim the thread on the underside. As the needle tip pierced through the fabric, I suddenly understood how 'small, consistent efforts' can re-anchor a broken point.",
+    "primary": 2,
+    "labels": [0,1,1,0,1]
+  },
+  {
+    "text": "Wi-Fi signal troubleshooting process for routers: restart the device → check for channel congestion → switch to the 5 GHz band → adjust antenna angles → use an app to run speed tests and generate a heatmap. When full-strength signal coverage reaches the corner of the study, loneliness seems to quietly expand as well.",
+    "primary": 2,
+    "labels": [0,1,1,1,1]
+  },
+  {
+    "text": "The precise process for baking chiffon cake: separate egg whites from yolks → add sugar in three batches while whipping the egg whites → mix the yolk mixture until smooth → fold the two mixtures together using the cutting-and-folding method → tap the mold to remove air bubbles → bake in a water bath at 150°C for 60 minutes → invert and cool. The moment the cake is unmolded, it springs up light and airy like a cloud—I hold my breath. It turns out that respecting each step is respecting possibility itself.",
+    "primary": 2,
+    "labels": [0,0,1,1,1]
+  },
+  {
+    "text": "A three-step method for teaching seniors how to use video calls: (1) affix icon-shaped sticky notes, (2) demonstrate the 'green phone' button, (3) accompany and practice until three consecutive successful connections are made—then leave behind a hand-drawn step-by-step instruction card. The sparkle in my grandmother’s eyes the first time she clearly saw my face made every repeated explanation worthwhile.",
+    "primary": 2,
+    "labels": [1,1,1,1,1]
+  },
+  {
+    "text": "Cleaning process for range hood filters: disassemble → soak in alkaline water for 20 minutes → gently scrub with a soft brush → rinse thoroughly with clean water → air-dry → reinstall in original position; once the grease and grime are removed, the metal’s natural luster reappears—like life revealing its true self after shedding its burdens.",
+    "primary": 2,
+    "labels": [0,0,1,0,1]
+  },
+  {
+    "text": "Manage your writing with the Pomodoro Technique: 25 minutes of focused work → 5 minutes of complete break away from your seat → record any interruptions → take a longer 15-minute break after every four Pomodoros; by the time the seventh Pomodoro ends, the document has surpassed 1,000 characters, and my attention feels recalibrated.",
+    "primary": 2,
+    "labels": [0,1,1,0,1]
+  },
+  {
+    "text": "IKEA bookshelf assembly process: Check parts → Arrange parts in diagram order → Erect side panels first → Insert horizontal shelves → Tighten eccentric connectors → Reinforce each shelf level by level → Secure to the wall; when the final screw is tightened, the empty corner of the wall finally gains supportive weight.",
+    "primary": 2,
+    "labels": [0,0,1,1,0]
+  },
+  {
+    "text": "SOP for Handling Customer Complaints: Listen without interrupting → Paraphrase to confirm understanding → Apologize while focusing on the customer’s feelings → Offer two alternative solutions → Follow up and close the loop within 24 hours. After hanging up, I took a sip of water; my throat felt slightly bitter, but the knot of anxiety in my chest began to loosen.",
+    "primary": 2,
+    "labels": [0,1,1,1,1]
+  },
+  {
+    "text": "Mint cultivation process: Choose a well-ventilated pot → Mix garden soil with perlite → Take 10-cm softwood cuttings → Water thoroughly → Place in an area with indirect light → New buds appear after five days → Prune weekly to encourage branching; when the first new leaf glistens with a velvety sheen, I suddenly understood that 'cultivation' is not about control, but about patiently providing the right conditions.",
+    "primary": 2,
+    "labels": [0,1,1,1,1]
+  },
+  {
+    "text": "Organize reading notes using the double-linked note-taking method: extract core sentences → create independent cards → link concepts with [[ ]] → annotate source page numbers → review weekly and generate relationship maps; when concepts such as 'alienation' and 'mono no aware' automatically connect within the interface, knowledge is no longer isolated.",
+    "primary": 2,
+    "labels": [0,0,1,0,1]
+  },
+  {
+    "text": "Procedure for replacing laptop thermal paste: Remove the back cover → Clean off the old paste → Wipe the surface thoroughly with an alcohol-soaked cotton swab → Apply a new pea-sized dot of thermal paste → Spread it into a thin, even layer → Reassemble and firmly secure all components → Test temperatures under full load. Fan noise decreased by 3 dB, making the world quieter—and thoughts, paradoxically, louder.",
+    "primary": 2,
+    "labels": [0,0,1,1,1]
+  },
+  {
+    "text": "Git local repository setup process: mkdir project → cd into it → git init → touch README → git add . → git commit -m 'init'; when the terminal displays the prompt for the 'master' branch, I feel as if I’ve just received a ticket to the collaborative universe.",
+    "primary": 2,
+    "labels": [0,1,1,1,0]
+  },
+  {
+    "text": "Ironing a silk shirt: Turn inside out and use low heat → Place a cotton cloth over it → Gently press with steam → Pay special attention to the collar, cuffs, and sleeves → Hang to cool in the air; as the fabric regains its soft, flowing drape, warmth lingers on my fingertips—like smoothing away more than just wrinkles.",
+    "primary": 2,
+    "labels": [0,1,1,1,1]
+  },
+  {
+    "text": "Set quarterly goals using OKRs: Objectives (O) must be inspiring; Key Results (KR) must be quantifiable; each KR must be linked to a data source; progress is reviewed biweekly and calibrated monthly. When 'improving user retention' becomes three specific percentage targets, vague anxiety transforms into tangible, step-by-step milestones.",
+    "primary": 2,
+    "labels": [0,1,1,0,1]
+  },
+  {
+    "text": "Restoration process for vintage mechanical watches: open the case back → photograph and record the hairspring’s position → ultrasonic cleaning → adjust the balance wheel under a magnifying glass → calibrate daily rate to within ±5 seconds → water-resistance testing; when the second hand resumes evenly sweeping, I hear the faint, reassuring whisper of time tamed anew.",
+    "primary": 2,
+    "labels": [0,0,1,1,0]
+  },
+  {
+    "text": "Procedure for creating a household emergency kit checklist: List 72-hour survival essentials (water, food, medicine, flashlight) → pack items per person → label transparent bags → check expiration dates monthly → store in an easily accessible location; after finishing the organization, I hugged my child—turns out the most rigid procedure is wrapped around the softest concern.",
+    "primary": 2,
+    "labels": [0,0,1,1,1]
+  },
+  {
+    "text": "Color mixing and painting using the color wheel principle: First, establish the dominant color → then add adjacent colors for support → use complementary colors as accents → balance saturation with muted tones → conduct the final review under natural light. When the painting suddenly 'comes alive,' I realize that rules are not cages, but runways that allow intuition to take flight.",
+    "primary": 2,
+    "labels": [0,1,1,1,1]
+  },
+  {
+    "text": "Pickled Crisp Radish Recipe: Cut white radish into strips → salt for 2 hours → squeeze out excess water → cover with sweet-and-sour sauce (equal parts sugar, vinegar, and water) → refrigerate for 4 hours → drain sauce and pack into jars; the first bite delivers a burst of sweet-and-sour crispness—time seems compressed and then released, like life’s candied reward for those who value order.",
+    "primary": 2,
+    "labels": [0,0,1,1,1]
+  },
+  {
+    "text": "Steps to set up a home reading nook: Choose a quiet corner → Install low-height bookshelves → Lay down a carpet and add cushions → Provide a warm-light floor lamp → Set up a borrowing logbook; the space acquires a soul’s topology the moment a child voluntarily brings over a second book.",
+    "primary": 2,
+    "labels": [0,0,1,1,1]
+  },
+  {
+    "text": "Learning new concepts using the Feynman technique: select a term → imagine teaching it to a middle school student → when you get stuck, revisit and review the material → simplify with analogies → draw diagrams and retell. When explaining 'entropy,' use the analogy of melting ice cream—and you’ll find yourself laughing out loud.",
+    "primary": 2,
+    "labels": [0,1,1,1,1]
+  },
+  {
+    "text": "Cleaning process for electric toothbrush heads: remove the brush head → rinse under running water → soak in toothbrush disinfectant solution for 5 minutes → rinse thoroughly with clean water → air-dry in a cool, well-ventilated area → replace monthly; watching the clean bristles gleam blue in the morning light, daily perseverance suddenly acquires a gentle radiance.",
+    "primary": 2,
+    "labels": [0,0,1,1,1]
+  },
+  {
+    "text": "Urban cycling route planning process: Enter start and end points → prioritize greenways → avoid construction zones → check gradient map → export GPX file to smartwatch → carry a power bank; as my wheels roll along tree-lined avenues, algorithms and the wind together pave my way.",
+    "primary": 2,
+    "labels": [0,1,1,0,0]
+  },
+  {
+    "text": "Take notes using the Cornell Note-Taking System: record key points in the right column → write cues in the left column → summarize the lesson in the bottom section after class → integrate notes weekly into a knowledge tree; when 'diminishing marginal utility' connects at the treetop with 'eating the third slice of cake,' economics suddenly gains a human touch.",
+    "primary": 2,
+    "labels": [0,1,1,1,1]
+  },
+  {
+    "text": "Microscope observation procedure for onion epidermis: locate the field of view under low magnification → adjust coarse focus → switch to high magnification → adjust fine focus → add iodine solution for staining → draw a cell diagram; when the cell walls appear sharp and crisp in the eyepiece, the minuscule and the monumental achieve harmony within my pupils.",
+    "primary": 2,
+    "labels": [0,1,1,1,1]
+  },
+  {
+    "text": "Kintsugi repair process for ceramic cups: clean the crack → mix raw lacquer → embed gold powder → air-dry in shade for 7 days → polish with sandpaper → nourish with mineral oil; the crack transforms into a winding golden line—I hold the cup and sip bitter tea, which leaves a sweet aftertaste—through this meticulous process, even imperfection can become a guide to light.",
+    "primary": 2,
+    "labels": [0,0,1,1,1]
+  },
+  {
+    "text": "Smart home lighting setup process: Install a Zigbee gateway → Pair individual lights → Define zones (e.g., living room, bedroom) → Create scene modes (e.g., entertaining, movie-watching, sleeping) → Integrate with door/window sensors; when curtains automatically close and lights gradually dim, technology finally learns to express thoughtfulness through silence.",
+    "primary": 2,
+    "labels": [0,1,1,0,1]
+  },
+  {
+    "text": "Reading academic literature using the SQ3R method: Survey (skim headings and figures) → Question (pose core questions to yourself) → Read (read closely with those questions in mind) → Recite (recite from memory without looking) → Review (reconstruct the logical flow within 24 hours). When you close the paper, the formulas no longer feel cold—they linger warmly, like a hand you’ve just shaken.",
+    "primary": 2,
+    "labels": [0,1,1,1,1]
+  },
+  {
+    "text": "Propagation process for succulents via beheading: select an etiolated stem → make a diagonal cut with a sharp knife → air-dry the wound for three days → plant shallowly in slightly moist soil → provide indirect light for care → new roots appear after two weeks; on the day tender buds emerge from the cut site, I suddenly realized: some farewells are life’s hidden preludes.",
+    "primary": 2,
+    "labels": [0,1,1,1,1]
+  },
+  {
+    "text": "Writing a Python web crawler requires first importing the 'requests' and 'BeautifulSoup' libraries, then sending a GET request, parsing the HTML, extracting a list of titles, and saving them as a CSV file—when it ran successfully, I couldn't help but smile.",
+    "primary": 2,
+    "labels": [1,1,1,1,1]
+  },
+  {
+    "text": "I learned to use a sewing machine to make simple fabric storage bags; seeing the finished products—both practical and beautiful—filled me with pride and satisfaction. Mastering the sewing machine’s stitching techniques is a fundamental skill in fabric crafting.",
+    "primary": 2,
+    "labels": [0,1,1,1,1]
+  },
+  {
+    "text": "I installed a dual-boot system on a colleague's computer. Encountered a boot issue while following the step-by-step instructions, resolved it after consulting reference materials, and successfully booted up—felt especially accomplished.",
+    "primary": 3,
+    "labels": [1,1,1,1,1]
+  },
+  {
+    "text": "After a month of practice, I was finally able to swim 50 meters continuously without stopping—my excitement was overwhelming the moment I surfaced.",
+    "primary": 3,
+    "labels": [1,0,1,1,1]
+  },
+  {
+    "text": "Tying a child's shoelaces using the 'bunny ears' method—looping, pinching the 'ears,' crossing through the hole, and pulling tight—when she completed it independently for the first time, my eyes welled up; I realized that passing on a skill is love made tangible.",
+    "primary": 3,
+    "labels": [1,1,1,1,1]
+  },
+  {
+    "text": "I used this method to perfectly remove the date watermark from a photo while editing it for a friend, and my friend’s look of delight upon seeing the final result gave me great satisfaction.",
+    "primary": 3,
+    "labels": [1,0,1,1,1]
+  },
+  {
+    "text": "Steaks marinated using this method turn out crispy on the outside and tender on the inside, with juices overflowing when sliced—my husband says they taste even better than those served at Western restaurants.",
+    "primary": 3,
+    "labels": [1,0,1,1,0]
+  },
+  {
+    "text": "After practicing calligraphy for three months, I created my first piece that truly satisfied me; gazing at the smooth, flowing strokes on the paper, I felt an extraordinary sense of calm and fulfillment.",
+    "primary": 3,
+    "labels": [1,0,1,1,1]
+  },
+  {
+    "text": "The first time I bathed my son, I carefully followed the nurse’s instructions; after finishing, I held him in my arms—fragrant and clean—and felt overwhelming happiness.",
+    "primary": 3,
+    "labels": [1,0,1,1,1]
+  },
+  {
+    "text": "When I heard the long-missed rain of my hometown, my heart warmed, and I suddenly understood that homesickness is not an abstract concept but rather the dampness and silence remembered by the body.",
+    "primary": 3,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "Flipping to a letter I wrote to my future self ten years ago, I read, 'I hope by then I no longer fear failure.' My fingertips tremble slightly and my eyes grow warm—turns out gentleness had already learned to forgive itself.",
+    "primary": 3,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "Standing on the threshold of the empty old house, the camphorwood chest exudes a faint, aged fragrance; a sudden pang stings my nostrils—turns out longing has weight, slowing even my breath.",
+    "primary": 3,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "After receiving the rejection email, I stared at the screen for three minutes, feeling a tightness in my chest; yet, as I closed the page, I distinctly heard an inner voice—soft but resolute—say, 'Revise it one more time.'",
+    "primary": 3,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "Coffee brewed using this method features distinct, layered flavors, and the sense of satisfaction from enjoying a great cup of coffee you’ve brewed yourself is indescribable.",
+    "primary": 3,
+    "labels": [0,0,1,1,1]
+  },
+  {
+    "text": "Using this method, we processed 3,000 sales records and generated the analytical report in just a few minutes—making me feel especially proud when my supervisor commended me.",
+    "primary": 3,
+    "labels": [1,0,1,1,1]
+  },
+  {
+    "text": "After practicing for a month, I can finally play and sing 'Twinkle Twinkle Little Star' all the way through—though it’s simple, I felt an extraordinary sense of accomplishment at that moment.",
+    "primary": 3,
+    "labels": [1,0,1,1,1]
+  },
+  {
+    "text": "I painted the entire living room myself, and although I was tired, I felt especially fulfilled seeing the walls refreshed and renewed.",
+    "primary": 3,
+    "labels": [1,0,1,1,1]
+  },
+  {
+    "text": "My son ate two large slices of bread spread with the strawberry jam made using this recipe, and I felt especially accomplished.",
+    "primary": 3,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "It was my first time attending a funeral, and the fear and sorrow surrounding death left me deeply unsettled for a long time.",
+    "primary": 3,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "Hearing the national anthem played abroad evokes such a profound sense of national pride that one is moved to tears.",
+    "primary": 3,
+    "labels": [0,0,0,1,1]
+  },
+  {
+    "text": "Watching a movie alone late at night, I burst into tears at the touching scenes—luckily, no one saw me.",
+    "primary": 3,
+    "labels": [1,0,0,1,0]
+  },
+  {
+    "text": "Seeing my own design turned into a physical product gives me such a strong sense of accomplishment that all the hard work is worth it.",
+    "primary": 3,
+    "labels": [0,0,0,1,1]
+  },
+  {
+    "text": "At 3 a.m., I took my feverish child to the hospital and felt more distressed watching the nurse insert the IV needle than if I myself were ill.",
+    "primary": 3,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "I received the long-awaited job offer and was so excited that I immediately called my mom—and ended up crying while talking to her.",
+    "primary": 3,
+    "labels": [1,0,0,1,0]
+  },
+  {
+    "text": "Seeing my parents young in old photographs, I suddenly realized they had grown old, and a pang of sadness welled up inside me.",
+    "primary": 3,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "Seeing a stray kitten on the street and wanting to adopt it, yet feeling powerless to do so—that sense of helplessness is deeply distressing.",
+    "primary": 3,
+    "labels": [0,0,0,1,1]
+  },
+  {
+    "text": "Learning that one is about to be laid off creates a feeling as if the sky has fallen, leaving one utterly overwhelmed.",
+    "primary": 3,
+    "labels": [0,0,0,1,0]
+  },
+  {
+    "text": "The pride and satisfaction of watching one's child learn to ride a bicycle are indescribable.",
+    "primary": 3,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "At dawn, I saw flocks of egrets flying over the lakeside; their pure white figures skimmed across the water’s surface, filling me with a sense of peace and beauty—and leading me to realize that the beauty of nature can heal the soul.",
+    "primary": 3,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "I learned how to make handmade soap to give as gifts to friends; seeing their smiles when they received the gifts made me feel happy and fulfilled. The saponification reaction principle behind handmade soap is a fundamental concept in chemistry.",
+    "primary": 3,
+    "labels": [1,1,1,1,1]
+  },
+  {
+    "text": "Learning about the demanding workload of medical staff and seeing their weary yet resolute figures, I feel both admiration and deep concern; the human body’s fatigue recovery cycle is an objective medical fact.",
+    "primary": 3,
+    "labels": [0,1,0,1,1]
+  },
+  {
+    "text": "This morning, I saw the vendor’s warm, cheerful smile at the vegetable market; after buying my groceries, I thanked him, and I felt both comforted and delighted—realizing that simple acts of kindness can make life more beautiful.",
+    "primary": 3,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "Receiving a wedding invitation from a friend I hadn’t been in touch with for many years was both a delightful surprise and a poignant moment.",
+    "primary": 3,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "Watching horror movies late at night left me too scared to go to the bathroom, and even the slightest sound made my heart race.",
+    "primary": 3,
+    "labels": [1,0,0,1,0]
+  },
+  {
+    "text": "The first time I bought gifts for my parents, seeing them so happy made me happier than receiving gifts myself.",
+    "primary": 3,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "Falling ill in a foreign land evokes an especially intense feeling of helplessness and homesickness.",
+    "primary": 3,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "Seeing the students I sponsor graduate brings a sense of fulfillment more precious than anything else.",
+    "primary": 3,
+    "labels": [0,0,0,1,1]
+  },
+  {
+    "text": "Seeing people affected by disasters in the news left me deeply sympathetic and sorrowful, and I couldn’t calm down for a long time.",
+    "primary": 3,
+    "labels": [0,0,0,1,1]
+  },
+  {
+    "text": "After my first successful parachute jump and safe landing, the joy of having narrowly escaped danger made me laugh and shout while hugging my instructor.",
+    "primary": 3,
+    "labels": [1,0,0,1,0]
+  },
+  {
+    "text": "I was so thrilled to receive a holiday greeting from the person I secretly admire that I could barely hold my phone steady.",
+    "primary": 3,
+    "labels": [1,0,0,1,0]
+  },
+  {
+    "text": "The pride of seeing your child complete homework independently for the first time surpasses everything else.",
+    "primary": 3,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "Watching a film about family bonds at the cinema, I couldn’t help but shed tears along with the audience around me when the touching scenes unfolded—my heart brimming with longing and warmth for my loved ones.",
+    "primary": 3,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "A carefully prepared birthday gift was lost in transit and failed to reach my friend on time, leaving me feeling guilty and disappointed; I could only prepare a new gift as an apology.",
+    "primary": 3,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "Seeing news reports of people in the disaster-stricken area helping one another—though complete strangers—I felt deep empathy and moved to tears, and donated money to the best of my ability.",
+    "primary": 3,
+    "labels": [0,0,0,1,1]
+  },
+  {
+    "text": "After practicing the dumpling-wrapping technique many times, I finally mastered it—my dumplings look beautiful and never break while boiling. During the New Year’s Eve dinner, my family praised my dumpling-wrapping skills, filling me with happiness.",
+    "primary": 3,
+    "labels": [1,0,1,1,1]
+  },
+  {
+    "text": "After experiencing the loss of loved ones, I finally understood that although some people are gone, their love remains in our hearts forever.",
+    "primary": 3,
+    "labels": [0,0,0,1,1]
+  },
+  {
+    "text": "Hearing the long-missed rain of my hometown, my heart warmed, and I suddenly understood why homesickness always feels strongest in silence.",
+    "primary": 3,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "The moment the operating room door opened, my palms were drenched in sweat and my heart pounded like a drum—not just from fear, but from a dual awareness of life’s fragility and resilience.",
+    "primary": 3,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "Receiving a birthday letter handwritten by an old friend, its pages slightly yellowed and the handwriting faintly trembling, I felt a lump in my throat and suddenly realized that sincerity never requires an immediate response.",
+    "primary": 3,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "Hearing my mother hum an off-key nursery rhyme, I felt a lump in my throat—the long-forgotten sense of security struck me more deeply than any comfort could.",
+    "primary": 3,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "Holding my father's cold hand at his funeral, sorrow surged over me, yet it was also in my tears that I truly understood for the first time that 'love is an unfinished farewell.'",
+    "primary": 3,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "The subway window glass reflected my weary face, overlapping with the tired reflection of a stranger—a girl sitting across from me; in that moment, loneliness suddenly felt warm.",
+    "primary": 3,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "The night my pet cat passed away, I held its little bed and cried until I lost my voice; the next day, however, I diligently researched resources on animal grief support—heartbreak can also inspire gentle, compassionate action.",
+    "primary": 3,
+    "labels": [1,1,0,1,1]
+  },
+  {
+    "text": "The first time I told my counselor, 'I'm actually very afraid,' my voice trembled—but the moment I finished speaking, a weight lifted from my shoulders. It turns out that revealing one's vulnerability is itself the starting point of strength.",
+    "primary": 3,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "I received an anonymous card from a student that read, 'You gave me the courage to raise my hand and speak up.' I froze, my fingertips trembling slightly—this feeling of being needed was unexpectedly warm and grounding.",
+    "primary": 3,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "After learning the compound interest formula, I realized that long-term, consistent saving can yield substantial returns—a key insight in financial literacy.",
+    "primary": 4,
+    "labels": [0,1,0,0,1]
+  },
+  {
+    "text": "The correct way to memorize the multiplication table is to repeatedly recite it row by row; after mastering this concept, my calculation speed improved significantly, and I also realized the importance of foundational learning.",
+    "primary": 4,
+    "labels": [0,1,1,0,1]
+  },
+  {
+    "text": "After studying the PDCA cycle theory, I concluded that work improvement must follow a closed-loop process comprising planning, execution, checking, and acting.",
+    "primary": 4,
+    "labels": [0,1,1,0,1]
+  },
+  {
+    "text": "I have completed a one-month morning reading plan, and the improvement in my language expression skills makes me feel proud and fulfilled.",
+    "primary": 4,
+    "labels": [0,0,0,1,1]
+  },
+  {
+    "text": "After experiencing a minor setback, I adjusted my mindset and set off again, feeling both more mature and more resolute—and realizing that setbacks are an essential part of growth.",
+    "primary": 4,
+    "labels": [0,0,0,1,1]
+  },
+  {
+    "text": "After arguing with a friend yesterday and then calmly reflecting on it, I realized that often what we argue about is not right or wrong, but rather our attitudes.",
+    "primary": 4,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "Looking at myself in the mirror, I suddenly realized that happiness is not a destination to be reached, but rather the ability to savor the present moment.",
+    "primary": 4,
+    "labels": [0,0,0,1,1]
+  },
+  {
+    "text": "After finishing the entire novel To Live, I deeply realized that the resilience of life often exceeds our imagination.",
+    "primary": 4,
+    "labels": [0,0,0,1,1]
+  },
+  {
+    "text": "This trip taught me that the most beautiful scenery is often not at the destination, but along the way there.",
+    "primary": 4,
+    "labels": [0,0,0,1,1]
+  },
+  {
+    "text": "After experiencing setbacks in my career, I reflected and realized that true growth lies in learning to find one's own rhythm amid uncertainty.",
+    "primary": 4,
+    "labels": [0,0,0,1,1]
+  },
+  {
+    "text": "A conversation with my child suddenly made me realize that we have been holding children to adult standards, forgetting that they are, after all, just children.",
+    "primary": 4,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "Watching my parents' hair gradually turn gray, I realized that companionship is not about how much time we spend together, but about the closeness of our hearts.",
+    "primary": 4,
+    "labels": [0,0,0,1,1]
+  },
+  {
+    "text": "After a breakup, I traveled alone and finally realized that some people enter our lives solely to teach us how to love ourselves better.",
+    "primary": 4,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "Looking back on a decade of professional life, I've realized that what's most precious isn't position or salary, but the camaraderie forged through shared struggles.",
+    "primary": 4,
+    "labels": [0,0,0,1,1]
+  },
+  {
+    "text": "After attending my classmates' reunion, I deeply realized that the value of life lies not in comparison but in whether one has become the person one truly wants to be.",
+    "primary": 4,
+    "labels": [0,0,0,1,1]
+  },
+  {
+    "text": "Through this family upheaval, I have realized that true love is not about control but about letting go, not about taking but about enabling.",
+    "primary": 4,
+    "labels": [0,0,0,1,1]
+  },
+  {
+    "text": "While sitting in silent meditation, I suddenly realized that inner peace does not come from the absence of worries, but from learning to coexist with them.",
+    "primary": 4,
+    "labels": [0,0,0,1,1]
+  },
+  {
+    "text": "After helping an elderly person find his way, his simple 'thank you' made me realize that kindness does not require grand gestures—only offering a helping hand when it is needed.",
+    "primary": 4,
+    "labels": [1,1,0,1,1]
+  },
+  {
+    "text": "Reading 'The Ordinary World' made me realize that even an ordinary life can embody extraordinary perseverance and passion.",
+    "primary": 4,
+    "labels": [0,1,0,1,1]
+  },
+  {
+    "text": "After my entrepreneurial venture failed, I reflected on the experience: failure is not an end result but a process—one that taught me more than success ever could.",
+    "primary": 4,
+    "labels": [0,0,0,1,1]
+  },
+  {
+    "text": "Watching my child learn to walk—falling down again and again, then getting back up—I realized that growth is inherently a process of continuous trial and error.",
+    "primary": 4,
+    "labels": [0,0,0,1,1]
+  },
+  {
+    "text": "Reuniting with an old friend I hadn’t seen in many years, I realized that true friendship remains unchanged by time and distance.",
+    "primary": 4,
+    "labels": [1,1,0,1,1]
+  },
+  {
+    "text": "Late at night, reflecting alone, I realized that many of my worries stem from caring too much about others' opinions and forgetting to listen to my own inner voice.",
+    "primary": 4,
+    "labels": [0,0,0,1,1]
+  },
+  {
+    "text": "Seeing the eager, book-hungry eyes of children in mountainous areas, I reflected on how much I have—and how often I fail to appreciate it.",
+    "primary": 4,
+    "labels": [0,0,0,1,1]
+  },
+  {
+    "text": "After experiencing this setback, I reflected that true courage is not the absence of fear, but moving forward despite it.",
+    "primary": 4,
+    "labels": [0,1,0,1,1]
+  },
+  {
+    "text": "Watching the sunset slowly descend, I suddenly realized that some things cannot be forced—letting them take their natural course often yields better results.",
+    "primary": 4,
+    "labels": [0,0,0,1,1]
+  },
+  {
+    "text": "After going through the adjustment period of marriage, I finally realized that love is not about finding a perfect person, but about learning to see an imperfect person through perfect eyes.",
+    "primary": 4,
+    "labels": [0,1,0,1,1]
+  },
+  {
+    "text": "My first experience as a volunteer taught me that giving brings greater happiness and fulfillment than receiving.",
+    "primary": 4,
+    "labels": [0,0,0,1,1]
+  },
+  {
+    "text": "Drawing on my repeated experience in crafting by hand, I have realized that patience and focus are essential to producing high-quality work, while mastery of processing techniques for different materials forms the foundational knowledge of handicrafts—this has taught me to approach tasks with calm and dedication.",
+    "primary": 4,
+    "labels": [0,1,1,1,1]
+  },
+  {
+    "text": "Last week, while reflecting on my spending habits during a trip, I realized that impulsive purchases accounted for too high a proportion of my spending; in contrast, the principle of rational spending and financial planning forms a foundational concept in economics.",
+    "primary": 4,
+    "labels": [1,1,0,1,1]
+  },
+  {
+    "text": "Reflecting on my emotional regulation during this period, I realized that exercise effectively alleviates anxiety—a realization that brought me relief—and I have therefore set a goal to exercise three times per week.",
+    "primary": 4,
+    "labels": [0,0,1,1,1]
+  },
+  {
+    "text": "Upon reflecting on the reasons for my poor performance in this exam, I realized that the issue lies in my review method—not in a weak foundation—and I will therefore switch to a framework-based review approach going forward.",
+    "primary": 4,
+    "labels": [0,0,1,0,1]
+  },
+  {
+    "text": "Yesterday, while reviewing my graduate entrance exam preparation days at the library, I realized that the phase in which I persisted with daily reflection was the most efficient and also gave me the greatest sense of accomplishment.",
+    "primary": 4,
+    "labels": [1,0,1,1,1]
+  },
+  {
+    "text": "Summarizing my repeated failures in growing plants, I realized that differing light requirements among plant species are the fundamental cause, and the principle of photosynthesis is an objective biological fact.",
+    "primary": 4,
+    "labels": [0,1,0,1,1]
+  },
+  {
+    "text": "Reflecting on my swimming lessons, I realized that overcoming fear and breaking down movements into smaller steps were key to mastering the skill—this led me to conclude that learning any skill requires a step-by-step, progressive approach.",
+    "primary": 4,
+    "labels": [0,1,1,1,1]
+  },
+  {
+    "text": "Reflecting on my patterns of interaction with family members, I realized that I lack patience in listening—a realization that left me feeling guilty and determined to spend more time with my family.",
+    "primary": 4,
+    "labels": [0,0,0,1,1]
+  },
+  {
+    "text": "This morning, while commuting, I reflected on my social interactions from last week and realized that sincere compliments can bring people closer together. This insight delighted me, and I plan to pay more attention to others' strengths.",
+    "primary": 4,
+    "labels": [0,1,0,1,1]
+  },
+  {
+    "text": "Last week, while reflecting on my exercise habits at the gym, I realized that blindly pursuing intensity actually increases the risk of injury, whereas the principle of progressive overload is an objective concept in exercise science.",
+    "primary": 4,
+    "labels": [1,1,0,1,1]
+  },
+  {
+    "text": "Reflecting on my reading habits over this period, I've realized that deep reading yields greater rewards than fragmented reading. This insight has brought me satisfaction and inspired me to set a goal of carefully reading one book each month.",
+    "primary": 4,
+    "labels": [0,0,0,1,1]
+  },
+  {
+    "text": "Reflecting on the failure of this entrepreneurial attempt, I realized that insufficient market research was the primary cause; moving forward, I must first validate demand before committing resources.",
+    "primary": 4,
+    "labels": [0,1,1,0,1]
+  },
+  {
+    "text": "Yesterday, while reflecting on my childhood growth experiences in the courtyard of my hometown, I realized that my elders’ words and actions had a profound influence on shaping my character.",
+    "primary": 4,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "After experiencing this career crisis, I reflected that professional networks and capabilities are the true moat.",
+    "primary": 4,
+    "labels": [0,0,0,1,1]
+  },
+  {
+    "text": "A conversation with my daughter made me realize that we always give our children the best without ever asking what they actually want.",
+    "primary": 4,
+    "labels": [1,0,0,1,1]
+  },
+  {
+    "text": "After failing so many times, I finally realized that growth often occurs in the most uncomfortable places.",
+    "primary": 4,
+    "labels": [0,0,0,1,1]
+  },
+  {
+    "text": "Looking at my wrinkles in the mirror, I realized that time waits for no one.",
+    "primary": 4,
+    "labels": [0,0,0,1,1]
+  },
+  {
+    "text": "After attending the funeral, I deeply realized that the meaning of life lies in its breadth, not its length.",
+    "primary": 4,
+    "labels": [1,1,0,1,1]
+  },
+  {
+    "text": "After experiencing the cutthroat competition in the workplace, I reflected that maintaining kindness is not weakness but rather a form of courage.",
+    "primary": 4,
+    "labels": [0,0,0,1,1]
+  },
+  {
+    "text": "Reading the Analects made me reflect that 'Do not impose on others what you do not desire for yourself' is a principle requiring lifelong cultivation.",
+    "primary": 4,
+    "labels": [0,1,0,0,1]
+  },
+  {
+    "text": "Use the Pomodoro Technique: focus for 25 minutes → take a 5-minute break → after every four cycles, take an extended 15-minute break. After sticking with it for two weeks, my task completion rate increased by 40%, and I gained a deeper understanding that rhythm matters more than duration.",
+    "primary": 4,
+    "labels": [0,1,1,1,1]
+  },
+  {
+    "text": "During subway security checks, I automatically remove my laptop, unbuckle my belt, and raise both arms to cooperate with the scanning process—a routine that now requires no conscious thought, yet prompts me to reflect on the security pact underlying standardized procedures.",
+    "primary": 4,
+    "labels": [0,0,1,1,1]
+  },
+  {
+    "text": "When repairing a bicycle tire, I first pry off the tire, locate the leak, sand the area with sandpaper, apply glue, attach the patch, and inflate to test. After succeeding on the fifth attempt, I learned to break down failure into iterative, manageable micro-steps.",
+    "primary": 4,
+    "labels": [1,0,1,1,1]
+  },
+  {
+    "text": "At the start of a meeting, the moderator should greet attendees, outline the agenda, emphasize timekeeping rules, and invite the first speaker. After smoothly managing a meeting in this way, I realized that structured communication can effectively reduce collective cognitive load.",
+    "primary": 4,
+    "labels": [0,1,1,0,1]
+  },
+  {
+    "text": "Teaching an elderly person to use WeChat video calls: Tap the icon → Select a contact → Tap the video button → Guide them to hold the phone upright → Remind them, 'I'm on the screen!' When she laughed until tears streamed down her face, I realized that adaptation is the highest form of process design.",
+    "primary": 4,
+    "labels": [1,0,1,1,1]
+  },
+  {
+    "text": "When repotting pothos, I first gently tap the old pot to loosen the soil, prune away any rotten roots, fill the new pot with fresh nutrient-rich soil, and then carefully plant and firm the soil. After three such experiences, I realized I had begun observing the growth rhythms of plants through a systems-thinking lens.",
+    "primary": 4,
+    "labels": [1,0,1,0,1]
+  },
+  {
+    "text": "When misunderstood by someone I trust, the sense of injustice feels like a bucket of cold water poured over my head; yet after taking a deep breath, I choose to write a calm email rather than vent—turns out emotions can become teachers of the self.",
+    "primary": 4,
+    "labels": [0,0,1,1,1]
+  },
+  {
+    "text": "While waiting for my test results at a foreign hospital, I watched pigeons fly past the gray clouds outside the window—and suddenly, I wasn’t so afraid anymore: fear remained, but my heart had learned to sit beside it and share a cup of tea.",
+    "primary": 4,
+    "labels": [1,0,0,1,1]
   }
 ]
