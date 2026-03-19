@@ -21,7 +21,7 @@ from src.core.vector.base_vector_store import VectorSearch, BaseVectorStore
 from src.core.waypoints import Waypoints, Expansion
 from src.memory import user_ops
 from src.memory.decay import Decay
-from src.memory.embed import embed_multi_sector, calc_mean_vec, embed
+from src.memory.embed import embed_multi_sector, calc_mean_vec, embed, embed_batch
 from src.memory.models.memory_models import IMemoryFilters, IMemoryItemDebugInfo, IMemoryItemInfo, IMemoryUserIdentity, IMemoryUser, QARole
 from src.memory.user_summary import update_user_summary
 from src.ops.dynamic_memory import calc_cross_sector_resonance_score, apply_retrieval_trace_reinforcement_to_memory, \
@@ -42,9 +42,12 @@ embed_model: BaseEmbedModel = get_embed_model()
 
 @timing
 async def embed_query_for_all_sectors(query: str, sectors: List[str]) -> Dict[str, List[float]]:
-    # 并发生成各扇区查询向量，减少多扇区检索的总等待时间
-    vectors = await asyncio.gather(*(embed(query, sector) for sector in sectors))
-    return {sector: vector for sector, vector in zip(sectors, vectors)}
+    if not sectors: return {}
+    try:
+        vectors = await embed_batch(query, sectors)
+        return {sector: vector for sector, vector in zip(sectors, vectors)}
+    except Exception as e:
+        raise RuntimeError(f"[HSG] embed_batch failed, fallback to per-sector embedding: {e}")
 
 
 def compress_vec_for_storage(vec: List[float], target_dim: int) -> List[float]:
@@ -367,9 +370,9 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
             if mem["user_id"] != user_id or (tenant_id and mem["tenant_id"] != tenant_id) or (project_id and mem["project_id"] != project_id):
                 continue
 
-            # 多向量融合相似度评分
+            # 多向量融合相似度评分（该评分反映了记忆在多个维度（扇区）上与查询的相关性）
             mvf = await calc_multi_vec_fusion_score(mid, query_embed_with_sectors, dynamic_sector_weights)
-            # 跨扇区共振分数
+            # 跨扇区共振分数（根据记忆类型间的相互作用强度计算激活程度）
             csr = await calc_cross_sector_resonance_score(mem["primary_sector"], query_classify.primary, mvf)
 
             # 取最高相似度

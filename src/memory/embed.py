@@ -7,14 +7,20 @@ from src.core.components import get_embed_model
 from src.core.dml_ops import dml_ops
 
 
+async def embed_batch(txt: str, sectors: List[str]) -> list[list[float]]:
+    # 去重并保持顺序，避免重复扇区造成重复嵌入请求
+    unique_sectors = list(dict.fromkeys(sectors))
+    sector_texts = [f"[sector:{sector}]\n{txt}" for sector in unique_sectors]
+    return await get_embed_model().embed_batch(sector_texts)
+
+
 async def embed(txt: str, sector: Optional[str] = None) -> List[float]:
     """
     根据配置的嵌入提供者生成文本 txt 的向量
     @param txt: 待嵌入的文本
     @return: 生成的向量列表
     """
-    sector_text = f"[sector:{sector}]\n{txt}" if sector else txt
-    return await get_embed_model().embed(sector_text)
+    return (await embed_batch(txt, [sector] if sector else []))[0]
 
 
 async def embed_multi_sector(uid: str, txt: str, secs: List[str], chunks: Optional[List[dict]] = None) -> List[Dict[str, Any]]:
