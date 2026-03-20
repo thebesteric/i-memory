@@ -7,6 +7,7 @@ import uuid
 from typing import Any, Dict, List
 
 from agile.db.vector.base.base_embed_model import BaseEmbedModel
+from agile.search import BM25Searcher
 from agile.utils import LogHelper, timing
 
 from src.core.components import get_sector_classifier, get_vector_store, MEMORIES_CACHE, get_embed_model
@@ -38,6 +39,7 @@ decay = Decay(reinforce_on_query=True, regeneration_enabled=True)
 vector_store: BaseVectorStore = get_vector_store()
 sector_classifier: SectorClassifier = get_sector_classifier()
 embed_model: BaseEmbedModel = get_embed_model()
+bm25_searcher = BM25Searcher(id_field="id", content_field="content")
 
 
 @timing
@@ -306,6 +308,17 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
         primary_sector = query_classify.primary
         dynamic_sector_weights = get_dynamic_sector_weights(primary_sector=primary_sector)
 
+        # 第一路召回：BM25 召回
+        # 获取用户记忆
+        bm25_memories = dml_ops.find_mem_by_user(
+            user_identity=filters.user_identity,
+            order_by=["t.created_at DESC"],
+            limit=2000
+        )
+        bm25_search_wrapped = timing(bm25_searcher.search)
+        bm25_ids = set(bm25_search_wrapped(query, docs=bm25_memories, top_k=top_k * 3))
+
+        # 第二路召回：向量召回
         # 存储各扇区检索结果
         sector_result = {}
         for sector in sectors:
@@ -315,14 +328,19 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
             res: List[VectorSearch] = await vector_store.search(query_vector, sector, top_k * 3, filters)
             sector_result[sector] = res
 
-        # 收集所有候选的相似度
-        all_sims = []
-        # 候选记忆 ID 集合
+        # 合并召回 ID
         ids = set()
         for sector, result in sector_result.items():
             for vector_search in result:
-                all_sims.append(vector_search.similarity)
                 ids.add(vector_search.id)
+        ids.update(bm25_ids)
+
+        # 收集所有候选的相似度
+        all_sims = []
+        # 候选记忆 ID 集合
+        for sector, result in sector_result.items():
+            for vector_search in result:
+                all_sims.append(vector_search.similarity)
 
         # 计算平均相似度，判断检索质量
         avg_sim = sum(all_sims) / len(all_sims) if all_sims else 0
@@ -333,6 +351,7 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
         # 是否置信度高
         high_conf = avg_sim >= 0.55
 
+        # 第三路召回：图扩展召回（按需）
         # 若平均相似度 < 0.55（低置信），触发图遍历扩展
         expansion: List[Expansion] = []
         if not high_conf:
@@ -343,7 +362,7 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
                 ids.add(exp.id)
 
         # 获取候选记忆内容
-        memories = dml_ops.find_mem(ids)
+        memories = dml_ops.find_mem(list(ids))
 
         # 提前计算每个候选的关键词重叠分数
         res_list: List[IMemoryItemInfo] = []
