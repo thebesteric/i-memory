@@ -1,7 +1,7 @@
 import json
 import math
 import os
-from typing import Literal, Union, Any
+from typing import Literal, Union, Any, TypedDict, Annotated
 
 import pyrootutils
 import torch
@@ -16,6 +16,12 @@ from transformers import AutoModel, AutoTokenizer, PreTrainedModel, PreTrainedTo
 logger = LogHelper.get_logger()
 
 DatasetType = Union[DatasetDict, Dataset, IterableDatasetDict, IterableDataset]
+
+class Checkpoint(TypedDict):
+    epoch: Annotated[int, "当前训练完成的轮次，断点续训起始值"]
+    val_acc: Annotated[float, "当前轮次的验证准确率，范围 [0.0, 1.0]"]
+    model_state_dict: Annotated[dict[str, Any], "模型权重参数，可直接加载到 model.load_state_dict()"]
+    optimizer_state_dict: Annotated[dict[str, Any], "优化器状态，包含学习率、动量、参数更新轨迹等"]
 
 
 class BertDataset(TorchDataset):
@@ -401,6 +407,7 @@ class BertManager:
         final_train_metrics: dict[str, float] = {}
         final_valid_metrics: dict[str, float] = {}
         # 开始训练（默认从 1 开始；续训时可指定 start_epoch）
+        avg_train_acc = 0.0  # 确保任何情况下都能引用
         for epoch in range(start_epoch, epochs + 1):
             # 防止验证阶段切换到 eval 后影响后续 epoch
             bert_incr_model.train()
@@ -545,11 +552,13 @@ class BertManager:
                 # 每训练 10 个 epoch，保存一次参数
                 if epoch % 10 == 0:
                     periodic_file_param_save_path = os.path.join(params_save_path, f"periodic_epoch_{epoch}_{avg_train_acc:.4f}.pth")
-                    torch.save({
+                    checkpoint: Checkpoint = {
                         "epoch": epoch,
+                        "val_acc": avg_train_acc if not valid_loader else 0.0,  # 无验证集时用训练准确率
                         "model_state_dict": bert_incr_model.state_dict(),
                         "optimizer_state_dict": optimizer.state_dict(),
-                    }, periodic_file_param_save_path)
+                    }
+                    torch.save(checkpoint, periodic_file_param_save_path)
                     # 清理文件，数量保持在 periodic_checkpoint_max_keep 个
                     periodic_cleanup_result = self._cleanup_old_periodic_checkpoints(
                         params_save_path=params_save_path,
@@ -701,11 +710,13 @@ class BertManager:
                         # 这就是为什么要保存最优参数的原因
                         best_val_acc = avg_val_acc
                         best_file_params_save_path = os.path.join(params_save_path, f"best_bert_epoch_{epoch}_acc_{best_val_acc:.4f}.pth")
-                        torch.save({
+                        checkpoint: Checkpoint = {
                             "epoch": epoch,
+                            "val_acc": avg_val_acc,
                             "model_state_dict": bert_incr_model.state_dict(),
                             "optimizer_state_dict": optimizer.state_dict(),
-                        }, best_file_params_save_path)
+                        }
+                        torch.save(checkpoint, best_file_params_save_path)
                         # 清理文件，保证只有一份最优的 checkpoint 文件存在
                         cleanup_result = self._cleanup_old_best_checkpoints(
                             params_save_path=params_save_path,
@@ -738,11 +749,13 @@ class BertManager:
         # 训练结束后的统一兜底：保存最后一轮参数（避免早停或轮次过小无法保存的情况）
         if final_epoch > 0:
             last_file_params_save_path = os.path.join(params_save_path, f"last_bert_epoch_{final_epoch}.pth")
-            torch.save({
+            checkpoint: Checkpoint = {
                 "epoch": final_epoch,
+                "val_acc": best_val_acc if valid_loader else avg_train_acc,
                 "model_state_dict": bert_incr_model.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
-            }, last_file_params_save_path)
+            }
+            torch.save(checkpoint, last_file_params_save_path)
             logger.info(
                 f"[SAVE] epoch={final_epoch}/{epochs}, kind=last_fallback, path={last_file_params_save_path}"
             )
@@ -849,7 +862,7 @@ class BertManager:
             raise ValueError("optimizer is required when load_optimizer=True")
 
         effective_map_location = map_location or self.device
-        checkpoint = torch.load(checkpoint_path, map_location=effective_map_location)
+        checkpoint: Checkpoint = torch.load(checkpoint_path, map_location=effective_map_location)
 
         checkpoint_type = "full_checkpoint" if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint else "state_dict"
         model_state_dict = checkpoint["model_state_dict"] if checkpoint_type == "full_checkpoint" else checkpoint
@@ -871,6 +884,7 @@ class BertManager:
             "checkpoint_type": checkpoint_type,
             "path": checkpoint_path,
             "epoch": checkpoint.get("epoch") if isinstance(checkpoint, dict) else None,
+            "val_acc": checkpoint.get("val_acc") if isinstance(checkpoint, dict) else None,
             "has_optimizer_state": has_optimizer_state,
             "optimizer_loaded": optimizer_loaded,
             "missing_keys": list(load_result.missing_keys),
@@ -879,7 +893,7 @@ class BertManager:
 
         logger.info(
             f"[LOAD] path={checkpoint_path}, type={checkpoint_type}, strict={strict}, "
-            f"epoch={result['epoch']}, optimizer_loaded={optimizer_loaded}, "
+            f"epoch={result['epoch']}, val_acc={result['val_acc']}, optimizer_loaded={optimizer_loaded}, "
             f"missing_keys={len(result['missing_keys'])}, unexpected_keys={len(result['unexpected_keys'])}"
         )
 
