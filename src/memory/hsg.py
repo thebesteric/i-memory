@@ -275,6 +275,43 @@ async def add_hsg_memory(content: str,
 
 
 @timing
+async def reinforce_memories(effective_k_list):
+    for _item in effective_k_list:
+        try:
+            reinforcement_sal = await apply_retrieval_trace_reinforcement_to_memory(_item.id, _item.salience)
+            now = datetime.datetime.now()
+            db.execute("UPDATE memories SET salience=%s, last_seen_at = %s WHERE id = %s", (reinforcement_sal, now, _item.id))
+
+            # 有图遍历路径时
+            if len(_item.path) > 1:
+                wps_rows = db.fetchall("SELECT dst_id, weight FROM waypoints WHERE src_id=%s", (_item.id,))
+                wps = [{"target_id": row["dst_id"], "weight": row["weight"]} for row in wps_rows]
+
+                # 向关联节点传播（得到关联节点新的显著性）
+                pru = await propagate_associative_reinforcement_to_linked_nodes(_item.id, reinforcement_sal, wps)
+                for u in pru:
+                    # 获取关联记忆
+                    linked_mem = dml_ops.get_mem(u["node_id"])
+                    if linked_mem:
+                        # “当前时间” 与 “关联记忆最后访问时间” 的间隔天数
+                        time_diff = (now - linked_mem["last_seen_at"]).total_seconds() / 86400.0
+                        # 自然指数函数 math.exp 生成一个衰减系数 decay_fact（衰减因子），核心作用是将「关联记忆最后访问时间与当前时间的间隔天数」转化为 0~1 之间的权重值
+                        # 时间间隔越久，衰减因子越小，对应记忆的权重 / 影响力越低
+                        decay_fact = math.exp(-0.02 * time_diff)
+                        # 上下文增强系数：基于记忆显著性差异和时间衰减的得分调整项，用于精细化修正基础匹配得分，放大优质记忆的优势、降低低质记忆的权重
+                        ctx_boost = HYBRID_PARAMS["gamma"] * (reinforcement_sal - (linked_mem["salience"] or 0)) * decay_fact
+                        # 更新关联记忆的显著性
+                        new_sal = max(0.0, min(1.0, (linked_mem["salience"] or 0) + ctx_boost))
+                        # 更新关联记忆的显著性和最后访问时间
+                        db.execute("UPDATE memories SET salience = %s, last_seen_at = %s WHERE id = %s", (new_sal, now, u["node_id"]))
+
+            # 记录查询命中事件并触发动态更新
+            await decay.on_query_hit(_item.id, _item.primary_sector, lambda t: embed(t, _item.primary_sector))
+        except Exception as e:
+            logger.warning(f"reinforce_memories failed for memory {_item.id}: {e}")
+
+
+@timing
 async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilters = None) -> List[IMemoryItemInfo]:
     """
     基于混合评分机制（内容相似度、关键词重叠、路标关联、时间衰减等）进行记忆检索
@@ -479,38 +516,11 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
         # 取 effective_k 条记录
         effective_k_list: List[IMemoryItemInfo] = res_list[:effective_k]
 
-        # 命中记忆强化
-        for _item in effective_k_list:
-            # 应用检索迹强化：提升成功检索到的记忆节点的显著性
-            reinforcement_sal = await apply_retrieval_trace_reinforcement_to_memory(_item.id, _item.salience)
-            now = datetime.datetime.now()
-            db.execute("UPDATE memories SET salience=%s, last_seen_at = %s WHERE id = %s", (reinforcement_sal, now, _item.id))
-
-            # 有图遍历路径时
-            if len(_item.path) > 1:
-                wps_rows = db.fetchall("SELECT dst_id, weight FROM waypoints WHERE src_id=%s", (_item.id,))
-                wps = [{"target_id": row["dst_id"], "weight": row["weight"]} for row in wps_rows]
-
-                # 向关联节点传播（得到关联节点新的显著性）
-                pru = await propagate_associative_reinforcement_to_linked_nodes(_item.id, reinforcement_sal, wps)
-                for u in pru:
-                    # 获取关联记忆
-                    linked_mem = dml_ops.get_mem(u["node_id"])
-                    if linked_mem:
-                        # “当前时间”与“关联记忆最后访问时间”的间隔天数
-                        time_diff = (now - linked_mem["last_seen_at"]).total_seconds() / 86400.0
-                        # 自然指数函数 math.exp 生成一个衰减系数 decay_fact（衰减因子），核心作用是将「关联记忆最后访问时间与当前时间的间隔天数」转化为 0~1 之间的权重值
-                        # 时间间隔越久，衰减因子越小，对应记忆的权重 / 影响力越低
-                        decay_fact = math.exp(-0.02 * time_diff)
-                        # 上下文增强系数：基于记忆显著性差异和时间衰减的得分调整项，用于精细化修正基础匹配得分，放大优质记忆的优势、降低低质记忆的权重
-                        ctx_boost = HYBRID_PARAMS["gamma"] * (reinforcement_sal - (linked_mem["salience"] or 0)) * decay_fact
-                        # 更新关联记忆的显著性
-                        new_sal = max(0.0, min(1.0, (linked_mem["salience"] or 0) + ctx_boost))
-                        # 更新关联记忆的显著性和最后访问时间
-                        db.execute("UPDATE memories SET salience = %s, last_seen_at = %s WHERE id = %s", (new_sal, now, u["node_id"]))
-
-            # 记录查询命中事件并触发动态更新
-            await decay.on_query_hit(_item.id, _item.primary_sector, lambda t: embed(t, _item.primary_sector))
+        # 命中记忆强化异步执行
+        try:
+            asyncio.create_task(reinforce_memories(effective_k_list))
+        except Exception as e:
+            logger.warning(f"Failed to schedule reinforce_memories async task: {e}")
 
         # 存入查询缓存
         MEMORIES_CACHE.set(cache_key, effective_k_list)
