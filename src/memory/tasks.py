@@ -38,6 +38,7 @@ class JobDefinition:
 
 def _build_job_definitions() -> list[JobDefinition]:
     return [
+        # 记忆衰减任务
         JobDefinition(
             id="decay",
             name="Periodic memory decay",
