@@ -642,8 +642,7 @@ def _promote_qa_assistant_answer(items: List[IMemoryItemInfo], query_sector: str
     return items
 
 
-def _resolve_auto_qa_linking(user_identity: IMemoryUserIdentity,
-                             qa_role: QARole | None) -> str | None:
+def _resolve_auto_qa_linking(user_identity: IMemoryUserIdentity, qa_role: QARole | None) -> str | None:
     """
     自动补齐 QA 配对字段：
     - human：生成新的 qa_pair_id

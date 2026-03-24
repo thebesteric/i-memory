@@ -104,6 +104,8 @@ class EnvConfig:
         # ================ 图相关配置 ================
         # 图构建循环间隔（秒）
         self.GRAPH_BUILD_INTERVAL_SECONDS = env_helper.get("IM_GRAPH_BUILD_INTERVAL_SECONDS", 60 * 30)
+        self.GRAPH_MEM_COUNT_AT_LEAST = env_helper.get("IM_GRAPH_MEM_COUNT_AT_LEAST", 50)
+        self.GRAPH_MEM_COUNT_AT_MOST = env_helper.get("IM_GRAPH_MEM_COUNT_AT_MOST", 100)
 
 
 def _load_env_file():

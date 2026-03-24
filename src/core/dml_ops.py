@@ -142,7 +142,31 @@ class DMLOps:
         final_sql = " ".join(sql_parts)
         return self.db.fetchall(final_sql, tuple(params))
 
-    def count_mem_by_user(self, user_identity: IMemoryUserIdentity) -> int:
+    def find_un_fact_join_mem_by_user(self, user_identity: IMemoryUserIdentity, limit=10, offset=0) -> List[Dict[str, Any]]:
+        user_id = user_identity.user_id
+        tenant_id = user_identity.tenant_id
+        project_id = user_identity.project_id
+
+        sql_parts = [
+            "SELECT * FROM memories WHERE fact_joined IS NOT TRUE AND user_id = %s"
+        ]
+        params = [user_id]
+
+        if tenant_id:
+            sql_parts.append("AND tenant_id = %s")
+            params.append(tenant_id)
+
+        if project_id:
+            sql_parts.append("AND project_id = %s")
+            params.append(project_id)
+
+        sql_parts.append("ORDER BY created_at ASC LIMIT %s OFFSET %s")
+        params.extend([str(limit), str(offset)])
+
+        final_sql = " ".join(sql_parts)
+        return self.db.fetchall(final_sql, tuple(params))
+
+    def count_mem_by_user(self, user_identity: IMemoryUserIdentity, conditions: list[str] = None) -> int:
         user_id = user_identity.user_id
         tenant_id = user_identity.tenant_id
         project_id = user_identity.project_id
@@ -159,6 +183,9 @@ class DMLOps:
         if project_id:
             sql_parts.append("AND project_id = %s")
             params.append(project_id)
+
+        if conditions:
+            sql_parts.append("AND " + " AND ".join(conditions))
 
         final_sql = " ".join(sql_parts)
         row = self.db.fetchone(final_sql, tuple(params))

@@ -99,6 +99,7 @@ CREATE TABLE IF NOT EXISTS users
 );
 
 COMMENT ON TABLE users IS '用户级摘要与计数器';
+COMMENT ON COLUMN users.id IS '用户主键';
 COMMENT ON COLUMN users.tenant_id IS '租户标识';
 COMMENT ON COLUMN users.project_id IS '项目标识';
 COMMENT ON COLUMN users.user_id IS '用户标识';

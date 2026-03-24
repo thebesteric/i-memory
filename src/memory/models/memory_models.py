@@ -2,7 +2,7 @@ import datetime
 from typing import Any, Literal
 
 from agile.utils.pydantic_extension import BaseModelEnhance
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 QARole = Literal["human", "assistant"]
 QueryMode = Literal["vector", "qa", "prefer"]
@@ -17,6 +17,29 @@ class IMemoryUserIdentity(BaseModel):
     tenant_id: str | None = Field(default=None, description="租户 ID")
     project_id: str | None = Field(default=None, description="项目 ID")
     user_id: str = Field(default="anonymous", description="用户 ID")
+
+    _id: str | None = PrivateAttr(default=None)
+
+    @staticmethod
+    def from_dict(user: "IMemoryUser") -> "IMemoryUserIdentity":
+        return IMemoryUserIdentity(
+            _id=user.id,
+            tenant_id=user.tenant_id,
+            project_id=user.project_id,
+            user_id=user.user_id,
+        )
+
+    @property
+    def id(self):
+        return self.model_extra.get("_id")
+
+    def check_legality(self):
+        """
+        检查用户身份是否合法
+        :return: True 如果合法，否则 False
+        """
+        if not self.tenant_id or not self.project_id or not self.user_id:
+            raise ValueError("User tenant_id and project_id and user_id cannot be empty")
 
 
 class IMemoryConfig(BaseModel):

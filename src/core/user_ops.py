@@ -65,13 +65,13 @@ async def get_user(user_identity: IMemoryUserIdentity) -> IMemoryUser | None:
     return IMemoryUser.from_dict(user)
 
 
-async def add_user(user_identity: IMemoryUserIdentity, summary: str = None, reflection_count: int = 0) -> None:
+async def add_user(user_identity: IMemoryUserIdentity, summary: str = None, reflection_count: int = 0) -> IMemoryUser:
     """
     添加用户
     :param user_identity: 用户身份
     :param summary: 用户概要信息
     :param reflection_count: 反思次数
-    :return:
+    :return: 用户
     """
     user_id = user_identity.user_id
     tenant_id = user_identity.tenant_id
@@ -82,6 +82,7 @@ async def add_user(user_identity: IMemoryUserIdentity, summary: str = None, refl
 
     # 当前时间
     now = datetime.datetime.now()
+    id = str(uuid.uuid4())
 
     db.execute(
         """
@@ -89,9 +90,19 @@ async def add_user(user_identity: IMemoryUserIdentity, summary: str = None, refl
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (tenant_id, project_id, user_id) DO NOTHING
         """,
-        (str(uuid.uuid4()), tenant_id, project_id, user_id, summary, reflection_count, now, now)
+        (id, tenant_id, project_id, user_id, summary, reflection_count, now, now)
     )
     db.commit()
+    return IMemoryUser(
+        id=id,
+        tenant_id=tenant_id,
+        project_id=project_id,
+        user_id=user_id,
+        summary=summary,
+        reflection_count=reflection_count,
+        created_at=now,
+        updated_at=now,
+    )
 
 
 async def update_user_summary(id: str, summary: str) -> None:
