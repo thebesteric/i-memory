@@ -276,6 +276,11 @@ async def add_hsg_memory(content: str,
 
 @timing
 async def reinforce_memories(effective_k_list):
+    """
+    强化记忆
+    :param effective_k_list: 需要强化的记忆列表
+    :return:
+    """
     for _item in effective_k_list:
         try:
             reinforcement_sal = await apply_retrieval_trace_reinforcement_to_memory(_item.id, _item.salience)
