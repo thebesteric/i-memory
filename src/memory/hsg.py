@@ -20,11 +20,11 @@ from src.core.score import compute_tag_match_score, compute_hybrid_score
 from src.core.sector_classify import SECTOR_CONFIGS, ClassifyResult, SectorClassifier
 from src.core.vector.base_vector_store import VectorSearch, BaseVectorStore
 from src.core.waypoints import Waypoints, Expansion
-from src.memory import user_ops
+from src.core import user_ops
 from src.memory.decay import Decay
 from src.memory.embed import embed_multi_sector, calc_mean_vec, embed, embed_batch
 from src.memory.models.memory_models import IMemoryFilters, IMemoryItemDebugInfo, IMemoryItemInfo, IMemoryUserIdentity, IMemoryUser, QARole
-from src.memory.user_summary import update_user_summary
+from src.core.user_summary import update_user_summary
 from src.ops.dynamic_memory import calc_cross_sector_resonance_score, apply_retrieval_trace_reinforcement_to_memory, \
     propagate_associative_reinforcement_to_linked_nodes
 from src.tools.chunking import chunk_text

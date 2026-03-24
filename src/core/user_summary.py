@@ -1,5 +1,4 @@
 import datetime
-import time
 import json
 import asyncio
 from typing import Dict, List
@@ -8,7 +7,7 @@ from agile.utils import LogHelper
 
 from src.core.config import env
 from src.core.db import get_db
-from src.memory import user_ops
+from src.core import user_ops
 from src.memory.models.memory_models import IMemoryUserIdentity, IMemoryUser
 
 logger = LogHelper.get_logger()
