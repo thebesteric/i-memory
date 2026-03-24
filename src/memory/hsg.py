@@ -7,6 +7,7 @@ import uuid
 from typing import Any, Dict, List
 
 from agile.db.vector.base.base_embed_model import BaseEmbedModel
+from agile.search import BM25Searcher
 from agile.utils import LogHelper, timing
 
 from src.core.components import get_sector_classifier, get_vector_store, MEMORIES_CACHE, get_embed_model
@@ -19,11 +20,11 @@ from src.core.score import compute_tag_match_score, compute_hybrid_score
 from src.core.sector_classify import SECTOR_CONFIGS, ClassifyResult, SectorClassifier
 from src.core.vector.base_vector_store import VectorSearch, BaseVectorStore
 from src.core.waypoints import Waypoints, Expansion
-from src.memory import user_ops
+from src.core import user_ops
 from src.memory.decay import Decay
-from src.memory.embed import embed_multi_sector, calc_mean_vec, embed
+from src.memory.embed import embed_multi_sector, calc_mean_vec, embed, embed_batch
 from src.memory.models.memory_models import IMemoryFilters, IMemoryItemDebugInfo, IMemoryItemInfo, IMemoryUserIdentity, IMemoryUser, QARole
-from src.memory.user_summary import update_user_summary
+from src.core.user_summary import update_user_summary
 from src.ops.dynamic_memory import calc_cross_sector_resonance_score, apply_retrieval_trace_reinforcement_to_memory, \
     propagate_associative_reinforcement_to_linked_nodes
 from src.tools.chunking import chunk_text
@@ -38,13 +39,17 @@ decay = Decay(reinforce_on_query=True, regeneration_enabled=True)
 vector_store: BaseVectorStore = get_vector_store()
 sector_classifier: SectorClassifier = get_sector_classifier()
 embed_model: BaseEmbedModel = get_embed_model()
+bm25_searcher = BM25Searcher(id_field="id", content_field="content")
 
 
 @timing
 async def embed_query_for_all_sectors(query: str, sectors: List[str]) -> Dict[str, List[float]]:
-    # 并发生成各扇区查询向量，减少多扇区检索的总等待时间
-    vectors = await asyncio.gather(*(embed(query, sector) for sector in sectors))
-    return {sector: vector for sector, vector in zip(sectors, vectors)}
+    if not sectors: return {}
+    try:
+        vectors = await embed_batch(query, sectors)
+        return {sector: vector for sector, vector in zip(sectors, vectors)}
+    except Exception as e:
+        raise RuntimeError(f"[HSG] embed_batch failed, fallback to per-sector embedding: {e}")
 
 
 def compress_vec_for_storage(vec: List[float], target_dim: int) -> List[float]:
@@ -218,7 +223,7 @@ async def add_hsg_memory(content: str,
         )
 
         # 调用 embed_multi_sector，对内容进行多 sector 嵌入，生成向量
-        emb_res = await embed_multi_sector(mid, content, all_secs, chunks if use_chunks else None)
+        emb_res: List[Dict[str, Any]] = await embed_multi_sector(mid, content, all_secs, chunks if use_chunks else None)
         tasks = []
         for r in emb_res:
             # 存储每个 sector 的向量到向量库
@@ -270,6 +275,48 @@ async def add_hsg_memory(content: str,
 
 
 @timing
+async def reinforce_memories(effective_k_list):
+    """
+    强化记忆
+    :param effective_k_list: 需要强化的记忆列表
+    :return:
+    """
+    for _item in effective_k_list:
+        try:
+            reinforcement_sal = await apply_retrieval_trace_reinforcement_to_memory(_item.id, _item.salience)
+            now = datetime.datetime.now()
+            db.execute("UPDATE memories SET salience=%s, last_seen_at = %s WHERE id = %s", (reinforcement_sal, now, _item.id))
+
+            # 有图遍历路径时
+            if len(_item.path) > 1:
+                wps_rows = db.fetchall("SELECT dst_id, weight FROM waypoints WHERE src_id=%s", (_item.id,))
+                wps = [{"target_id": row["dst_id"], "weight": row["weight"]} for row in wps_rows]
+
+                # 向关联节点传播（得到关联节点新的显著性）
+                pru = await propagate_associative_reinforcement_to_linked_nodes(_item.id, reinforcement_sal, wps)
+                for u in pru:
+                    # 获取关联记忆
+                    linked_mem = dml_ops.get_mem(u["node_id"])
+                    if linked_mem:
+                        # “当前时间” 与 “关联记忆最后访问时间” 的间隔天数
+                        time_diff = (now - linked_mem["last_seen_at"]).total_seconds() / 86400.0
+                        # 自然指数函数 math.exp 生成一个衰减系数 decay_fact（衰减因子），核心作用是将「关联记忆最后访问时间与当前时间的间隔天数」转化为 0~1 之间的权重值
+                        # 时间间隔越久，衰减因子越小，对应记忆的权重 / 影响力越低
+                        decay_fact = math.exp(-0.02 * time_diff)
+                        # 上下文增强系数：基于记忆显著性差异和时间衰减的得分调整项，用于精细化修正基础匹配得分，放大优质记忆的优势、降低低质记忆的权重
+                        ctx_boost = HYBRID_PARAMS["gamma"] * (reinforcement_sal - (linked_mem["salience"] or 0)) * decay_fact
+                        # 更新关联记忆的显著性
+                        new_sal = max(0.0, min(1.0, (linked_mem["salience"] or 0) + ctx_boost))
+                        # 更新关联记忆的显著性和最后访问时间
+                        db.execute("UPDATE memories SET salience = %s, last_seen_at = %s WHERE id = %s", (new_sal, now, u["node_id"]))
+
+            # 记录查询命中事件并触发动态更新
+            await decay.on_query_hit(_item.id, _item.primary_sector, lambda t: embed(t, _item.primary_sector))
+        except Exception as e:
+            logger.warning(f"reinforce_memories failed for memory {_item.id}: {e}")
+
+
+@timing
 async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilters = None) -> List[IMemoryItemInfo]:
     """
     基于混合评分机制（内容相似度、关键词重叠、路标关联、时间衰减等）进行记忆检索
@@ -303,6 +350,17 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
         primary_sector = query_classify.primary
         dynamic_sector_weights = get_dynamic_sector_weights(primary_sector=primary_sector)
 
+        # 第一路召回：BM25 召回
+        # 获取用户记忆
+        bm25_memories = dml_ops.find_mem_by_user(
+            user_identity=filters.user_identity,
+            order_by=["t.created_at DESC"],
+            limit=2000
+        )
+        bm25_search_wrapped = timing(bm25_searcher.search)
+        bm25_ids = set(bm25_search_wrapped(query, docs=bm25_memories, top_k=top_k * 3))
+
+        # 第二路召回：向量召回
         # 存储各扇区检索结果
         sector_result = {}
         for sector in sectors:
@@ -312,14 +370,19 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
             res: List[VectorSearch] = await vector_store.search(query_vector, sector, top_k * 3, filters)
             sector_result[sector] = res
 
-        # 收集所有候选的相似度
-        all_sims = []
-        # 候选记忆 ID 集合
+        # 合并召回 ID
         ids = set()
         for sector, result in sector_result.items():
             for vector_search in result:
-                all_sims.append(vector_search.similarity)
                 ids.add(vector_search.id)
+        ids.update(bm25_ids)
+
+        # 收集所有候选的相似度
+        all_sims = []
+        # 候选记忆 ID 集合
+        for sector, result in sector_result.items():
+            for vector_search in result:
+                all_sims.append(vector_search.similarity)
 
         # 计算平均相似度，判断检索质量
         avg_sim = sum(all_sims) / len(all_sims) if all_sims else 0
@@ -330,6 +393,7 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
         # 是否置信度高
         high_conf = avg_sim >= 0.55
 
+        # 第三路召回：图扩展召回（按需）
         # 若平均相似度 < 0.55（低置信），触发图遍历扩展
         expansion: List[Expansion] = []
         if not high_conf:
@@ -340,7 +404,7 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
                 ids.add(exp.id)
 
         # 获取候选记忆内容
-        memories = dml_ops.find_mem(ids)
+        memories = dml_ops.find_mem(list(ids))
 
         # 提前计算每个候选的关键词重叠分数
         res_list: List[IMemoryItemInfo] = []
@@ -367,9 +431,9 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
             if mem["user_id"] != user_id or (tenant_id and mem["tenant_id"] != tenant_id) or (project_id and mem["project_id"] != project_id):
                 continue
 
-            # 多向量融合相似度评分
+            # 多向量融合相似度评分（该评分反映了记忆在多个维度（扇区）上与查询的相关性）
             mvf = await calc_multi_vec_fusion_score(mid, query_embed_with_sectors, dynamic_sector_weights)
-            # 跨扇区共振分数
+            # 跨扇区共振分数（根据记忆类型间的相互作用强度计算激活程度）
             csr = await calc_cross_sector_resonance_score(mem["primary_sector"], query_classify.primary, mvf)
 
             # 取最高相似度
@@ -457,38 +521,11 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
         # 取 effective_k 条记录
         effective_k_list: List[IMemoryItemInfo] = res_list[:effective_k]
 
-        # 命中记忆强化
-        for _item in effective_k_list:
-            # 应用检索迹强化：提升成功检索到的记忆节点的显著性
-            reinforcement_sal = await apply_retrieval_trace_reinforcement_to_memory(_item.id, _item.salience)
-            now = datetime.datetime.now()
-            db.execute("UPDATE memories SET salience=%s, last_seen_at = %s WHERE id = %s", (reinforcement_sal, now, _item.id))
-
-            # 有图遍历路径时
-            if len(_item.path) > 1:
-                wps_rows = db.fetchall("SELECT dst_id, weight FROM waypoints WHERE src_id=%s", (_item.id,))
-                wps = [{"target_id": row["dst_id"], "weight": row["weight"]} for row in wps_rows]
-
-                # 向关联节点传播（得到关联节点新的显著性）
-                pru = await propagate_associative_reinforcement_to_linked_nodes(_item.id, reinforcement_sal, wps)
-                for u in pru:
-                    # 获取关联记忆
-                    linked_mem = dml_ops.get_mem(u["node_id"])
-                    if linked_mem:
-                        # “当前时间”与“关联记忆最后访问时间”的间隔天数
-                        time_diff = (now - linked_mem["last_seen_at"]).total_seconds() / 86400.0
-                        # 自然指数函数 math.exp 生成一个衰减系数 decay_fact（衰减因子），核心作用是将「关联记忆最后访问时间与当前时间的间隔天数」转化为 0~1 之间的权重值
-                        # 时间间隔越久，衰减因子越小，对应记忆的权重 / 影响力越低
-                        decay_fact = math.exp(-0.02 * time_diff)
-                        # 上下文增强系数：基于记忆显著性差异和时间衰减的得分调整项，用于精细化修正基础匹配得分，放大优质记忆的优势、降低低质记忆的权重
-                        ctx_boost = HYBRID_PARAMS["gamma"] * (reinforcement_sal - (linked_mem["salience"] or 0)) * decay_fact
-                        # 更新关联记忆的显著性
-                        new_sal = max(0.0, min(1.0, (linked_mem["salience"] or 0) + ctx_boost))
-                        # 更新关联记忆的显著性和最后访问时间
-                        db.execute("UPDATE memories SET salience = %s, last_seen_at = %s WHERE id = %s", (new_sal, now, u["node_id"]))
-
-            # 记录查询命中事件并触发动态更新
-            await decay.on_query_hit(_item.id, _item.primary_sector, lambda t: embed(t, _item.primary_sector))
+        # 命中记忆强化异步执行
+        try:
+            asyncio.create_task(reinforce_memories(effective_k_list))
+        except Exception as e:
+            logger.warning(f"Failed to schedule reinforce_memories async task: {e}")
 
         # 存入查询缓存
         MEMORIES_CACHE.set(cache_key, effective_k_list)

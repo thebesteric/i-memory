@@ -77,8 +77,8 @@ class DMLOps:
         self.db.commit()
         return affected_rows
 
-    def find_mem_by_user(self, user_identity: IMemoryUserIdentity, order_by: List[str], limit=10, offset=0) -> List[
-        Dict[str, Any]]:
+    @timing
+    def find_mem_by_user(self, user_identity: IMemoryUserIdentity, order_by: List[str], limit=10, offset=0) -> List[Dict[str, Any]]:
         user_id = user_identity.user_id
         tenant_id = user_identity.tenant_id
         project_id = user_identity.project_id

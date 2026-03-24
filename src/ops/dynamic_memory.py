@@ -85,16 +85,14 @@ async def calc_cross_sector_resonance_score(ms: str, qs: str, bs: float) -> floa
     参数：
         ms (str)：源记忆扇区类型，如"semantic"、"emotional"等
         qs (str)：目标记忆扇区类型（被激活的记忆类型）
-        bs (float)：基础显著性 (baseline salience)，范围 0.0-1.0
-                   表示源记忆的初始激活强度
+        bs (float)：基础显著性 (baseline salience)，范围 0.0-1.0，表示源记忆的初始激活强度
 
     返回：
-        float：共鸣分数 = bs × 矩阵[源扇区][目标扇区]
-               范围 0.0-1.0，表示目标记忆被激活的强度
+        float：共鸣分数 = bs × 矩阵[源扇区][目标扇区]，范围 0.0-1.0，表示目标记忆被激活的强度
 
     执行步骤：
-        1. 从映射表查找源扇区在矩阵中的行号（默认为semantic=1）
-        2. 从映射表查找目标扇区在矩阵中的列号（默认为semantic=1）
+        1. 从映射表查找源扇区在矩阵中的行号（默认为 semantic=1）
+        2. 从映射表查找目标扇区在矩阵中的列号（默认为 semantic=1）
         3. 返回：基础显著性 × 矩阵相关系数
 
     使用示例：

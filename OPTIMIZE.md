@@ -6,6 +6,7 @@
 - [ ] P1: 增加租户、项目维度，用来隔离不同租户、项目之间的记忆数据
 - [ ] P2: 增加时间的判断：如：昨天我说了什么，记忆系统只会提取昨天的记忆
 - [ ] P2: 提供 MCP 能力
+- [ ] P2: 增加 wrap_openai(OpenAI()) 的能力，自动将 OpenAI 的调用结果存储到记忆系统中
 - [ ] P3: 提供视觉记忆能力（embedding + image desc）
 - [ ] P3: 提供 LangChain Middleware 组件
 

@@ -72,7 +72,7 @@ class EnvConfig:
         # 最大向量维度
         self.VECTOR_MAX_DIM = env_helper.get("IM_VECTOR_MAX_DIM", 1536)
         # 是否使用向量数据库辅助
-        self.VECTOR_MILVUS_SUPPORT = env_helper.get("IM_VECTOR_MILVUS_SUPPORT", True)
+        self.VECTOR_MILVUS_SUPPORT = env_helper.get("IM_VECTOR_MILVUS_SUPPORT", False)
 
         # 摘要最大长度
         self.SUMMARY_MAX_LENGTH = env_helper.get("IM_SUMMARY_MAX_LENGTH", 1000)
@@ -100,6 +100,10 @@ class EnvConfig:
         # ================ 记忆分类相关配置 ================
         # 是否使用 BERT 分类器进行记忆分类
         self.USE_BERT_CLASSIFIER = env_helper.get("IM_USE_BERT_CLASSIFIER", True)
+
+        # ================ 图相关配置 ================
+        # 图构建循环间隔（秒）
+        self.GRAPH_BUILD_INTERVAL_SECONDS = env_helper.get("IM_GRAPH_BUILD_INTERVAL_SECONDS", 60 * 30)
 
 
 def _load_env_file():

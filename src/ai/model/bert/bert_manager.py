@@ -1,7 +1,7 @@
 import json
 import math
 import os
-from typing import Literal, Union, Any
+from typing import Literal, Union, Any, TypedDict, Annotated
 
 import pyrootutils
 import torch
@@ -16,6 +16,12 @@ from transformers import AutoModel, AutoTokenizer, PreTrainedModel, PreTrainedTo
 logger = LogHelper.get_logger()
 
 DatasetType = Union[DatasetDict, Dataset, IterableDatasetDict, IterableDataset]
+
+class Checkpoint(TypedDict):
+    epoch: Annotated[int, "当前训练完成的轮次，断点续训起始值"]
+    val_acc: Annotated[float, "当前轮次的验证准确率，范围 [0.0, 1.0]"]
+    model_state_dict: Annotated[dict[str, Any], "模型权重参数，可直接加载到 model.load_state_dict()"]
+    optimizer_state_dict: Annotated[dict[str, Any], "优化器状态，包含学习率、动量、参数更新轨迹等"]
 
 
 class BertDataset(TorchDataset):
@@ -390,8 +396,8 @@ class BertManager:
         # 定义学习率调度器，根据验证准确率调整学习率，验证准确率连续 5 个 epoch 没有提升，则将学习率降低到原来的 0.5
         scheduler = ReduceLROnPlateau(optimizer, mode="max", patience=10, factor=0.5)
 
-        # 初始化验证最佳加权综合指标
-        best_val_weighted_score = 0.0
+        # 初始化验证最佳准确率
+        best_val_acc = 0.0
         # 早停计数器，记录验证准确率连续没有提升的 epoch 数
         early_stop_count = 0
         # 显式设置训练模式
@@ -401,6 +407,7 @@ class BertManager:
         final_train_metrics: dict[str, float] = {}
         final_valid_metrics: dict[str, float] = {}
         # 开始训练（默认从 1 开始；续训时可指定 start_epoch）
+        avg_train_acc = 0.0  # 确保任何情况下都能引用
         for epoch in range(start_epoch, epochs + 1):
             # 防止验证阶段切换到 eval 后影响后续 epoch
             bert_incr_model.train()
@@ -482,17 +489,11 @@ class BertManager:
 
                 # 每隔 5 个批次，输出训练信息
                 if i % 5 == 0:
-                    # 当前这个 batch 里，除了主标签分支之外，其他分支的 acc 指标，即：辅助分支准确率
-                    # 如：真实：[1, 0, 1, 0] -> 预测：[1, 0, 0, 0]
-                    # 因为 4 个位置里有 1 个错了，这样真条就是错的，所以这条样本对 xxx_acc 的贡献是 0
                     extra_acc_logs = ", ".join(
                         f"{name}_acc={acc:.4f}"
                         for name, acc in train_batch_branch_acc.items()
                         if name != main_label_name
                     )
-                    # 多标签分支中，每个标签位的准确率（这个指标只会出现在 multi 分支里，single 分支没有这个值）
-                    # 如：真实：[1, 0, 1, 1] -> 预测：[1, 0, 1, 0]
-                    # 因为 4 个位置里对了 3 个，所以 xxx_labels_acc 是 0.75
                     extra_label_acc_logs = ", ".join(
                         f"{name}_label_acc={acc:.4f}"
                         for name, acc in train_batch_branch_label_acc.items()
@@ -551,11 +552,13 @@ class BertManager:
                 # 每训练 10 个 epoch，保存一次参数
                 if epoch % 10 == 0:
                     periodic_file_param_save_path = os.path.join(params_save_path, f"periodic_epoch_{epoch}_{avg_train_acc:.4f}.pth")
-                    torch.save({
+                    checkpoint: Checkpoint = {
                         "epoch": epoch,
+                        "val_acc": avg_train_acc if not valid_loader else 0.0,  # 无验证集时用训练准确率
                         "model_state_dict": bert_incr_model.state_dict(),
                         "optimizer_state_dict": optimizer.state_dict(),
-                    }, periodic_file_param_save_path)
+                    }
+                    torch.save(checkpoint, periodic_file_param_save_path)
                     # 清理文件，数量保持在 periodic_checkpoint_max_keep 个
                     periodic_cleanup_result = self._cleanup_old_periodic_checkpoints(
                         params_save_path=params_save_path,
@@ -633,7 +636,6 @@ class BertManager:
                                 val_branch_label_correct_sums[label_name] += branch_metrics["label_correct"]
                                 val_branch_label_total_sums[label_name] += branch_metrics["label_total"]
                                 val_batch_branch_label_acc[label_name] = branch_metrics["label_acc"]
-                            # 计算主标签
                             if label_name == main_label_name:
                                 main_batch_acc = branch_metrics["acc"]
                                 val_main_correct += branch_metrics["correct"]
@@ -664,39 +666,21 @@ class BertManager:
                         continue
                     # 计算验证的平均损失
                     avg_val_loss = val_total_loss / val_steps
-                    # 计算主标签分支的验证集准确率
+                    # 计算验证的平均精度
                     avg_val_acc = (val_main_correct / val_main_total) if val_main_total > 0 else 0.0
-                    # 各分支样本级准确率：single=分类准确率，multi=样本级 exact-match（整行标签全对才算对）
                     avg_val_branch_accs = {
                         label_name: (val_branch_correct_sums[label_name] / val_branch_total_sums[label_name])
                         if val_branch_total_sums[label_name] > 0 else 0.0
                         for label_name in val_branch_correct_sums.keys()
                     }
-                    # 仅 multi 分支的标签位准确率（label-wise accuracy）；single 分支不进入该字典
                     avg_val_branch_label_accs = {
                         label_name: (val_branch_label_correct_sums[label_name] / val_branch_label_total_sums[label_name])
                         if val_branch_label_total_sums[label_name] > 0 else 0.0
                         for label_name in val_branch_label_correct_sums.keys()
                     }
-                    # 按 loss_weights 计算各分支的加权综合指标：single 用 acc，multi 用 label_acc
-                    # 说明：branch_meta 中的 weight 来自入参 loss_weights，且与 label_fields 一一对齐
-                    weighted_acc_sum = 0.0
-                    weight_sum = 0.0
-                    for label_name, _, weight, branch_cfg in branch_meta:
-                        if branch_cfg.type == "multi":
-                            # 按“标签位准确率”参与综合分
-                            metric_val = avg_val_branch_label_accs.get(label_name, 0.0)
-                        else:
-                            metric_val = avg_val_branch_accs.get(label_name, 0.0)
-                        weighted_acc_sum += weight * metric_val
-                        weight_sum += weight
-                    # 归一化为“加权平均”而非“加权求和”：避免权重总和（如 1.0、10.0）改变指标量纲
-                    # 当 weight_sum=0 时回退到 0.0，防止除零
-                    avg_val_weighted_score = (weighted_acc_sum / weight_sum) if weight_sum > 0 else 0.0
                     final_valid_metrics = {
                         "loss": avg_val_loss,
                         "main_acc": avg_val_acc,
-                        "weighted_score": avg_val_weighted_score,
                         **{f"{name}_acc": acc for name, acc in avg_val_branch_accs.items()},
                         **{f"{name}_label_acc": acc for name, acc in avg_val_branch_label_accs.items()},
                     }
@@ -713,30 +697,26 @@ class BertManager:
                     logger.info(
                         f"[VALID] epoch={epoch}/{epochs}, summary, "
                         f"avg_loss={avg_val_loss:.4f}, avg_main_acc={avg_val_acc:.4f}, "
-                        f"avg_weighted_score={avg_val_weighted_score:.4f}, "
                         f"steps={val_steps}{(', ' + valid_extra_acc_summary) if valid_extra_acc_summary else ''}"
                         f"{(', ' + valid_extra_label_acc_summary) if valid_extra_label_acc_summary else ''}"
                     )
 
                     # 学习率调度
-                    # 统一使用加权综合指标作为调度目标：综合分长期不提升时，自动降低学习率
-                    scheduler.step(avg_val_weighted_score)
+                    scheduler.step(avg_val_acc)
 
-                    # 根据验证加权综合指标，保存最优参数
-                    # 与 scheduler/early stop 使用同一指标，避免“保存标准”和“停止标准”不一致
-                    if avg_val_weighted_score > best_val_weighted_score:
+                    # 根据验证准确率，保存最优参数
+                    if avg_val_acc > best_val_acc:
                         # 把最优的参数保存下来，就是为了方式过拟合，因为一旦过拟合是无法回退的，如果沒有保存，那么只有重新训练
                         # 这就是为什么要保存最优参数的原因
-                        best_val_weighted_score = avg_val_weighted_score
-                        best_file_params_save_path = os.path.join(
-                            params_save_path,
-                            f"best_bert_epoch_{epoch}_score_{best_val_weighted_score:.4f}.pth"
-                        )
-                        torch.save({
+                        best_val_acc = avg_val_acc
+                        best_file_params_save_path = os.path.join(params_save_path, f"best_bert_epoch_{epoch}_acc_{best_val_acc:.4f}.pth")
+                        checkpoint: Checkpoint = {
                             "epoch": epoch,
+                            "val_acc": avg_val_acc,
                             "model_state_dict": bert_incr_model.state_dict(),
                             "optimizer_state_dict": optimizer.state_dict(),
-                        }, best_file_params_save_path)
+                        }
+                        torch.save(checkpoint, best_file_params_save_path)
                         # 清理文件，保证只有一份最优的 checkpoint 文件存在
                         cleanup_result = self._cleanup_old_best_checkpoints(
                             params_save_path=params_save_path,
@@ -752,8 +732,7 @@ class BertManager:
                             else ""
                         )
                         logger.info(
-                            f"[SAVE] epoch={epoch}/{epochs}, kind=best, "
-                            f"score={best_val_weighted_score:.4f}, main_acc={avg_val_acc:.4f}, "
+                            f"[SAVE] epoch={epoch}/{epochs}, kind=best, acc={best_val_acc:.4f}, "
                             f"path={best_file_params_save_path}{deleted_count_text}, deleted_files={deleted_files_text}"
                         )
                     else:
@@ -763,18 +742,20 @@ class BertManager:
                                 # 早停触发，停止训练
                                 logger.info(
                                     f"[EARLY_STOP] epoch={epoch}/{epochs}, patience={patience}, "
-                                    f"best_val_weighted_score={best_val_weighted_score:.4f}"
+                                    f"best_val_acc={best_val_acc:.4f}"
                                 )
                                 break
 
         # 训练结束后的统一兜底：保存最后一轮参数（避免早停或轮次过小无法保存的情况）
         if final_epoch > 0:
             last_file_params_save_path = os.path.join(params_save_path, f"last_bert_epoch_{final_epoch}.pth")
-            torch.save({
+            checkpoint: Checkpoint = {
                 "epoch": final_epoch,
+                "val_acc": best_val_acc if valid_loader else avg_train_acc,
                 "model_state_dict": bert_incr_model.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
-            }, last_file_params_save_path)
+            }
+            torch.save(checkpoint, last_file_params_save_path)
             logger.info(
                 f"[SAVE] epoch={final_epoch}/{epochs}, kind=last_fallback, path={last_file_params_save_path}"
             )
@@ -881,7 +862,7 @@ class BertManager:
             raise ValueError("optimizer is required when load_optimizer=True")
 
         effective_map_location = map_location or self.device
-        checkpoint = torch.load(checkpoint_path, map_location=effective_map_location)
+        checkpoint: Checkpoint = torch.load(checkpoint_path, map_location=effective_map_location)
 
         checkpoint_type = "full_checkpoint" if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint else "state_dict"
         model_state_dict = checkpoint["model_state_dict"] if checkpoint_type == "full_checkpoint" else checkpoint
@@ -903,6 +884,7 @@ class BertManager:
             "checkpoint_type": checkpoint_type,
             "path": checkpoint_path,
             "epoch": checkpoint.get("epoch") if isinstance(checkpoint, dict) else None,
+            "val_acc": checkpoint.get("val_acc") if isinstance(checkpoint, dict) else None,
             "has_optimizer_state": has_optimizer_state,
             "optimizer_loaded": optimizer_loaded,
             "missing_keys": list(load_result.missing_keys),
@@ -911,7 +893,7 @@ class BertManager:
 
         logger.info(
             f"[LOAD] path={checkpoint_path}, type={checkpoint_type}, strict={strict}, "
-            f"epoch={result['epoch']}, optimizer_loaded={optimizer_loaded}, "
+            f"epoch={result['epoch']}, val_acc={result['val_acc']}, optimizer_loaded={optimizer_loaded}, "
             f"missing_keys={len(result['missing_keys'])}, unexpected_keys={len(result['unexpected_keys'])}"
         )
 

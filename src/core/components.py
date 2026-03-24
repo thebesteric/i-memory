@@ -94,7 +94,7 @@ def get_vector_store() -> BaseVectorStore:
     if backend == VectorStoreProvider.POSTGRES.value:
         from src.core.vector.postgres_vector_store import PostgresVectorStore
         dsn = env.POSTGRES_DB_URL
-        _vector_store = COMPONENTS_CACHE.get_or_set(
+        _vector_store: PostgresVectorStore = COMPONENTS_CACHE.get_or_set(
             backend,
             lambda: PostgresVectorStore(dsn),
             on_set=lambda k, v: logger.info(f"Using PostgresVectorStore at {dsn}")
@@ -103,7 +103,7 @@ def get_vector_store() -> BaseVectorStore:
     elif backend == VectorStoreProvider.VALKEY.value or backend == VectorStoreProvider.REDIS.value:
         from src.core.vector.redis_vector_store import RedisVectorStore
         url = env.REDIS_URL
-        _vector_store = COMPONENTS_CACHE.get_or_set(
+        _vector_store: RedisVectorStore = COMPONENTS_CACHE.get_or_set(
             backend,
             lambda: RedisVectorStore(url),
             on_set=lambda k, v: logger.info(f"Using RedisVectorStore at {url}")

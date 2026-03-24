@@ -35,6 +35,7 @@ class TestBertManagerPredict(unittest.TestCase):
         )
         cls.checkpoint_path = REAL_CHECKPOINT_PATH
         cls.text = "旧毛衣袖口磨出毛边，套上时熟悉的柔软裹住手腕，像被时光温柔地抱了一下。"
+        # cls.text = "The cuffs of the old sweater have worn fuzzy, and slipping it on, its familiar softness envelops my wrists—as if time itself had gently hugged me."
         # {
         #     "text": "旧毛衣袖口磨出毛边，套上时熟悉的柔软裹住手腕，像被时光温柔地抱了一下。",
         #     "primary": 3,

@@ -35,20 +35,21 @@ testing = ["bitsandbytes", "datasets", "diffusers", "evaluate", "parameterized",
 
 [[package]]
 name = "agile"
-version = "0.1.7"
+version = "0.1.8"
 description = "An easy-to-use general-purpose Python utility toolkits"
 optional = false
 python-versions = "<4.0.0,>=3.12"
 groups = ["main"]
 files = [
-    {file = "agile-0.1.7-py3-none-any.whl", hash = "sha256:9b14f9f84dfa3fe4bc90d316ea1b5632ad35f36e202e38b2147b2dad0682614c"},
-    {file = "agile-0.1.7.tar.gz", hash = "sha256:df75f4e63c7a8c5a1b60cdc2c9d16b7564072bf4cc26cca4722edc7f518adbbb"},
+    {file = "agile-0.1.8-py3-none-any.whl", hash = "sha256:936dfb666c21ba1749e7724af731142f02d853f5b362b15ab50c96d07cb15395"},
+    {file = "agile-0.1.8.tar.gz", hash = "sha256:08c53e3c125b50d6be9e589e5a6801487cb919c2fdacbd5e3f99126df2f8039b"},
 ]
 
 [package.dependencies]
 build = ">=1.4.0,<2.0.0"
 cachetools = ">=7.0.5,<8.0.0"
 colorlog = ">=6.10.1,<7.0.0"
+jieba = ">=0.42.1,<0.43.0"
 langchain = ">=1.2.11,<2.0.0"
 numpy = ">=2.4.3,<3.0.0"
 pydantic = ">=2.12.5,<3.0.0"
@@ -56,6 +57,7 @@ pymilvus = ">=2.6.10,<3.0.0"
 pyrootutils = ">=1.0.4,<2.0.0"
 pyyaml = ">=6.0.3,<7.0.0"
 typer = ">=0.24.1,<0.25.0"
+whoosh = ">=2.7.4,<3.0.0"
 
 [[package]]
 name = "aiohappyeyeballs"
@@ -4929,6 +4931,19 @@ files = [
 ]
 
 [[package]]
+name = "whoosh"
+version = "2.7.4"
+description = "Fast, pure-Python full text indexing, search, and spell checking library."
+optional = false
+python-versions = "*"
+groups = ["main"]
+files = [
+    {file = "Whoosh-2.7.4-py2.py3-none-any.whl", hash = "sha256:aa39c3c3426e3fd107dcb4bde64ca1e276a65a889d9085a6e4b54ba82420a852"},
+    {file = "Whoosh-2.7.4.tar.gz", hash = "sha256:7ca5633dbfa9e0e0fa400d3151a8a0c4bec53bd2ecedc0a67705b17565c31a83"},
+    {file = "Whoosh-2.7.4.zip", hash = "sha256:e0857375f63e9041e03fedd5b7541f97cf78917ac1b6b06c1fcc9b45375dda69"},
+]
+
+[[package]]
 name = "xxhash"
 version = "3.6.0"
 description = "Python binding for xxHash"
@@ -5336,4 +5351,4 @@ cffi = ["cffi (>=1.17,<2.0) ; platform_python_implementation != \"PyPy\" and pyt
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<3.15"
-content-hash = "2ad2d52a1226726bbdd798166ec14c86b3ae5d12740dd3b66444b91bc80a4219"
+content-hash = "0393cc3d228c830c2cd368d7af2aa9cd35a127e4ed2361466b091b14a4e7a392"

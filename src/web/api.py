@@ -1,4 +1,5 @@
 import os
+import inspect
 import sys
 import time
 from contextlib import asynccontextmanager
@@ -18,6 +19,7 @@ project_root = os.path.abspath(os.path.join(current_dir, '../../'))
 sys.path.append(project_root)
 
 from src.core.config import env
+from src.core.components import get_vector_store
 from src.memory.tasks import start_background_tasks, stop_background_tasks
 from src.web.routes import health_router, memory_router, sources_router
 
@@ -38,6 +40,14 @@ def create_app() -> FastAPI:
             f"🚀 Starting iMemory API server on {env.WEB_HOST}:{env.WEB_PORT} with debug: {debug}, "
             f"using environment mode: {env_mode if env_mode else 'local'}"
         )
+        vector_store = get_vector_store()
+        warmup = getattr(vector_store, "warmup", None)
+        if callable(warmup):
+            warmup_result = warmup()
+            if inspect.isawaitable(warmup_result):
+                await warmup_result
+            logger.info("Vector store warmup completed")
+
         # 启动相关任务
         app.state.scheduler = start_background_tasks()
 

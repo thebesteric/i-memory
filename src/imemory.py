@@ -36,7 +36,9 @@ class IMemory:
         """
         # 初始化数据库与连接池
         self.db.connect()
+
         # 初始化向量数据库集合（如果需要）
+        logger.info(f"Using Milvus DB for vector storage: {env.VECTOR_MILVUS_SUPPORT}")
         if env.VECTOR_MILVUS_SUPPORT is True:
             self.milvus_manager = get_milvus_manager()
             # 检查集合是否存在，不存在则创建

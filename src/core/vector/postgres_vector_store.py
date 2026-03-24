@@ -1,4 +1,6 @@
+import asyncio
 import json
+import time
 from typing import List, Optional
 
 import asyncpg
@@ -18,6 +20,8 @@ class PostgresVectorStore(BaseVectorStore):
         self.dsn = dsn
         self.vector_table_name = vector_table_name or "vectors"
         self.pool = None
+        self.initialized = False
+        self._pool_init_lock = asyncio.Lock()
 
     async def _get_pool(self):
         """
@@ -25,36 +29,71 @@ class PostgresVectorStore(BaseVectorStore):
         该方法会确保 pgvector 扩展已启用，并初始化表结构和索引
         :return:
         """
-        if not self.pool:
-            self.pool = await asyncpg.create_pool(self.dsn)
-            async with self.pool.acquire() as conn:
-                # 确认 pgvector 扩展已启用
-                await conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
-                logger.info("pgvector extension enabled")
+        if self.pool and self.initialized:
+            return self.pool
 
-                # 初始化向量表结构
-                await conn.execute(f"""
-                    CREATE TABLE IF NOT EXISTS {self.vector_table_name} (
-                        id TEXT,
-                        sector TEXT NOT NULL,
-                        user_id TEXT,
-                        tenant_id TEXT,
-                        project_id TEXT,
-                        v vector({env.VECTOR_DIM}),
-                        dim INTEGER,
-                        created_at TIMESTAMPTZ DEFAULT NOW(),
-                        PRIMARY KEY (id, sector)
-                    )
-                """)
+        async with self._pool_init_lock:
+            if self.pool and self.initialized:
+                return self.pool
 
-                # 创建 HNSW 索引以加速向量相似度搜索
-                await conn.execute(f"""
-                    CREATE INDEX IF NOT EXISTS {self.vector_table_name}_hnsw_idx
-                    ON {self.vector_table_name} USING hnsw (v vector_cosine_ops)
-                """)
-                logger.info(f"HNSW index created on {self.vector_table_name} for fast ANN queries")
+            init_start = time.perf_counter()
+            pool = await asyncpg.create_pool(self.dsn)
+            try:
+                async with pool.acquire() as conn:
+                    # 确认 pgvector 扩展已启用
+                    await conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
+                    logger.info("pgvector extension enabled")
+
+                    # 初始化向量表结构
+                    await conn.execute(f"""
+                        CREATE TABLE IF NOT EXISTS {self.vector_table_name} (
+                            id TEXT,
+                            sector TEXT NOT NULL,
+                            user_id TEXT,
+                            tenant_id TEXT,
+                            project_id TEXT,
+                            v vector({env.VECTOR_DIM}),
+                            dim INTEGER,
+                            created_at TIMESTAMPTZ DEFAULT NOW(),
+                            PRIMARY KEY (id, sector)
+                        )
+                    """)
+
+                    # 创建 HNSW 索引以加速向量相似度搜索
+                    await conn.execute(f"""
+                        CREATE INDEX IF NOT EXISTS {self.vector_table_name}_hnsw_idx
+                        ON {self.vector_table_name} USING hnsw (v vector_cosine_ops)
+                    """)
+                    logger.info(f"HNSW index created on {self.vector_table_name} for fast ANN queries")
+            except Exception:
+                await pool.close()
+                raise
+
+            self.pool = pool
+            self.initialized = True
+            logger.info(
+                f"PostgresVectorStore initialized for table={self.vector_table_name} "
+                f"in {(time.perf_counter() - init_start) * 1000:.2f}ms"
+            )
 
         return self.pool
+
+    async def warmup(self):
+        """在服务启动阶段主动初始化连接池与表结构。"""
+        warmup_start = time.perf_counter()
+        was_initialized = self.initialized
+        await self._get_pool()
+        if was_initialized:
+            logger.info(
+                f"PostgresVectorStore warmup skipped (already initialized), "
+                f"cost {(time.perf_counter() - warmup_start) * 1000:.2f}ms"
+            )
+            return
+
+        logger.info(
+            f"PostgresVectorStore warmup completed, "
+            f"cost {(time.perf_counter() - warmup_start) * 1000:.2f}ms"
+        )
 
     async def store_vector(self, id: str, sector: str, vector: List[float], dim: int, user_identity: IMemoryUserIdentity = None):
         """

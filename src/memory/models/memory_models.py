@@ -97,3 +97,16 @@ class IMemoryUser(BaseModel):
     reflection_count: int = Field(default=0, description="反思次数")
     created_at: datetime.datetime | None = Field(default=None, description="创建时间")
     updated_at: datetime.datetime | None = Field(default=None, description="更新时间")
+
+    @staticmethod
+    def from_dict(data: dict[str, Any]):
+        return IMemoryUser(
+            id=data["id"],
+            tenant_id=data["tenant_id"],
+            project_id=data["project_id"],
+            user_id=data["user_id"],
+            summary=data["summary"],
+            reflection_count=data["reflection_count"],
+            created_at=data["created_at"],
+            updated_at=data["updated_at"]
+        ) if data else None

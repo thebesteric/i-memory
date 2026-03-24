@@ -7,6 +7,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
 from src.core.config import env
+from src.memory.graph import graph
 from src.memory.hsg import decay
 
 logger = LogHelper.get_logger()
@@ -38,11 +39,22 @@ class JobDefinition:
 
 def _build_job_definitions() -> list[JobDefinition]:
     return [
+        # 记忆衰减任务
         JobDefinition(
             id="decay",
             name="Periodic memory decay",
             func=decay.apply_decay,
-            seconds=max(1, int(getattr(env, "DECAY_INTERVAL_SECONDS", 60) or 60)),
+            seconds=max(1, int(getattr(env, "DECAY_INTERVAL_SECONDS", 60 * 5) or 60 * 5)),
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=30,
+        ),
+        # 图构建任务
+        JobDefinition(
+            id="graph",
+            name="Memory graph build",
+            func=graph.build_graph,
+            seconds=max(1, int(getattr(env, "GRAPH_BUILD_INTERVAL_SECONDS", 60 * 30) or 60 * 30)),
             max_instances=1,
             coalesce=True,
             misfire_grace_time=30,

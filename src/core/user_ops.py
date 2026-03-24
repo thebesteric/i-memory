@@ -11,6 +11,32 @@ logger = LogHelper.get_logger()
 db = get_db()
 
 
+async def find_user(order_by: list[str] = None, limit=10, offset=0) -> list[IMemoryUser]:
+    """
+    查询所有用户
+    :param order_by: 排序调节
+    :param limit: 数量限制
+    :param offset: 偏移量
+    :return:
+    """
+    sql_parts = [
+        "SELECT * FROM users t"
+    ]
+
+    # 拼接排序
+    if order_by:
+        order_by_clause = ", ".join(order_by)
+        sql_parts.append(f"ORDER BY {order_by_clause}")
+
+    # 分页
+    sql_parts.append(f"LIMIT %s OFFSET %s")
+    params = [str(limit), str(offset)]
+
+    final_sql = " ".join(sql_parts)
+    users = db.fetchall(final_sql, tuple(params))
+    return [IMemoryUser.from_dict(u) for u in users]
+
+
 async def get_user(user_identity: IMemoryUserIdentity) -> IMemoryUser | None:
     """
     获取用户信息
@@ -36,16 +62,7 @@ async def get_user(user_identity: IMemoryUserIdentity) -> IMemoryUser | None:
 
     final_sql = " ".join(sql_parts)
     user = db.fetchone(final_sql, tuple(params))
-    return IMemoryUser(
-        id=user["id"],
-        tenant_id=user["tenant_id"],
-        project_id=user["project_id"],
-        user_id=user["user_id"],
-        summary=user["summary"],
-        reflection_count=user["reflection_count"],
-        created_at=user["created_at"],
-        updated_at=user["updated_at"]
-    ) if user else None
+    return IMemoryUser.from_dict(user)
 
 
 async def add_user(user_identity: IMemoryUserIdentity, summary: str = None, reflection_count: int = 0) -> None:
