@@ -5,6 +5,7 @@ from agile.utils import LogHelper
 from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_EXECUTED, JobExecutionEvent
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
+import asyncio
 
 from src.core.config import env
 from src.memory.graph import graph
@@ -59,6 +60,16 @@ def _build_job_definitions() -> list[JobDefinition]:
             max_instances=1,
             coalesce=True,
             misfire_grace_time=30,
+        ),
+        # 每日强制图化任务
+        JobDefinition(
+            id="force_graph",
+            name="Daily force graph build for cold users",
+            func=graph.daily_force_graph_build,
+            seconds=60*60*24,  # 每24小时执行一次
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=600,
         )
     ]
 
@@ -96,6 +107,16 @@ def start_background_tasks() -> AsyncIOScheduler:
     _register_jobs(scheduler)
     scheduler.start()
     logger.info(f"[TASKS] Scheduler started, timezone={timezone}")
+
+    # 启动 graph worker 协程（多并发）
+    try:
+        graph_worker_count = getattr(env, "GRAPH_WORKER_COUNT", 3)
+        for i in range(graph_worker_count):
+            asyncio.create_task(graph.process_user_identity_queue())
+        logger.info(f"[TASKS] Started {graph_worker_count} process_user_identity_queue workers.")
+    except Exception as e:
+        logger.error(f"[TASKS] Failed to start process_user_identity_queue workers: {e}")
+
     return scheduler
 
 

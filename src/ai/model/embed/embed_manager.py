@@ -27,7 +27,6 @@ class EmbedManager:
         if self._is_model_local:
             self._model = self.load_model()
 
-
         logger.info(f"Embed model initialized: {self.model_name_or_path}, "
                     f"cache_dir={self.cache_dir}, device={self.device}, is_model_local={self._is_model_local}")
 
@@ -105,12 +104,12 @@ class EmbedManager:
         # 文本类型
         if isinstance(sentence1, str) and isinstance(sentence2, str):
             embeddings = self.embed_batch([sentence1, sentence2], dim=dim)
-            return self._cosine_similarity(embeddings[0], embeddings[1])
+            return self.cosine_similarity(embeddings[0], embeddings[1])
         # 向量类型
-        return self._cosine_similarity(sentence1, sentence2)
+        return self.cosine_similarity(sentence1, sentence2)
 
     @staticmethod
-    def _cosine_similarity(vec1: Sequence[float], vec2: Sequence[float], eps: float = 1e-12) -> float:
+    def cosine_similarity(vec1: Sequence[float], vec2: Sequence[float], eps: float = 1e-12) -> float:
         arr1 = np.asarray(vec1, dtype=np.float64)
         arr2 = np.asarray(vec2, dtype=np.float64)
         if arr1.shape != arr2.shape:

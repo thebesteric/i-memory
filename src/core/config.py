@@ -106,6 +106,7 @@ class EnvConfig:
         self.GRAPH_BUILD_INTERVAL_SECONDS = env_helper.get("IM_GRAPH_BUILD_INTERVAL_SECONDS", 60 * 30)
         self.GRAPH_MEM_COUNT_AT_LEAST = env_helper.get("IM_GRAPH_MEM_COUNT_AT_LEAST", 50)
         self.GRAPH_MEM_COUNT_AT_MOST = env_helper.get("IM_GRAPH_MEM_COUNT_AT_MOST", 100)
+        self.GRAPH_WORKER_COUNT = env_helper.get("IM_GRAPH_WORKER_COUNT", 3)
 
 
 def _load_env_file():

@@ -5,6 +5,99 @@ from typing import Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 
+class RelationType(str, Enum):
+    """
+    人与人之间关系类型枚举
+    """
+    # 家人亲属
+    FAMILY = ("family", "家人")
+    PARENT = ("parent", "父母")
+    CHILD = ("child", "子女")
+    SPOUSE = ("spouse", "配偶")
+    SIBLING = ("sibling", "兄弟姐妹")
+    RELATIVE = ("relative", "亲戚")
+
+    # 朋友同学
+    FRIEND = ("friend", "朋友")
+    BEST_FRIEND = ("best_friend", "挚友")
+    CLASSMATE = ("classmate", "同学")
+
+    # 工作职场
+    COLLEAGUE = ("colleague", "同事")
+    LEADER = ("leader", "上级/领导")
+    SUBORDINATE = ("subordinate", "下属")
+    PARTNER = ("partner", "合作伙伴")
+
+    # 情感亲密
+    LOVER = ("lover", "恋人")
+    FIANCE = ("fiance", "未婚夫/妻")
+
+    # 社交其他
+    NEIGHBOR = ("neighbor", "邻居")
+    ACQUAINTANCE = ("acquaintance", "熟人")
+    STRANGER = ("stranger", "陌生人")
+    OTHER = ("other", "其他")
+
+    def __new__(cls, value: str, label: str):
+        """支持元组形式的枚举值"""
+        obj = str.__new__(cls)
+        obj._value_ = value
+        obj._label = label
+        return obj
+
+    @property
+    def label(self) -> str:
+        """
+        获取中文标签
+        :return:
+        """
+        return self._label
+
+    def display(self) -> str:
+        """获取显示文本"""
+        return f"{self.value} ({self.label})"
+
+    @classmethod
+    def get_all_labels(cls) -> list[tuple[str, str]]:
+        """
+        获取所有类型的 value 和 label 列表
+        :return:
+        """
+        return [(e.value, e.label) for e in cls]
+
+    @classmethod
+    def get_prompt_description(cls) -> str:
+        """生成用于提示词的描述"""
+        lines = []
+        for e in cls:
+            lines.append(f"  - {e.value}：{e.label}")
+        return "\n".join(lines)
+
+    @classmethod
+    def from_value(cls, value: str) -> Optional["RelationType"]:
+        """
+        根据 value 获取枚举成员
+        :param value:
+        :return:
+        """
+        for e in cls:
+            if e.value == value:
+                return e
+        return None
+
+    @classmethod
+    def from_label(cls, label: str) -> Optional["RelationType"]:
+        """
+        根据中文标签获取枚举成员
+        :param label:
+        :return:
+        """
+        for e in cls:
+            if e.label == label:
+                return e
+        return None
+
+
 class EntityType(str, Enum):
     """
     实体类型枚举
@@ -88,7 +181,35 @@ class Entity(BaseModel):
 
     text: str = Field(..., description="事实中出现的具体命名实体")
     entity_type: EntityType = Field(..., description="实体类型")
-    relation_to_user: str | None = Field(default=None, description="与用户的关系")
+    relation_to_user: RelationType | None = Field(default=None, description="与用户的关系")
+
+    _id: str | None = PrivateAttr(None)
+
+    @property
+    def id(self):
+        return self.model_extra.get("_id", None)
+
+
+class Topic(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True, extra="allow")
+
+    name: str = Field(..., description="主题")
+    summary: str = Field(..., description="内容简介（精简，紧凑，能够表达核心含义）")
+    keywords: list[str] = Field(default_factory=list, description="关键词/信息，尽可能细分")
+    dialogue_ids: list[str] = Field(..., description="原始对话 ID 列表，表示这个知识单元包含了哪些原始对话内容")
+
+    _id: str | None = PrivateAttr(None)
+
+    # 私有字段，用于后面将 summary 进行向量嵌入
+    _summary_embedding: list[float] | None = PrivateAttr(default=None)
+
+    @property
+    def id(self):
+        return self.model_extra.get("_id", None)
+
+    @property
+    def summary_embedding(self):
+        return self.model_extra.get("_summary_embedding", None)
 
 
 class Fact(BaseModel):
@@ -165,6 +286,8 @@ class Fact(BaseModel):
 
     # 私有字段，用于设置语义，列表的第一个为主语义，其他为辅助语义
     _sectors: list[Literal["episodic", "semantic", "procedural", "emotional", "reflective"]] = PrivateAttr(...)
+    # 私有字段：主键
+    _id: str | None = PrivateAttr(None)
 
     def add_sectors(self, sectors: list[Literal["episodic", "semantic", "procedural", "emotional", "reflective"]]):
         """
@@ -174,12 +297,13 @@ class Fact(BaseModel):
         """
         self._sectors = sectors
 
-    def get_sectors(self) -> list[str]:
-        """
-        获取语义类型列表
-        :return:
-        """
-        return self._sectors
+    @property
+    def sectors(self) -> list[str]:
+        return self.model_extra.get("_sectors", [])
+
+    @property
+    def id(self):
+        return self.model_extra.get("_id", None)
 
 
 class NodeType(str, Enum):
@@ -350,3 +474,9 @@ class Edge(BaseModel):
     target_id: str = Field(..., description="目标节点 ID")
     edge_type: EdgeType = Field(..., description="边类型")
     properties: dict = Field(default_factory=dict, description="额外属性，如权重、时间戳等")
+
+
+if __name__ == '__main__':
+    print(EntityType.CAPABILITY.name)
+    print(EntityType.CAPABILITY.value)
+    print(EntityType.CAPABILITY.label)

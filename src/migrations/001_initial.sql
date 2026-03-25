@@ -67,7 +67,7 @@ CREATE TABLE IF NOT EXISTS vectors
     tenant_id  TEXT,
     project_id TEXT,
     user_id    TEXT,
-    v          vector(1536),
+    v          VECTOR(1536),
     dim        INTEGER,
     PRIMARY KEY (id, sector),
     CONSTRAINT fk_vectors_id_memories_id
@@ -237,11 +237,41 @@ COMMENT ON COLUMN segment.current_segment IS '当前分段值';
 COMMENT ON COLUMN segment.created_at IS '创建时间戳';
 COMMENT ON COLUMN segment.updated_at IS '最后更新时间戳';
 
+-- 主题表
+CREATE TABLE IF NOT EXISTS topics
+(
+    id           TEXT PRIMARY KEY,
+    tenant_id    TEXT,
+    project_id   TEXT,
+    user_id      TEXT,
+    name         TEXT NOT NULL,
+    summary      TEXT,
+    keywords     JSONB     DEFAULT '[]',
+    dialogue_ids JSONB     DEFAULT '[]',
+    created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE topics IS '主题表';
+COMMENT ON COLUMN topics.id IS '主题标识';
+COMMENT ON COLUMN topics.tenant_id IS '租户标识';
+COMMENT ON COLUMN topics.project_id IS '项目标识';
+COMMENT ON COLUMN topics.user_id IS '用户标识';
+COMMENT ON COLUMN topics.name IS '主题名称';
+COMMENT ON COLUMN topics.summary IS '主题摘要';
+COMMENT ON COLUMN topics.keywords IS '主题相关关键词列表';
+COMMENT ON COLUMN topics.dialogue_ids IS '相关对话标识列表';
+COMMENT ON COLUMN topics.created_at IS '创建时间戳';
+COMMENT ON COLUMN topics.updated_at IS '最后更新时间戳';
 
 -- 事实表
 CREATE TABLE IF NOT EXISTS facts
 (
     id             TEXT PRIMARY KEY,
+    tenant_id      TEXT,
+    project_id     TEXT,
+    user_id        TEXT,
+    topic_id       TEXT,
     what           TEXT        NOT NULL,
     when_          TEXT,
     where_         TEXT,
@@ -251,14 +281,19 @@ CREATE TABLE IF NOT EXISTS facts
     fact_kind      VARCHAR(20) NOT NULL DEFAULT 'conversation',
     occurred_start TIMESTAMP,
     occurred_end   TIMESTAMP,
-    dialogue_ids   JSONB                DEFAULT '[]',
     created_at     TIMESTAMP,
     updated_at     TIMESTAMP,
-    processed_at   TIMESTAMP
+    processed_at   TIMESTAMP,
+    CONSTRAINT fk_facts_topic_id_topics_id
+        FOREIGN KEY (topic_id) REFERENCES topics (id)
 );
 
 COMMENT ON TABLE facts IS '事实表';
 COMMENT ON COLUMN facts.id IS '事实标识';
+COMMENT ON COLUMN facts.tenant_id IS '租户标识';
+COMMENT ON COLUMN facts.project_id IS '项目标识';
+COMMENT ON COLUMN facts.user_id IS '用户标识';
+COMMENT ON COLUMN facts.topic_id IS '主题 ID';
 COMMENT ON COLUMN facts.what IS '事实内容';
 COMMENT ON COLUMN facts.when_ IS '事实发生的时间描述';
 COMMENT ON COLUMN facts.where_ IS '事实发生的地点描述';
@@ -268,7 +303,6 @@ COMMENT ON COLUMN facts.status IS '事实状态（如 pending、processed、fail
 COMMENT ON COLUMN facts.fact_kind IS '事实类型（如 conversation、event 等）';
 COMMENT ON COLUMN facts.occurred_start IS '事实发生的开始时间';
 COMMENT ON COLUMN facts.occurred_end IS '事实发生的结束时间';
-COMMENT ON COLUMN facts.dialogue_ids IS '相关对话标识列表';
 COMMENT ON COLUMN facts.created_at IS '创建时间戳';
 COMMENT ON COLUMN facts.updated_at IS '最后更新时间戳';
 COMMENT ON COLUMN facts.processed_at IS '事实被图谱化的时间戳';
@@ -276,32 +310,67 @@ COMMENT ON COLUMN facts.processed_at IS '事实被图谱化的时间戳';
 -- 实体表
 CREATE TABLE IF NOT EXISTS entities
 (
+    id             TEXT PRIMARY KEY,
+    tenant_id      TEXT,
+    project_id     TEXT,
+    user_id        TEXT,
+    text           VARCHAR(500) NOT NULL,
+    entity_type    VARCHAR(30)  NOT NULL,
+    entity_label   VARCHAR(50),
+    canonical_id   TEXT,
+    canonical_text TEXT,
+    created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (tenant_id, project_id, user_id, text, entity_type),
+    CONSTRAINT fk_entities_canonical_id_canonical_entities_id
+        FOREIGN KEY (canonical_id) REFERENCES canonical_entities (id)
+);
+
+COMMENT ON TABLE entities IS '实体表';
+COMMENT ON COLUMN entities.id IS '实体标识';
+COMMENT ON COLUMN entities.tenant_id IS '租户标识';
+COMMENT ON COLUMN entities.project_id IS '项目标识';
+COMMENT ON COLUMN entities.user_id IS '用户标识';
+COMMENT ON COLUMN entities.text IS '实体原始提及文本';
+COMMENT ON COLUMN entities.entity_type IS '实体类型';
+COMMENT ON COLUMN entities.canonical_id IS '规范化实体标识';
+COMMENT ON COLUMN entities.canonical_text IS '规范化实体文本';
+COMMENT ON COLUMN entities.created_at IS '创建时间戳';
+COMMENT ON COLUMN entities.updated_at IS '最后更新时间戳';
+
+-- 规范化实体表
+CREATE TABLE IF NOT EXISTS canonical_entities
+(
     id               TEXT PRIMARY KEY,
-    text             VARCHAR(500) NOT NULL,
+    tenant_id        TEXT,
+    project_id       TEXT,
+    user_id          TEXT,
+    name             VARCHAR(500) NOT NULL,
     entity_type      VARCHAR(30)  NOT NULL,
     entity_label     VARCHAR(50),
-    canonical_id     TEXT,
-    canonical_text   TEXT,
+    vector           VECTOR(1536),
     occurrence_count INT       DEFAULT 1,
     first_seen_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_seen_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (text, entity_type)
+    UNIQUE (tenant_id, project_id, user_id, name, entity_type)
 );
 
-COMMENT ON TABLE entities IS '实体表';
-COMMENT ON COLUMN entities.id IS '实体标识';
-COMMENT ON COLUMN entities.text IS '实体文本';
-COMMENT ON COLUMN entities.entity_type IS '实体类型（如 person、location、organization 等）';
-COMMENT ON COLUMN entities.entity_label IS '实体标签';
-COMMENT ON COLUMN entities.canonical_id IS '规范化实体标识';
-COMMENT ON COLUMN entities.canonical_text IS '规范化实体文本';
-COMMENT ON COLUMN entities.occurrence_count IS '实体出现次数';
-COMMENT ON COLUMN entities.first_seen_at IS '实体首次出现时间';
-COMMENT ON COLUMN entities.last_seen_at IS '实体最后出现时间';
-COMMENT ON COLUMN entities.created_at IS '创建时间戳';
-COMMENT ON COLUMN entities.updated_at IS '最后更新时间戳';
+COMMENT ON TABLE canonical_entities IS '规范化实体表';
+COMMENT ON COLUMN canonical_entities.id IS '实体标识';
+COMMENT ON COLUMN canonical_entities.tenant_id IS '租户标识';
+COMMENT ON COLUMN canonical_entities.project_id IS '项目标识';
+COMMENT ON COLUMN canonical_entities.user_id IS '用户标识';
+COMMENT ON COLUMN canonical_entities.name IS '实体名称';
+COMMENT ON COLUMN canonical_entities.entity_type IS '实体类型';
+COMMENT ON COLUMN canonical_entities.vector IS '实体的嵌入向量';
+COMMENT ON COLUMN canonical_entities.occurrence_count IS '实体出现次数';
+COMMENT ON COLUMN canonical_entities.first_seen_at IS '实体首次出现时间';
+COMMENT ON COLUMN canonical_entities.last_seen_at IS '实体最后出现时间';
+COMMENT ON COLUMN canonical_entities.created_at IS '创建时间戳';
+COMMENT ON COLUMN canonical_entities.updated_at IS '最后更新时间戳';
+
 
 -- 事实-实体关联表
 CREATE TABLE IF NOT EXISTS fact_entities
@@ -325,45 +394,6 @@ COMMENT ON COLUMN fact_entities.relation_to_user IS '实体与用户的关系描
 COMMENT ON COLUMN fact_entities.created_at IS '创建时间戳';
 COMMENT ON COLUMN fact_entities.updated_at IS '最后更新时间戳';
 
--- 主题表
-CREATE TABLE IF NOT EXISTS topics
-(
-    id         TEXT PRIMARY KEY,
-    name       TEXT NOT NULL,
-    summary    TEXT,
-    keywords   JSONB     DEFAULT '[]',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-COMMENT ON TABLE topics IS '主题表';
-COMMENT ON COLUMN topics.id IS '主题标识';
-COMMENT ON COLUMN topics.name IS '主题名称';
-COMMENT ON COLUMN topics.summary IS '主题摘要';
-COMMENT ON COLUMN topics.keywords IS '主题相关关键词列表';
-COMMENT ON COLUMN topics.created_at IS '创建时间戳';
-COMMENT ON COLUMN topics.updated_at IS '最后更新时间戳';
-
--- 事实-主题关联表
-CREATE TABLE IF NOT EXISTS fact_topics
-(
-    fact_id    TEXT,
-    topic_id   TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (fact_id, topic_id),
-    CONSTRAINT fk_fact_topics_fact_id_facts_id
-        FOREIGN KEY (fact_id) REFERENCES facts (id),
-    CONSTRAINT fk_fact_topics_topic_id_topics_id
-        FOREIGN KEY (topic_id) REFERENCES topics (id)
-);
-
-COMMENT ON TABLE fact_topics IS '事实与主题的关联表';
-COMMENT ON COLUMN fact_topics.fact_id IS '事实标识';
-COMMENT ON COLUMN fact_topics.topic_id IS '主题标识';
-COMMENT ON COLUMN fact_topics.created_at IS '创建时间戳';
-COMMENT ON COLUMN fact_topics.updated_at IS '最后更新时间戳';
-
 -- 事实图构建过程表
 CREATE TABLE IF NOT EXISTS fact_processing_logs
 (
@@ -377,6 +407,15 @@ CREATE TABLE IF NOT EXISTS fact_processing_logs
     CONSTRAINT fk_fact_graph_construction_fact_id_facts_id
         FOREIGN KEY (fact_id) REFERENCES facts (id)
 );
+
+COMMENT ON TABLE fact_processing_logs IS '事实图构建过程日志';
+COMMENT ON COLUMN fact_processing_logs.id IS '日志记录标识';
+COMMENT ON COLUMN fact_processing_logs.fact_id IS '相关事实标识';
+COMMENT ON COLUMN fact_processing_logs.stage IS '处理阶段描述';
+COMMENT ON COLUMN fact_processing_logs.status IS '阶段状态（如 pending、completed、failed）';
+COMMENT ON COLUMN fact_processing_logs.message IS '阶段相关消息或错误信息';
+COMMENT ON COLUMN fact_processing_logs.created_at IS '创建时间戳';
+COMMENT ON COLUMN fact_processing_logs.updated_at IS '更新时间戳';
 
 -- 基础数据插入
 

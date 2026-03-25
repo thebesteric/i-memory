@@ -4,7 +4,7 @@ from langchain_core.prompts import PromptTemplate
 from src.core.components import get_chat_model
 from src.core.dml_ops import dml_ops
 from src.memory.graph.semantic_split import Topic, Dialogue
-from src.memory.models.graph_models import Fact, EntityType
+from src.memory.models.graph_models import Fact, EntityType, RelationType
 
 
 class FactExtract:
@@ -21,7 +21,12 @@ class FactExtract:
 3. 如果信息不完整，相关字段留空
 
 ## 实体标签类型
+解析出的实体，必须严格按照如下类型赋值：
 {entity_types}
+
+## 关系标签类型
+解析出的实体与用户的关系，必须严格按照如下类型赋值：
+{relation_types}
 
 ## 输出格式
 {format_instructions}
@@ -51,6 +56,7 @@ begin!!
             input_variables=["topic", "summary", "keywords", "dialogues"],
             partial_variables={
                 "entity_types": EntityType.get_prompt_description(),
+                "relation_types": RelationType.get_prompt_description(),
                 "format_instructions": output_parser.get_format_instructions()
             }
         )

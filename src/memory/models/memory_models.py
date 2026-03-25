@@ -31,7 +31,7 @@ class IMemoryUserIdentity(BaseModel):
 
     @property
     def id(self):
-        return self.model_extra.get("_id")
+        return self.model_extra.get("_id", None)
 
     def check_legality(self):
         """
