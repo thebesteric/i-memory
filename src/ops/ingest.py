@@ -6,11 +6,12 @@ from typing import Dict, Any
 
 from agile.utils import LogHelper
 
+from src.core import user_ops
 from src.core.db import get_db
 from src.core.dml_ops import dml_ops
 from src.core.waypoints import Waypoints
 from src.memory.hsg import add_hsg_memory
-from src.memory.models.memory_models import IMemoryConfig, IMemoryUserIdentity, QARole
+from src.memory.models.memory_models import IMemoryConfig, IMemoryUserIdentity, QARole, IMemoryUser
 from src.ops.extract import extract_text
 
 logger = LogHelper.get_logger()
@@ -116,12 +117,12 @@ def split_text(t: str, sz: int) -> list[str]:
     return secs
 
 
-async def mk_root(txt: str,
+async def mk_root(user_identity: IMemoryUserIdentity,
+                  txt: str,
                   cfg: IMemoryConfig,
                   ex_dict: Dict,
                   sec_count: int,
                   meta: Dict[str, Any] = None,
-                  user_identity: IMemoryUserIdentity = None,
                   qa_role: QARole | None = None) -> str:
     """
     创建根记忆
@@ -129,15 +130,21 @@ async def mk_root(txt: str,
     逻辑：
     1. 生成摘要（截取前 N 字符）
     2. 格式化根记忆内容，包含文档类型和摘要
+    :param user_identity: 用户身份
     :param txt: 文本完整内容
     :param cfg: 配置项
     :param ex_dict: 扩展字典
     :param sec_count: 文本切分后的数量
     :param meta: 元数据
-    :param user_identity: 用户身份
     :param qa_role: QA 角色（human/assistant）
     :return:
     """
+    # 获取当前用户
+    user_identity.check_legality()
+    user = await user_ops.get_user(user_identity)
+    if not user:
+        raise ValueError(f"User not found for identity: {user_identity}")
+
     metadata = ex_dict["metadata"]
     # 生成摘要作为根记忆的内容
     summary = txt[:cfg.summary_length] + "..." if len(txt) > cfg.summary_length else txt
@@ -158,16 +165,10 @@ async def mk_root(txt: str,
             "ingested_at": now.strftime("%Y-%m-%d %H:%M:%S")
         })
 
-        user_id = user_identity.user_id
-        tenant_id = user_identity.tenant_id
-        project_id = user_identity.project_id
-
         dml_ops.ins_mem(
             id=mid,
             content=content,
-            user_id=user_id,
-            tenant_id=tenant_id or None,
-            project_id=project_id or None,
+            user_id=user.id,
             primary_sector="reflective",
             sectors=json.dumps([]),
             tags=json.dumps([]),
@@ -186,21 +187,21 @@ async def mk_root(txt: str,
         raise e
 
 
-async def mk_child(sec_txt: str,
+async def mk_child(user_identity: IMemoryUserIdentity,
+                   sec_txt: str,
                    idx: int,
                    sec_size: int,
                    root_id: str,
                    meta: Dict = None,
-                   user_identity: IMemoryUserIdentity = None,
                    qa_role: QARole | None = None) -> str:
     """
     创建子记忆
+    :param user_identity: 用户身份
     :param sec_txt: 部分内容
     :param idx: 索引
     :param sec_size: 部门内容长度
     :param root_id: 根 ID
     :param meta: 元数据
-    :param user_identity: 用户身份
     :param qa_role: QA 角色（human/assistant）
     :return:
     """
@@ -212,11 +213,7 @@ async def mk_child(sec_txt: str,
         "total_sections": sec_size,
         "root_id": root_id
     })
-    r = await add_hsg_memory(sec_txt,
-                             [],
-                             m,
-                             user_identity,
-                             qa_role=qa_role)
+    r = await add_hsg_memory(user_identity, sec_txt, [], m, qa_role=qa_role)
     return r["id"]
 
 
@@ -250,11 +247,7 @@ async def ingest_document(*,
         m.update(ex_meta)
         m.update({"ingestion_strategy": "single", "ingested_at": now.strftime("%Y-%m-%d %H:%M:%S")})
         # 将记忆写入数据库
-        r = await add_hsg_memory(text,
-                                 tags,
-                                 m,
-                                 user_identity,
-                                 qa_role=qa_role)
+        r = await add_hsg_memory(user_identity, text, tags, m, qa_role=qa_role)
         return {
             "root_memory_id": r["id"],
             "child_count": 0,
@@ -272,24 +265,12 @@ async def ingest_document(*,
         # 创建 Waypoints 实例
         waypoints = Waypoints()
         # 创建根记忆 (传入实际分段数)
-        root_id = await mk_root(text,
-                                cfg,
-                                ex_dict,
-                                len(secs),
-                                meta,
-                                user_identity,
-                                qa_role=qa_role)
+        root_id = await mk_root(user_identity, text, cfg, ex_dict, len(secs), meta, qa_role=qa_role)
         # 创建子记忆并建立链接
         for i, s in enumerate(secs):
-            child_id = await mk_child(s,
-                                      i,
-                                      len(secs),
-                                      root_id,
-                                      meta,
-                                      user_identity,
-                                      qa_role=qa_role)
+            child_id = await mk_child(user_identity, s, i, len(secs), root_id, meta, qa_role=qa_role)
             child_ids.append(child_id)
-            await waypoints.link(root_id, child_id, i, user_identity)
+            await waypoints.link(user_identity, root_id, child_id, i)
 
         return {
             "root_memory_id": root_id,

@@ -7,8 +7,6 @@ CREATE EXTENSION IF NOT EXISTS vector;
 CREATE TABLE IF NOT EXISTS memories
 (
     id             TEXT PRIMARY KEY,
-    tenant_id      TEXT,
-    project_id     TEXT,
     user_id        TEXT             DEFAULT 'anonymous',
     qa_role        TEXT,
     qa_pair_id     TEXT,
@@ -29,13 +27,13 @@ CREATE TABLE IF NOT EXISTS memories
     version        INTEGER,
     mean_dim       INTEGER,
     mean_vec       BYTEA,
-    feedback_score DOUBLE PRECISION DEFAULT 0
+    feedback_score DOUBLE PRECISION DEFAULT 0,
+    CONSTRAINT chk_memories_qa_role
+        CHECK (qa_role IS NULL OR qa_role IN ('human', 'assistant'))
 );
 
 COMMENT ON TABLE memories IS '用户记忆及派生元数据';
 COMMENT ON COLUMN memories.id IS '记忆主标识';
-COMMENT ON COLUMN memories.tenant_id IS '租户标识';
-COMMENT ON COLUMN memories.project_id IS '项目标识';
 COMMENT ON COLUMN memories.user_id IS '用户标识';
 COMMENT ON COLUMN memories.qa_role IS '问答角色（human/assistant）';
 COMMENT ON COLUMN memories.qa_pair_id IS '问答对标识';
@@ -62,13 +60,11 @@ COMMENT ON COLUMN memories.feedback_score IS '用户反馈得分';
 
 CREATE TABLE IF NOT EXISTS vectors
 (
-    id         TEXT,
-    sector     TEXT,
-    tenant_id  TEXT,
-    project_id TEXT,
-    user_id    TEXT,
-    v          VECTOR(1536),
-    dim        INTEGER,
+    id      TEXT,
+    sector  TEXT,
+    user_id TEXT,
+    v       VECTOR(1536),
+    dim     INTEGER,
     PRIMARY KEY (id, sector),
     CONSTRAINT fk_vectors_id_memories_id
         FOREIGN KEY (id) REFERENCES memories (id)
@@ -77,8 +73,6 @@ CREATE TABLE IF NOT EXISTS vectors
 COMMENT ON TABLE vectors IS '记忆的嵌入向量';
 COMMENT ON COLUMN vectors.id IS '记忆标识';
 COMMENT ON COLUMN vectors.sector IS '扇区/主题标签';
-COMMENT ON COLUMN vectors.tenant_id IS '租户标识';
-COMMENT ON COLUMN vectors.project_id IS '项目标识';
 COMMENT ON COLUMN vectors.user_id IS '用户标识';
 COMMENT ON COLUMN vectors.v IS '嵌入向量';
 COMMENT ON COLUMN vectors.dim IS '向量维度';
@@ -88,21 +82,21 @@ COMMENT ON COLUMN vectors.dim IS '向量维度';
 CREATE TABLE IF NOT EXISTS users
 (
     id               TEXT PRIMARY KEY,
-    tenant_id        TEXT,
-    project_id       TEXT,
-    user_id          TEXT,
+    tenant_key       TEXT,
+    project_key      TEXT,
+    user_key         TEXT,
     summary          TEXT,
     reflection_count INTEGER,
     created_at       TIMESTAMP,
     updated_at       TIMESTAMP,
-    UNIQUE (tenant_id, project_id, user_id)
+    UNIQUE (tenant_key, project_key, user_key)
 );
 
 COMMENT ON TABLE users IS '用户级摘要与计数器';
 COMMENT ON COLUMN users.id IS '用户主键';
-COMMENT ON COLUMN users.tenant_id IS '租户标识';
-COMMENT ON COLUMN users.project_id IS '项目标识';
-COMMENT ON COLUMN users.user_id IS '用户标识';
+COMMENT ON COLUMN users.tenant_key IS '租户标识';
+COMMENT ON COLUMN users.project_key IS '项目标识';
+COMMENT ON COLUMN users.user_key IS '用户标识';
 COMMENT ON COLUMN users.summary IS '用户摘要文本';
 COMMENT ON COLUMN users.reflection_count IS '反思计数';
 COMMENT ON COLUMN users.created_at IS '创建时间戳';
@@ -148,8 +142,6 @@ CREATE TABLE IF NOT EXISTS waypoints
 (
     src_id     TEXT,
     dst_id     TEXT,
-    tenant_id  TEXT,
-    project_id TEXT,
     user_id    TEXT,
     weight     DOUBLE PRECISION,
     created_at TIMESTAMP,
@@ -164,62 +156,10 @@ CREATE TABLE IF NOT EXISTS waypoints
 COMMENT ON TABLE waypoints IS '相关记忆之间的边';
 COMMENT ON COLUMN waypoints.src_id IS '源记忆标识';
 COMMENT ON COLUMN waypoints.dst_id IS '目标记忆标识';
-COMMENT ON COLUMN waypoints.tenant_id IS '租户标识';
-COMMENT ON COLUMN waypoints.project_id IS '项目标识';
 COMMENT ON COLUMN waypoints.user_id IS '用户标识';
 COMMENT ON COLUMN waypoints.weight IS '边权重';
 COMMENT ON COLUMN waypoints.created_at IS '创建时间戳';
 COMMENT ON COLUMN waypoints.updated_at IS '最后更新时间戳';
-
--- 时间事实表，表示从内容提取的有时间边界的事实，以及它们之间的关系边
-
-CREATE TABLE IF NOT EXISTS temporal_facts
-(
-    id         TEXT PRIMARY KEY,
-    subject    TEXT   NOT NULL,
-    predicate  TEXT   NOT NULL,
-    obj        TEXT   NOT NULL,
-    valid_from BIGINT NOT NULL,
-    valid_to   BIGINT,
-    confidence DOUBLE PRECISION,
-    metadata   TEXT
-);
-
-COMMENT ON TABLE temporal_facts IS '从内容提取的有时间边界的事实';
-COMMENT ON COLUMN temporal_facts.id IS '时间事实标识';
-COMMENT ON COLUMN temporal_facts.subject IS '事实主体';
-COMMENT ON COLUMN temporal_facts.predicate IS '事实谓词';
-COMMENT ON COLUMN temporal_facts.obj IS '事实客体';
-COMMENT ON COLUMN temporal_facts.valid_from IS '有效期开始（毫秒）';
-COMMENT ON COLUMN temporal_facts.valid_to IS '有效期结束（毫秒）';
-COMMENT ON COLUMN temporal_facts.confidence IS '事实置信度';
-COMMENT ON COLUMN temporal_facts.metadata IS '元数据载荷（序列化）';
-
--- 时间边表，表示时间事实之间的关系边
-
-CREATE TABLE IF NOT EXISTS temporal_edges
-(
-    source_id  TEXT             NOT NULL,
-    target_id  TEXT             NOT NULL,
-    relation   TEXT             NOT NULL,
-    valid_from BIGINT           NOT NULL,
-    valid_to   BIGINT,
-    weight     DOUBLE PRECISION NOT NULL,
-    metadata   TEXT,
-    CONSTRAINT fk_temporal_edges_source_id_temporal_facts_id
-        FOREIGN KEY (source_id) REFERENCES temporal_facts (id),
-    CONSTRAINT fk_temporal_edges_target_id_temporal_facts_id
-        FOREIGN KEY (target_id) REFERENCES temporal_facts (id)
-);
-
-COMMENT ON TABLE temporal_edges IS '事实之间的时间关系';
-COMMENT ON COLUMN temporal_edges.source_id IS '源时间事实标识';
-COMMENT ON COLUMN temporal_edges.target_id IS '目标时间事实标识';
-COMMENT ON COLUMN temporal_edges.relation IS '边关系标签';
-COMMENT ON COLUMN temporal_edges.valid_from IS '有效期开始（毫秒）';
-COMMENT ON COLUMN temporal_edges.valid_to IS '有效期结束（毫秒）';
-COMMENT ON COLUMN temporal_edges.weight IS '边权重';
-COMMENT ON COLUMN temporal_edges.metadata IS '元数据载荷（序列化）';
 
 -- 分段表，用于全局分段跟踪，确保在分布式环境中生成唯一的分段编号
 
@@ -268,8 +208,6 @@ COMMENT ON COLUMN topics.updated_at IS '最后更新时间戳';
 CREATE TABLE IF NOT EXISTS facts
 (
     id             TEXT PRIMARY KEY,
-    tenant_id      TEXT,
-    project_id     TEXT,
     user_id        TEXT,
     topic_id       TEXT,
     what           TEXT        NOT NULL,
@@ -290,8 +228,6 @@ CREATE TABLE IF NOT EXISTS facts
 
 COMMENT ON TABLE facts IS '事实表';
 COMMENT ON COLUMN facts.id IS '事实标识';
-COMMENT ON COLUMN facts.tenant_id IS '租户标识';
-COMMENT ON COLUMN facts.project_id IS '项目标识';
 COMMENT ON COLUMN facts.user_id IS '用户标识';
 COMMENT ON COLUMN facts.topic_id IS '主题 ID';
 COMMENT ON COLUMN facts.what IS '事实内容';
@@ -307,43 +243,10 @@ COMMENT ON COLUMN facts.created_at IS '创建时间戳';
 COMMENT ON COLUMN facts.updated_at IS '最后更新时间戳';
 COMMENT ON COLUMN facts.processed_at IS '事实被图谱化的时间戳';
 
--- 实体表
-CREATE TABLE IF NOT EXISTS entities
-(
-    id             TEXT PRIMARY KEY,
-    tenant_id      TEXT,
-    project_id     TEXT,
-    user_id        TEXT,
-    text           VARCHAR(500) NOT NULL,
-    entity_type    VARCHAR(30)  NOT NULL,
-    entity_label   VARCHAR(50),
-    canonical_id   TEXT,
-    canonical_text TEXT,
-    created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (tenant_id, project_id, user_id, text, entity_type),
-    CONSTRAINT fk_entities_canonical_id_canonical_entities_id
-        FOREIGN KEY (canonical_id) REFERENCES canonical_entities (id)
-);
-
-COMMENT ON TABLE entities IS '实体表';
-COMMENT ON COLUMN entities.id IS '实体标识';
-COMMENT ON COLUMN entities.tenant_id IS '租户标识';
-COMMENT ON COLUMN entities.project_id IS '项目标识';
-COMMENT ON COLUMN entities.user_id IS '用户标识';
-COMMENT ON COLUMN entities.text IS '实体原始提及文本';
-COMMENT ON COLUMN entities.entity_type IS '实体类型';
-COMMENT ON COLUMN entities.canonical_id IS '规范化实体标识';
-COMMENT ON COLUMN entities.canonical_text IS '规范化实体文本';
-COMMENT ON COLUMN entities.created_at IS '创建时间戳';
-COMMENT ON COLUMN entities.updated_at IS '最后更新时间戳';
-
 -- 规范化实体表
 CREATE TABLE IF NOT EXISTS canonical_entities
 (
     id               TEXT PRIMARY KEY,
-    tenant_id        TEXT,
-    project_id       TEXT,
     user_id          TEXT,
     name             VARCHAR(500) NOT NULL,
     entity_type      VARCHAR(30)  NOT NULL,
@@ -354,13 +257,11 @@ CREATE TABLE IF NOT EXISTS canonical_entities
     last_seen_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (tenant_id, project_id, user_id, name, entity_type)
+    UNIQUE (user_id, name, entity_type)
 );
 
 COMMENT ON TABLE canonical_entities IS '规范化实体表';
 COMMENT ON COLUMN canonical_entities.id IS '实体标识';
-COMMENT ON COLUMN canonical_entities.tenant_id IS '租户标识';
-COMMENT ON COLUMN canonical_entities.project_id IS '项目标识';
 COMMENT ON COLUMN canonical_entities.user_id IS '用户标识';
 COMMENT ON COLUMN canonical_entities.name IS '实体名称';
 COMMENT ON COLUMN canonical_entities.entity_type IS '实体类型';
@@ -371,6 +272,32 @@ COMMENT ON COLUMN canonical_entities.last_seen_at IS '实体最后出现时间';
 COMMENT ON COLUMN canonical_entities.created_at IS '创建时间戳';
 COMMENT ON COLUMN canonical_entities.updated_at IS '最后更新时间戳';
 
+-- 实体表
+CREATE TABLE IF NOT EXISTS entities
+(
+    id             TEXT PRIMARY KEY,
+    user_id        TEXT,
+    text           VARCHAR(500) NOT NULL,
+    entity_type    VARCHAR(30)  NOT NULL,
+    entity_label   VARCHAR(50),
+    canonical_id   TEXT,
+    canonical_text TEXT,
+    created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (user_id, text, entity_type),
+    CONSTRAINT fk_entities_canonical_id_canonical_entities_id
+        FOREIGN KEY (canonical_id) REFERENCES canonical_entities (id)
+);
+
+COMMENT ON TABLE entities IS '实体表';
+COMMENT ON COLUMN entities.id IS '实体标识';
+COMMENT ON COLUMN entities.user_id IS '用户标识';
+COMMENT ON COLUMN entities.text IS '实体原始提及文本';
+COMMENT ON COLUMN entities.entity_type IS '实体类型';
+COMMENT ON COLUMN entities.canonical_id IS '规范化实体标识';
+COMMENT ON COLUMN entities.canonical_text IS '规范化实体文本';
+COMMENT ON COLUMN entities.created_at IS '创建时间戳';
+COMMENT ON COLUMN entities.updated_at IS '最后更新时间戳';
 
 -- 事实-实体关联表
 CREATE TABLE IF NOT EXISTS fact_entities
@@ -434,15 +361,9 @@ CREATE INDEX IF NOT EXISTS idx_vectors_user ON vectors (user_id);
 CREATE INDEX IF NOT EXISTS idx_waypoints_src ON waypoints (src_id);
 CREATE INDEX IF NOT EXISTS idx_waypoints_dst ON waypoints (dst_id);
 CREATE INDEX IF NOT EXISTS idx_stats_ts ON stats (ts);
-CREATE INDEX IF NOT EXISTS idx_temporal_subject ON temporal_facts (subject);
 CREATE INDEX IF NOT EXISTS idx_facts_created_at ON facts (created_at);
 CREATE INDEX IF NOT EXISTS idx_facts_fact_kind ON facts (fact_kind);
 CREATE INDEX IF NOT EXISTS idx_fact_entities_fact_id ON fact_entities (fact_id);
 CREATE INDEX IF NOT EXISTS idx_fact_entities_entity_id ON fact_entities (entity_id);
 CREATE INDEX IF NOT EXISTS idx_entities_text ON entities (text);
 CREATE INDEX IF NOT EXISTS idx_entities_canonical_id ON entities (canonical_id);
-
--- 约束
-
-ALTER TABLE memories
-    ADD CONSTRAINT chk_memories_qa_role CHECK (qa_role IS NULL OR qa_role IN ('human', 'assistant'));

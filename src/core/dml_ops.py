@@ -1,9 +1,9 @@
-from typing import Optional, Any, Dict, List, Literal, Tuple
+from typing import Optional, Any, Dict, List
 
 from agile.utils import singleton, timing
 
 from src.core.db import DB, get_db
-from src.memory.models.memory_models import IMemoryUserIdentity
+from src.memory.models.memory_models import IMemoryUser
 
 db = get_db()
 
@@ -16,13 +16,11 @@ class DMLOps:
 
     def ins_mem(self, **k) -> int:
         sql = """
-              INSERT INTO memories(id, user_id, tenant_id, project_id, segment, content, primary_sector, sectors, tags, meta, created_at, updated_at,
+              INSERT INTO memories(id, user_id, segment, content, primary_sector, sectors, tags, meta, created_at, updated_at,
                                    last_seen_at, salience, decay_lambda, version, mean_dim, mean_vec, compressed_vec, feedback_score,
                                    qa_role, qa_pair_id)
-              VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+              VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
               ON CONFLICT (id) DO UPDATE SET user_id=EXCLUDED.user_id,
-                                             tenant_id=EXCLUDED.tenant_id,
-                                             project_id=EXCLUDED.project_id,
                                              segment=EXCLUDED.segment,
                                              content=EXCLUDED.content,
                                              primary_sector=EXCLUDED.primary_sector,
@@ -43,7 +41,7 @@ class DMLOps:
                                              qa_pair_id=EXCLUDED.qa_pair_id
               """
         vals = (
-            k.get("id"), k.get("user_id"), k.get("tenant_id"), k.get("project_id"), k.get("segment", 0), k.get("content"),
+            k.get("id"), k.get("user_id"), k.get("segment", 0), k.get("content"),
             k.get("primary_sector"), k.get("sectors"), k.get("tags"), k.get("meta"), k.get("created_at"), k.get("updated_at"),
             k.get("last_seen_at"), k.get("salience", 1.0), k.get("decay_lambda", 0.02), k.get("version", 1),
             k.get("mean_dim"), k.get("mean_vec"), k.get("compressed_vec"), k.get("feedback_score", 0),
@@ -78,11 +76,7 @@ class DMLOps:
         return affected_rows
 
     @timing
-    def find_mem_by_user(self, user_identity: IMemoryUserIdentity, order_by: List[str], limit=10, offset=0) -> List[Dict[str, Any]]:
-        user_id = user_identity.user_id
-        tenant_id = user_identity.tenant_id
-        project_id = user_identity.project_id
-
+    def find_mem_by_user(self, user: IMemoryUser, order_by: List[str], limit=10, offset=0) -> List[Dict[str, Any]]:
         sql_parts = [
             """
             SELECT *
@@ -94,17 +88,7 @@ class DMLOps:
         ]
 
         # 查询参数列表，初始包含 user_id
-        params = [user_id]
-
-        # 判断租户是否存在
-        if tenant_id:
-            sql_parts.append("AND t.tenant_id = %s")
-            params.append(tenant_id)
-
-        # 判断项目是否存在
-        if project_id:
-            sql_parts.append("AND t.project_id = %s")
-            params.append(project_id)
+        params = [user.id]
 
         # 拼接排序
         if order_by:
@@ -118,71 +102,19 @@ class DMLOps:
         final_sql = " ".join(sql_parts)
         return self.db.fetchall(final_sql, tuple(params))
 
-    def all_mem_by_user(self, user_identity: IMemoryUserIdentity, limit=10, offset=0) -> List[Dict[str, Any]]:
-        user_id = user_identity.user_id
-        tenant_id = user_identity.tenant_id
-        project_id = user_identity.project_id
+    def all_mem_by_user(self, user: IMemoryUser, limit=10, offset=0) -> List[Dict[str, Any]]:
+        sql = "SELECT * FROM memories WHERE user_id = %s ORDER BY created_at DESC LIMIT %s OFFSET %s"
+        return self.db.fetchall(sql, (user.id, limit, offset))
 
-        sql_parts = [
-            "SELECT * FROM memories WHERE user_id = %s"
-        ]
-        params = [user_id]
+    def find_un_fact_join_mem_by_user(self, user: IMemoryUser, limit=10, offset=0) -> List[Dict[str, Any]]:
+        sql = "SELECT * FROM memories WHERE fact_joined IS NOT TRUE AND user_id = %s ORDER BY created_at ASC LIMIT %s OFFSET %s"
+        return self.db.fetchall(sql, (user.id, limit, offset))
 
-        if tenant_id:
-            sql_parts.append("AND tenant_id = %s")
-            params.append(tenant_id)
-
-        if project_id:
-            sql_parts.append("AND project_id = %s")
-            params.append(project_id)
-
-        sql_parts.append("ORDER BY created_at DESC LIMIT %s OFFSET %s")
-        params.extend([str(limit), str(offset)])
-
-        final_sql = " ".join(sql_parts)
-        return self.db.fetchall(final_sql, tuple(params))
-
-    def find_un_fact_join_mem_by_user(self, user_identity: IMemoryUserIdentity, limit=10, offset=0) -> List[Dict[str, Any]]:
-        user_id = user_identity.user_id
-        tenant_id = user_identity.tenant_id
-        project_id = user_identity.project_id
-
-        sql_parts = [
-            "SELECT * FROM memories WHERE fact_joined IS NOT TRUE AND user_id = %s"
-        ]
-        params = [user_id]
-
-        if tenant_id:
-            sql_parts.append("AND tenant_id = %s")
-            params.append(tenant_id)
-
-        if project_id:
-            sql_parts.append("AND project_id = %s")
-            params.append(project_id)
-
-        sql_parts.append("ORDER BY created_at ASC LIMIT %s OFFSET %s")
-        params.extend([str(limit), str(offset)])
-
-        final_sql = " ".join(sql_parts)
-        return self.db.fetchall(final_sql, tuple(params))
-
-    def count_mem_by_user(self, user_identity: IMemoryUserIdentity, conditions: list[str] = None) -> int:
-        user_id = user_identity.user_id
-        tenant_id = user_identity.tenant_id
-        project_id = user_identity.project_id
-
+    def count_mem_by_user(self, user: IMemoryUser, conditions: list[str] = None) -> int:
         sql_parts = [
             "SELECT COUNT(*) as cnt FROM memories WHERE user_id = %s"
         ]
-        params = [user_id]
-
-        if tenant_id:
-            sql_parts.append("AND tenant_id = %s")
-            params.append(tenant_id)
-
-        if project_id:
-            sql_parts.append("AND project_id = %s")
-            params.append(project_id)
+        params = [user.id]
 
         if conditions:
             sql_parts.append("AND " + " AND ".join(conditions))
@@ -203,26 +135,9 @@ class DMLOps:
         self.db.commit()
         return affected_rows
 
-    def del_mem_by_user(self, user_identity: IMemoryUserIdentity) -> int:
-        user_id = user_identity.user_id
-        tenant_id = user_identity.tenant_id
-        project_id = user_identity.project_id
-
-        sql_parts = [
-            "SELECT id FROM memories WHERE user_id = %s"
-        ]
-        params: List[str] = [user_id]
-
-        if tenant_id:
-            sql_parts.append("AND tenant_id = %s")
-            params.append(tenant_id)
-
-        if project_id:
-            sql_parts.append("AND project_id = %s")
-            params.append(project_id)
-
-        final_sql = " ".join(sql_parts)
-        memory_ids = self.db.fetchall(final_sql, tuple(params))
+    def del_mem_by_user(self, user: IMemoryUser) -> int:
+        sql = "SELECT id FROM memories WHERE user_id = %s"
+        memory_ids = self.db.fetchall(sql, (user.id,))
         if not memory_ids:
             return 0
         ids = tuple(row["id"] for row in memory_ids)

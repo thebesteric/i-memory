@@ -179,9 +179,9 @@ flowchart TD
 
 多数核心表持有：
 
-- `tenant_id`
-- `project_id`
-- `user_id`
+- `tenant_key`
+- `project_key`
+- `user_key`
 
 检索与读写流程中会按该三元组做过滤（具体由 `IMemoryUserIdentity` 传入）。
 
@@ -428,7 +428,7 @@ sequenceDiagram
 ```json
 {
   "content": "OpenClaw是什么，和普通大模型区别在哪？",
-  "user_identity": {"user_id": "test_user", "tenant_id": "test_tenant", "project_id": "test_project"},
+  "user_identity": {"user_key": "test_user", "tenant_key": "test_tenant", "project_key": "test_project"},
   "qa_role": "human"
 }
 ```
@@ -438,7 +438,7 @@ sequenceDiagram
 ```json
 {
   "content": "它是本地部署的AI智能体执行框架，核心是执行任务，不是只聊天。",
-  "user_identity": {"user_id": "test_user", "tenant_id": "test_tenant", "project_id": "test_project"},
+  "user_identity": {"user_key": "test_user", "tenant_key": "test_tenant", "project_key": "test_project"},
   "qa_role": "assistant"
 }
 ```
@@ -451,7 +451,7 @@ sequenceDiagram
   "limit": 5,
   "query_mode": "prefer",
   "filters": {
-    "user_identity": {"user_id": "test_user", "tenant_id": "test_tenant", "project_id": "test_project"}
+    "user_identity": {"user_key": "test_user", "tenant_key": "test_tenant", "project_key": "test_project"}
   }
 }
 ```

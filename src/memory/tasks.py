@@ -56,7 +56,7 @@ def _build_job_definitions() -> list[JobDefinition]:
             name="Memory graph build",
             func=graph.graph_build,
             # seconds=max(1, int(getattr(env, "GRAPH_BUILD_INTERVAL_SECONDS", 60 * 30) or 60 * 30)),
-            seconds=5,
+            seconds=3000,
             max_instances=1,
             coalesce=True,
             misfire_grace_time=30,

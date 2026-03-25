@@ -14,9 +14,9 @@ class IMemoryUserIdentity(BaseModel):
     """
     model_config = ConfigDict(arbitrary_types_allowed=True, extra="allow")
 
-    tenant_id: str | None = Field(default=None, description="租户 ID")
-    project_id: str | None = Field(default=None, description="项目 ID")
-    user_id: str = Field(default="anonymous", description="用户 ID")
+    tenant_key: str | None = Field(default=None, description="租户标识")
+    project_key: str | None = Field(default=None, description="项目标识")
+    user_key: str = Field(default="anonymous", description="用户标识")
 
     _id: str | None = PrivateAttr(default=None)
 
@@ -24,9 +24,9 @@ class IMemoryUserIdentity(BaseModel):
     def from_dict(user: "IMemoryUser") -> "IMemoryUserIdentity":
         return IMemoryUserIdentity(
             _id=user.id,
-            tenant_id=user.tenant_id,
-            project_id=user.project_id,
-            user_id=user.user_id,
+            tenant_key=user.tenant_key,
+            project_key=user.project_key,
+            user_key=user.user_key,
         )
 
     @property
@@ -38,8 +38,8 @@ class IMemoryUserIdentity(BaseModel):
         检查用户身份是否合法
         :return: True 如果合法，否则 False
         """
-        if not self.tenant_id or not self.project_id or not self.user_id:
-            raise ValueError("User tenant_id and project_id and user_id cannot be empty")
+        if not self.tenant_key or not self.project_key or not self.user_key:
+            raise ValueError("User tenant_key and project_key and user_key cannot be empty")
 
 
 class IMemoryConfig(BaseModel):
@@ -113,9 +113,9 @@ class IMemoryUser(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True, extra="allow")
 
     id: str = Field(..., description="主键")
-    tenant_id: str | None = Field(default=None, description="租户 ID")
-    project_id: str | None = Field(default=None, description="项目 ID")
-    user_id: str | None = Field(default=None, description="用户 ID")
+    tenant_key: str | None = Field(default=None, description="租户标识")
+    project_key: str | None = Field(default=None, description="项目标识")
+    user_key: str | None = Field(default=None, description="用户标识")
     summary: str | None = Field(default=None, description="用户摘要")
     reflection_count: int = Field(default=0, description="反思次数")
     created_at: datetime.datetime | None = Field(default=None, description="创建时间")
@@ -125,9 +125,9 @@ class IMemoryUser(BaseModel):
     def from_dict(data: dict[str, Any]):
         return IMemoryUser(
             id=data["id"],
-            tenant_id=data["tenant_id"],
-            project_id=data["project_id"],
-            user_id=data["user_id"],
+            tenant_key=data["tenant_key"],
+            project_key=data["project_key"],
+            user_key=data["user_key"],
             summary=data["summary"],
             reflection_count=data["reflection_count"],
             created_at=data["created_at"],

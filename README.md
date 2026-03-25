@@ -104,7 +104,7 @@ query → embed → vector search → scoring → decay → resonance → reinfo
 ```json
 {
   "content": "OpenClaw是什么，和普通大模型区别在哪？",
-  "user_identity": {"user_id": "test_user", "tenant_id": "test_tenant", "project_id": "test_project"},
+  "user_identity": {"user_key": "test_user", "tenant_key": "test_tenant", "project_key": "test_project"},
   "qa_role": "human"
 }
 ```
@@ -117,7 +117,7 @@ query → embed → vector search → scoring → decay → resonance → reinfo
   "limit": 5,
   "query_mode": "prefer",
   "filters": {
-    "user_identity": {"user_id": "test_user", "tenant_id": "test_tenant", "project_id": "test_project"}
+    "user_identity": {"user_key": "test_user", "tenant_key": "test_tenant", "project_key": "test_project"}
   }
 }
 ```

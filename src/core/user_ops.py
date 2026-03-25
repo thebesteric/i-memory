@@ -43,26 +43,26 @@ async def get_user(user_identity: IMemoryUserIdentity) -> IMemoryUser | None:
     :param user_identity: 用户身份
     :return:
     """
-    user_id = user_identity.user_id
-    tenant_id = user_identity.tenant_id
-    project_id = user_identity.project_id
+    user_key = user_identity.user_key
+    tenant_key = user_identity.tenant_key
+    project_key = user_identity.project_key
 
     sql_parts = [
-        "SELECT * FROM users WHERE user_id = %s"
+        "SELECT * FROM users WHERE user_key = %s"
     ]
-    params = [user_id]
+    params = [user_key]
 
-    if tenant_id:
-        sql_parts.append("AND tenant_id = %s")
-        params.append(tenant_id)
+    if tenant_key:
+        sql_parts.append("AND tenant_key = %s")
+        params.append(tenant_key)
 
-    if project_id:
-        sql_parts.append("AND project_id = %s")
-        params.append(project_id)
+    if project_key:
+        sql_parts.append("AND project_key = %s")
+        params.append(project_key)
 
     final_sql = " ".join(sql_parts)
     user = db.fetchone(final_sql, tuple(params))
-    return IMemoryUser.from_dict(user)
+    return IMemoryUser.from_dict(user) if user else None
 
 
 async def add_user(user_identity: IMemoryUserIdentity, summary: str = None, reflection_count: int = 0) -> IMemoryUser:
@@ -73,31 +73,31 @@ async def add_user(user_identity: IMemoryUserIdentity, summary: str = None, refl
     :param reflection_count: 反思次数
     :return: 用户
     """
-    user_id = user_identity.user_id
-    tenant_id = user_identity.tenant_id
-    project_id = user_identity.project_id
+    user_key = user_identity.user_key
+    tenant_key = user_identity.tenant_key
+    project_key = user_identity.project_key
 
     summary = summary if summary else "User profile initializing..."
     reflection_count = reflection_count if reflection_count is not None else 0
 
     # 当前时间
     now = datetime.datetime.now()
-    id = str(uuid.uuid4())
+    _id = str(uuid.uuid4())
 
     db.execute(
         """
-        INSERT INTO users(id, tenant_id, project_id, user_id, summary, reflection_count, created_at, updated_at)
+        INSERT INTO users(id, tenant_key, project_key, user_key, summary, reflection_count, created_at, updated_at)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        ON CONFLICT (tenant_id, project_id, user_id) DO NOTHING
+        ON CONFLICT (tenant_key, project_key, user_key) DO NOTHING
         """,
-        (id, tenant_id, project_id, user_id, summary, reflection_count, now, now)
+        (_id, tenant_key, project_key, user_key, summary, reflection_count, now, now)
     )
     db.commit()
     return IMemoryUser(
-        id=id,
-        tenant_id=tenant_id,
-        project_id=project_id,
-        user_id=user_id,
+        id=_id,
+        tenant_key=tenant_key,
+        project_key=project_key,
+        user_key=user_key,
         summary=summary,
         reflection_count=reflection_count,
         created_at=now,
@@ -105,14 +105,14 @@ async def add_user(user_identity: IMemoryUserIdentity, summary: str = None, refl
     )
 
 
-async def update_user_summary(id: str, summary: str) -> None:
+async def update_user_summary(_id: str, summary: str) -> None:
     """
     更新用户概要信息
-    :param id: 主键
+    :param _id: 主键
     :param summary: 用户概要信息
     :return:
     """
     # 当前时间
     now = datetime.datetime.now()
-    db.execute("UPDATE users SET summary = %s, updated_at = %s WHERE id = %s", (summary, now, id))
+    db.execute("UPDATE users SET summary = %s, updated_at = %s WHERE id = %s", (summary, now, _id))
     db.commit()

@@ -5,7 +5,7 @@ from agile.utils import LogHelper
 
 from src.core.config import env
 from src.core.constants import VectorStoreProvider
-from src.memory.models.memory_models import IMemoryFilters, IMemoryUserIdentity
+from src.memory.models.memory_models import IMemoryFilters, IMemoryUserIdentity, IMemoryUser
 
 logger = LogHelper.get_logger()
 
@@ -29,14 +29,14 @@ class VectorSearch:
 class BaseVectorStore(ABC):
 
     @abstractmethod
-    async def store_vector(self, id: str, sector: str, vector: List[float], dim: int, user_identity: IMemoryUserIdentity = None):
+    async def store_vector(self, _id: str, sector: str, vector: List[float], dim: int, user: IMemoryUser = None):
         """
         存储向量
-        :param id: 唯一标识
+        :param _id: 唯一标识
         :param sector: 扇区名称
         :param vector: 向量列表
         :param dim: 向量维度
-        :param user_identity: 用户身份
+        :param user: 用户
         :return:
         """
         pass
@@ -70,13 +70,13 @@ class BaseVectorStore(ABC):
         pass
 
     @abstractmethod
-    async def search(self, vector: List[float], sector: str, k: int, filters: IMemoryFilters = None) -> List[VectorSearch]:
+    async def search(self, user: IMemoryUser, vector: List[float], sector: str, k: int) -> List[VectorSearch]:
         """
         相似度搜索
+        :param user: 用户
         :param vector: 向量列表
         :param sector: 扇区名称
         :param k: 返回结果数量
-        :param filters: 过滤条件
         :return:
         """
         pass

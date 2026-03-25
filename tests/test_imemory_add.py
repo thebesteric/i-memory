@@ -11,9 +11,9 @@ class TestIMemoryAdd(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.user_identity: IMemoryUserIdentity = IMemoryUserIdentity(
-            user_id="test_user",
-            tenant_id="test_tenant",
-            project_id="test_project"
+            user_key="test_user",
+            tenant_key="test_tenant",
+            project_key="test_project"
         )
         cls.mem = IMemory(user_identity=cls.user_identity)
         cls.meta = {"source": "unit_test"}

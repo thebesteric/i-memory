@@ -8,7 +8,7 @@ from agile.utils import LogHelper
 from src.core.config import env
 from src.core.db import get_db
 from src.core import user_ops
-from src.memory.models.memory_models import IMemoryUserIdentity, IMemoryUser
+from src.memory.models.memory_models import IMemoryUser
 
 logger = LogHelper.get_logger()
 
@@ -68,74 +68,36 @@ def gen_user_summary(memories: List[Dict]) -> str:
     return f"Active in {proj_str} using {lang_str}. Focused on {recent_files}. ({len(memories)} memories, {saves} saves). Last active: {last_active}."
 
 
-async def gen_user_summary_async(user_identity: IMemoryUserIdentity) -> str:
+async def gen_user_summary_async(user: IMemoryUser) -> str:
     """
     异步获取该用户最近 100 条记忆并生成概要字符串
     """
-    user_id = user_identity.user_id
-    tenant_id = user_identity.tenant_id
-    project_id = user_identity.project_id
-
-    sql_parts = [
-        "SELECT * FROM memories WHERE user_id = %s"
-    ]
-    params = [user_id]
-
-    if tenant_id:
-        sql_parts.append("AND tenant_id = %s")
-        params.append(tenant_id)
-
-    if project_id:
-        sql_parts.append("AND project_id = %s")
-        params.append(project_id)
-
-    sql_parts.append("ORDER BY created_at DESC LIMIT 100 OFFSET 0")
-    final_sql = " ".join(sql_parts)
-
-    rows = db.fetchall(final_sql, tuple(params))
+    sql = "SELECT * FROM memories WHERE user_id = %s ORDER BY created_at DESC LIMIT 100 OFFSET 0"
+    rows = db.fetchall(sql, (user.id,))
     return gen_user_summary(rows)
 
 
-async def update_user_summary(user_identity: IMemoryUserIdentity):
+async def update_user_summary(user: IMemoryUser):
     """
     用于根据指定用户的记忆（memories）自动生成并更新该用户的概要信息（summary）
-    :param user_identity: 用户身份
+    :param user: 用户
     """
-    user_id = user_identity.user_id
     try:
         # 生成用户概要
         # 格式为：Active in 项目名 using 语言. Focused on 文件. (N memories, M saves). Last active: 时间.
-        summary = await gen_user_summary_async(user_identity)
-        now = datetime.datetime.now()
-
-        # 获取用户
-        existing: IMemoryUser = await user_ops.get_user(user_identity)
-        if not existing:
-            # 插入新用户记录并设置概要
-            await user_ops.add_user(user_identity, summary)
-        else:
-            # 更新用户概要
-            await user_ops.update_user_summary(existing.id, summary)
-
+        summary = await gen_user_summary_async(user)
+        # 更新用户概要
+        await user_ops.update_user_summary(user.id, summary)
     except Exception as e:
-        logger.error(f"[USER_SUMMARY] Error for {user_id}: {e}")
+        logger.error(f"[USER_SUMMARY] Error for {user.id}: {e}")
 
 
 async def auto_update_user_summaries():
-    all_memories = db.fetchall("SELECT user_id, tenant_id, project_id FROM memories LIMIT 10000")
-
-    identities: list[IMemoryUserIdentity] = []
-    for m in all_memories:
-        if m["user_id"]:
-            identities.append(IMemoryUserIdentity(
-                user_id=m["user_id"],
-                tenant_id=m["tenant_id"],
-                project_id=m["project_id"]
-            ))
-
+    # 查询所有用户
+    users = await user_ops.find_user()
     updated = 0
-    for identity in identities:
-        await update_user_summary(identity)
+    for user in users:
+        await update_user_summary(user)
         updated += 1
     return {"updated": updated}
 

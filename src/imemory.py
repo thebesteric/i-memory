@@ -7,12 +7,13 @@ from agile.web import PagingResponse
 from pymilvus import Collection
 
 from src.ai.client.openai_registrar import OpenAIRegistrar
+from src.core import user_ops
 from src.core.components import get_milvus_manager
 from src.core.config import env
 from src.core.db import get_db
 from src.core.dml_ops import dml_ops
 from src.memory.hsg import query_hsg_memories
-from src.memory.models.memory_models import IMemoryConfig, IMemoryFilters, IMemoryUserIdentity, IMemoryItemInfo, QARole
+from src.memory.models.memory_models import IMemoryConfig, IMemoryFilters, IMemoryUserIdentity, IMemoryItemInfo, QARole, IMemoryUser
 from src.ops.ingest import ingest_document
 
 logger = LogHelper.get_logger()
@@ -122,8 +123,8 @@ class IMemory:
         :param user_identity: 用户身份
         :return:
         """
-        user_identity = user_identity or self.default_user_identity
-        return self.dml_ops.del_mem_by_user(user_identity)
+        user = await self._get_user_by_identity(user_identity or self.default_user_identity)
+        return self.dml_ops.del_mem_by_user(user)
 
     async def history(self,
                       *,
@@ -137,13 +138,20 @@ class IMemory:
         :param size: 每页大小
         :return: 记忆历史列表
         """
-        user_identity = user_identity or self.default_user_identity
-        total = self.dml_ops.count_mem_by_user(user_identity)
+        user = await self._get_user_by_identity(user_identity or self.default_user_identity)
+        total = self.dml_ops.count_mem_by_user(user)
         offset = (current - 1) * size
-        rows = self.dml_ops.all_mem_by_user(user_identity, size, offset)
+        rows = self.dml_ops.all_mem_by_user(user, size, offset)
         return PagingResponse(
             records=[dict(r) for r in rows],
             total=total,
             current=current,
             size=size
         )
+
+    @staticmethod
+    async def _get_user_by_identity(user_identity: IMemoryUserIdentity) -> IMemoryUser:
+        user = await user_ops.get_user(user_identity)
+        if not user:
+            raise ValueError(f"User not found for identity: {user_identity}")
+        return user

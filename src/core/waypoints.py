@@ -1,14 +1,14 @@
 import datetime
-import time
 from typing import List
 
 import numpy as np
 from agile.utils import LogHelper, singleton, timing
 from pydantic import BaseModel, Field
 
+from src.core import user_ops
 from src.core.db import get_db
 from src.core.dml_ops import dml_ops
-from src.memory.models.memory_models import IMemoryUserIdentity
+from src.memory.models.memory_models import IMemoryUserIdentity, IMemoryUser
 from src.tools.vectors import buf_to_vec, cos_sim
 
 logger = LogHelper.get_logger()
@@ -27,7 +27,7 @@ class Waypoints:
     def __init__(self):
         self.db = db
 
-    async def link(self, rid: str, cid: str, idx: int, user_identity: IMemoryUserIdentity = None):
+    async def link(self, user_identity: IMemoryUserIdentity, rid: str, cid: str, idx: int):
         """
         创建路标（waypoint）关系
         连接记忆 ID rid 和 cid，表示从 rid 可以通过路标到达 cid
@@ -37,16 +37,18 @@ class Waypoints:
         :param user_identity: 用户身份，标识该路标所属的用户
         :return: None
         """
-        user_id = user_identity.user_id
-        tenant_id = user_identity.tenant_id
-        project_id = user_identity.project_id
+        user_identity.check_legality()
+        user = await user_ops.get_user(user_identity)
+        if not user:
+            raise ValueError(f"User not found for identity: {user_identity}")
 
         now = datetime.datetime.now()
-        self.db.execute("""
-                        INSERT INTO waypoints(src_id, dst_id, tenant_id, project_id, user_id, weight, created_at, updated_at)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                        """,
-                        (rid, cid, tenant_id, project_id, user_id, 1.0, now, now))
+        self.db.execute(
+            """
+            INSERT INTO waypoints(src_id, dst_id, user_id, weight, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """,
+            (rid, cid, user.id, 1.0, now, now))
         self.db.commit()
 
     @timing
@@ -91,7 +93,7 @@ class Waypoints:
         # 返回扩展结果
         return expansion
 
-    async def create_single_waypoint(self, new_id: str, new_mean: List[float], dt: datetime.datetime, user_identity: IMemoryUserIdentity):
+    async def create_single_waypoint(self, new_id: str, new_mean: List[float], dt: datetime.datetime, user: IMemoryUser):
         """
         用于为新记忆（new_id）在所有记忆中寻找最相似的“均值向量”，并在数据库中建立 waypoint（路标）关联
         该函数会遍历当前用户的所有记忆，计算每个记忆的均值向量与新记忆均值向量的余弦相似度，
@@ -102,11 +104,11 @@ class Waypoints:
         @param new_id: 新记忆的唯一标识符
         @param new_mean: 新记忆的均值向量（浮点数列表）
         @param ts: 当前时间戳（毫秒）
-        @param user_identity: 用户身份
+        @param user: 用户
         """
         # 获取当前用户的所有记忆
         max_result = 1000
-        memories = dml_ops.all_mem_by_user(user_identity, limit=max_result, offset=0) if user_identity.user_id else dml_ops.all_mem(limit=max_result, offset=0)
+        memories = dml_ops.all_mem_by_user(user, limit=max_result, offset=0) if user.id else dml_ops.all_mem(limit=max_result, offset=0)
         best = None
         best_sim = -1.0
 
@@ -129,16 +131,11 @@ class Waypoints:
 
         # 如果找到最佳匹配，创建 waypoint 关联
         # Use Postgres UPSERT syntax (ON CONFLICT) — waypoints has PRIMARY KEY (src_id, dst_id)
-        user_id = user_identity.user_id
-        tenant_id = user_identity.tenant_id
-        project_id = user_identity.project_id
         insert_sql = (
             """
-            INSERT INTO waypoints(src_id, dst_id, tenant_id, project_id, user_id, weight, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (src_id, dst_id) DO UPDATE SET tenant_id  = EXCLUDED.tenant_id,
-                                                       project_id = EXCLUDED.project_id,
-                                                       user_id    = EXCLUDED.user_id,
+            INSERT INTO waypoints(src_id, dst_id, user_id, weight, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (src_id, dst_id) DO UPDATE SET user_id    = EXCLUDED.user_id,
                                                        weight     = EXCLUDED.weight,
                                                        created_at = EXCLUDED.created_at,
                                                        updated_at = EXCLUDED.updated_at
@@ -147,9 +144,9 @@ class Waypoints:
 
         # 如果找到了最佳相似记忆，创建指向该记忆的 waypoint
         if best:
-            self.db.execute(insert_sql, (new_id, best, tenant_id, project_id, user_id, float(best_sim), dt, dt))
+            self.db.execute(insert_sql, (new_id, best, user.id, float(best_sim), dt, dt))
         # 否则创建自指向的 waypoint
         else:
-            self.db.execute(insert_sql, (new_id, new_id, tenant_id, project_id, user_id, 1.0, dt, dt))
+            self.db.execute(insert_sql, (new_id, new_id, user.id, 1.0, dt, dt))
         # 提交事务
         self.db.commit()

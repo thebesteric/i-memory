@@ -81,10 +81,10 @@ def compress_vec_for_storage(vec: List[float], target_dim: int) -> List[float]:
     return comp
 
 
-async def add_hsg_memory(content: str,
+async def add_hsg_memory(user_identity: IMemoryUserIdentity,
+                         content: str,
                          tags: List[str] = None,
                          metadata: Any = None,
-                         user_identity: IMemoryUserIdentity = None,
                          qa_role: QARole | None = None) -> Dict[str, Any]:
     """
     添加一条 Hierarchical Semantic Graph 记忆（数据库 + 向量存储、按扇区（sectors）分层组织记忆）
@@ -95,17 +95,26 @@ async def add_hsg_memory(content: str,
     :param qa_role: QA 角色（human/assistant）
     :return:
     """
+    # 用户合法性检查
+    user_identity.check_legality()
+
+    # 获取用户，若不存在则创建一条新用户记录
+    user: IMemoryUser = await user_ops.get_user(user_identity=user_identity)
+    if not user:
+        user = await user_ops.add_user(user_identity=user_identity)
+
+    # 角色合法性检查
     if qa_role and qa_role not in ("human", "assistant"):
         raise ValueError("qa_role must be one of: human, assistant")
 
     # 需传 qa_role，问答配对（尝试复用最近一条未配对 human 的 qa_pair_id）
-    qa_pair_id = _resolve_auto_qa_linking(user_identity, qa_role)
+    qa_pair_id = _resolve_auto_qa_linking(user, qa_role)
 
     # 生成内容的嵌入向量
     vec = await embed_model.embed(content)
 
     # 构建 SQL 查询，查询该用户的记忆，包含租户和项目过滤（如果提供了租户和项目信息），并且只查询有向量的记忆
-    user_memories = dml_ops.find_mem_by_user(user_identity, order_by=["t.salience DESC", "t.last_seen_at DESC"], limit=100)
+    user_memories = dml_ops.find_mem_by_user(user, order_by=["t.salience DESC", "t.last_seen_at DESC"], limit=100)
 
     # 初始化最佳相似记忆（相似度，记忆记录）
     best_sim_mem_similarity = tuple()
@@ -126,11 +135,6 @@ async def add_hsg_memory(content: str,
     # 当前时间
     now = datetime.datetime.now()
 
-    # 用户身份信息
-    user_id = user_identity.user_id
-    tenant_id = user_identity.tenant_id
-    project_id = user_identity.project_id
-
     # 存在相似记忆 && 相似度 >= 0.95
     if best_sim_mem_similarity and best_sim_mem_similarity[0] >= env.SIMILARITY_THRESHOLD:
         """
@@ -140,7 +144,7 @@ async def add_hsg_memory(content: str,
         best_sim_mem = best_sim_mem_similarity[1]
         content = best_sim_mem["content"]
         content = content if len(content) <= 20 else content[:20] + "..."
-        logger.info(f"[HSG] Found similar memory {best_sim_mem['id']} with {best_sim_mem_similarity[0]} for User: {user_id}, Content: {content}")
+        logger.info(f"[HSG] Found similar memory {best_sim_mem['id']} with {best_sim_mem_similarity[0]} for User: {user.id}, Content: {content}")
         # 提升显著性，但不超过 1.0
         boost = min(1.0, (best_sim_mem["salience"] or 0) + 0.15)
         # 更新最后访问时间和显著性
@@ -152,13 +156,6 @@ async def add_hsg_memory(content: str,
             "sectors": [best_sim_mem["primary_sector"]],
             "deduplicated": True
         }
-
-    # 判断是否有用户
-    if user_id:
-        user: IMemoryUser = await user_ops.get_user(user_identity=user_identity)
-        # 没有该用户则创建一条新用户记录
-        if not user:
-            await user_ops.add_user(user_identity=user_identity)
 
     # 对内容分段，判断是否需要分块存储（当内容过长时），并统计总的令牌数
     chunks, total_token = chunk_text(content)
@@ -199,9 +196,7 @@ async def add_hsg_memory(content: str,
         mid = str(uuid.uuid4())
         dml_ops.ins_mem(
             id=mid,
-            user_id=user_id,
-            tenant_id=tenant_id or None,
-            project_id=project_id or None,
+            user_id=user.id,
             segment=cur_seg,
             content=essence,
             primary_sector=cls_ret.primary,
@@ -227,7 +222,7 @@ async def add_hsg_memory(content: str,
         tasks = []
         for r in emb_res:
             # 存储每个 sector 的向量到向量库
-            task = vector_store.store_vector(mid, r["sector"], r["vector"], r["dim"], user_identity)
+            task = vector_store.store_vector(mid, r["sector"], r["vector"], r["dim"], user)
             tasks.append(task)
 
         # 并发执行所有任务
@@ -251,13 +246,12 @@ async def add_hsg_memory(content: str,
             db.execute("UPDATE memories SET compressed_vec=%s WHERE id=%s", (comp_mean_buf, mid))
 
         # 建立 Waypoint 关联，为新记忆建立与其他记忆的关联
-        await waypoints.create_single_waypoint(mid, mean_vec, now, user_identity)
-        if user_id:
-            # 更新用户摘要
-            await update_user_summary(user_identity)
+        await waypoints.create_single_waypoint(mid, mean_vec, now, user)
+        # 更新用户摘要
+        await update_user_summary(user)
 
         logger.info(
-            f"[HSG] Added memory {mid} for User: {user_id}, Primary Sector: {cls_ret.primary}, Additional Sectors: {cls_ret.additional}, Salience: {init_sal}")
+            f"[HSG] Added memory {mid} for User: {user.id}, Primary Sector: {cls_ret.primary}, Additional Sectors: {cls_ret.additional}, Salience: {init_sal}")
 
         # 返回新记忆的 id、内容、sector、分段数、salience 等信息
         return {
@@ -328,6 +322,15 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
     start_q = time.time()
     decay.inc_q()
     filters = filters or IMemoryFilters(user_identity=IMemoryUserIdentity())
+
+    user_identity = filters.user_identity
+    # 用户合法性检查
+    user_identity.check_legality()
+
+    user = await user_ops.get_user(user_identity=user_identity)
+    if not user:
+        raise ValueError(f"User not found for identity: {user_identity}")
+
     try:
         # 检查 60 秒内的查询缓存，命中则直接返回
         cache_key = f"{query}:{top_k}:{filters.model_dump_json() if filters else '{}'}"
@@ -353,7 +356,7 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
         # 第一路召回：BM25 召回
         # 获取用户记忆
         bm25_memories = dml_ops.find_mem_by_user(
-            user_identity=filters.user_identity,
+            user=user,
             order_by=["t.created_at DESC"],
             limit=2000
         )
@@ -367,7 +370,7 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
             # 获取该扇区的查询向量
             query_vector = query_embed_with_sectors[sector]
             # 每个扇区返回 top_k × 3 个候选
-            res: List[VectorSearch] = await vector_store.search(query_vector, sector, top_k * 3, filters)
+            res: List[VectorSearch] = await vector_store.search(user, query_vector, sector, top_k * 3)
             sector_result[sector] = res
 
         # 合并召回 ID
@@ -421,14 +424,8 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
             if filters.min_salience and mem["salience"] < filters.min_salience:
                 continue
 
-            # 用户信息不匹配，跳过
-            user_identity = filters.user_identity
-            user_id = user_identity.user_id
-            tenant_id = user_identity.tenant_id
-            project_id = user_identity.project_id
             # 如果记忆的用户 ID 与查询用户 ID 不匹配，则跳过该记忆
-            # 或者（如果提供了租户 ID）记忆的租户 ID 与查询租户 ID 不匹配，或者（如果提供了项目 ID）记忆的项目 ID 与查询项目 ID 不匹配，则跳过该记忆
-            if mem["user_id"] != user_id or (tenant_id and mem["tenant_id"] != tenant_id) or (project_id and mem["project_id"] != project_id):
+            if mem["user_id"] != user.id:
                 continue
 
             # 多向量融合相似度评分（该评分反映了记忆在多个维度（扇区）上与查询的相关性）
@@ -642,7 +639,7 @@ def _promote_qa_assistant_answer(items: List[IMemoryItemInfo], query_sector: str
     return items
 
 
-def _resolve_auto_qa_linking(user_identity: IMemoryUserIdentity, qa_role: QARole | None) -> str | None:
+def _resolve_auto_qa_linking(user: IMemoryUser, qa_role: QARole | None) -> str | None:
     """
     自动补齐 QA 配对字段：
     - human：生成新的 qa_pair_id
@@ -655,43 +652,20 @@ def _resolve_auto_qa_linking(user_identity: IMemoryUserIdentity, qa_role: QARole
         return str(uuid.uuid4())
 
     # assistant 自动配对：匹配同身份下最近未配对的 human
-    user_id = user_identity.user_id
-    tenant_id = user_identity.tenant_id
-    project_id = user_identity.project_id
-
-    sql_parts = [
-        """
-        SELECT h.qa_pair_id
-        FROM memories h
-        WHERE h.qa_role = 'human'
-          AND h.user_id = %s
-          AND h.qa_pair_id IS NOT NULL
-        """
-    ]
-    params: list[Any] = [user_id]
-
-    if tenant_id:
-        sql_parts.append("AND h.tenant_id = %s")
-        params.append(tenant_id)
-    if project_id:
-        sql_parts.append("AND h.project_id = %s")
-        params.append(project_id)
-
-    sql_parts.append(
-        """
-        AND NOT EXISTS (
-            SELECT 1
-            FROM memories a
-            WHERE a.qa_role = 'assistant'
-              AND a.qa_pair_id = h.qa_pair_id
-              AND a.user_id = h.user_id
-        )
-        ORDER BY h.created_at DESC
-        LIMIT 1
-        """
-    )
-
-    row = db.fetchone(" ".join(sql_parts), tuple(params))
+    sql = """
+          SELECT h.qa_pair_id
+          FROM memories h
+          WHERE h.qa_role = 'human'
+            AND h.user_id = %s
+            AND h.qa_pair_id IS NOT NULL
+            AND NOT EXISTS (SELECT 1
+                            FROM memories a
+                            WHERE a.qa_role = 'assistant'
+                              AND a.qa_pair_id = h.qa_pair_id
+                              AND a.user_id = h.user_id)
+          ORDER BY h.created_at DESC LIMIT 1
+          """
+    row = db.fetchone(sql, (user.id,))
     if not row:
         return str(uuid.uuid4())
 

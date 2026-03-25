@@ -19,7 +19,7 @@
 - `content: str`：原始记忆文本
 - `tags: List[str] | None`：标签
 - `metadata: Any`：扩展元数据（函数内会补充统计字段）
-- `user_identity: IMemoryUserIdentity`：用户身份（`user_id/tenant_id/project_id`）
+- `user_identity: IMemoryUserIdentity`：用户身份（`user_key/tenant_key/project_key`）
 - `qa_role: QARole | None`：可选 `human` / `assistant`
 
 ### 返回结果（两类）
@@ -46,7 +46,7 @@
 - 作用：后续用于与历史记忆做相似度比对（去重判断）
 
 ### Step 4: 查询同用户历史记忆（带租户/项目过滤）
-- 操作：动态拼 SQL（`user_id` 必选，`tenant_id/project_id` 可选），并关联 `vectors` 表
+- 操作：动态拼 SQL（`user_key` 必选，`tenant_key/project_key` 可选），并关联 `vectors` 表
 - 作用：将候选范围限制在同身份域，避免跨用户误判相似
 
 ### Step 5: 计算最高相似候选
