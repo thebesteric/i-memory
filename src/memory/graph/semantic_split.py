@@ -6,6 +6,7 @@ from langchain_core.prompts import PromptTemplate
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 from src.core.components import get_chat_model
+from src.memory.models.graph_models import Topic
 
 
 class Dialogue(BaseModel):
