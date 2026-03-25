@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime
 from typing import Any
 
 from langchain_core.output_parsers import PydanticOutputParser
@@ -13,7 +14,7 @@ class Dialogue(BaseModel):
     id: str
     content: str
     role: str
-    created_at: str
+    created_at: datetime
 
     @staticmethod
     def mem_to_dialogue(mem: dict[str, Any]) -> "Dialogue":

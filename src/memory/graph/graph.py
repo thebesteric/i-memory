@@ -36,7 +36,7 @@ async def graph_build():
 
     def enqueue_if_reach_threshold(user: IMemoryUser, un_fact_join_count: int):
         """达到阈值则入队"""
-        if un_fact_join_count >= env.GRAPH_MEM_COUNT_AT_LEAST:
+        if un_fact_join_count >= 30:
             user_queue.put(user)
 
     await get_un_fact_join_mem_count(enqueue_if_reach_threshold)

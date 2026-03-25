@@ -178,7 +178,7 @@ COMMENT ON COLUMN segment.created_at IS '创建时间戳';
 COMMENT ON COLUMN segment.updated_at IS '最后更新时间戳';
 
 -- 主题表
-CREATE TABLE IF NOT EXISTS topics
+CREATE TABLE IF NOT EXISTS graph_topics
 (
     id           TEXT PRIMARY KEY,
     tenant_id    TEXT,
@@ -192,20 +192,20 @@ CREATE TABLE IF NOT EXISTS topics
     updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-COMMENT ON TABLE topics IS '主题表';
-COMMENT ON COLUMN topics.id IS '主题标识';
-COMMENT ON COLUMN topics.tenant_id IS '租户标识';
-COMMENT ON COLUMN topics.project_id IS '项目标识';
-COMMENT ON COLUMN topics.user_id IS '用户标识';
-COMMENT ON COLUMN topics.name IS '主题名称';
-COMMENT ON COLUMN topics.summary IS '主题摘要';
-COMMENT ON COLUMN topics.keywords IS '主题相关关键词列表';
-COMMENT ON COLUMN topics.dialogue_ids IS '相关对话标识列表';
-COMMENT ON COLUMN topics.created_at IS '创建时间戳';
-COMMENT ON COLUMN topics.updated_at IS '最后更新时间戳';
+COMMENT ON TABLE graph_topics IS '主题表';
+COMMENT ON COLUMN graph_topics.id IS '主题标识';
+COMMENT ON COLUMN graph_topics.tenant_id IS '租户标识';
+COMMENT ON COLUMN graph_topics.project_id IS '项目标识';
+COMMENT ON COLUMN graph_topics.user_id IS '用户标识';
+COMMENT ON COLUMN graph_topics.name IS '主题名称';
+COMMENT ON COLUMN graph_topics.summary IS '主题摘要';
+COMMENT ON COLUMN graph_topics.keywords IS '主题相关关键词列表';
+COMMENT ON COLUMN graph_topics.dialogue_ids IS '相关对话标识列表';
+COMMENT ON COLUMN graph_topics.created_at IS '创建时间戳';
+COMMENT ON COLUMN graph_topics.updated_at IS '最后更新时间戳';
 
 -- 事实表
-CREATE TABLE IF NOT EXISTS facts
+CREATE TABLE IF NOT EXISTS graph_facts
 (
     id             TEXT PRIMARY KEY,
     user_id        TEXT,
@@ -222,29 +222,29 @@ CREATE TABLE IF NOT EXISTS facts
     created_at     TIMESTAMP,
     updated_at     TIMESTAMP,
     processed_at   TIMESTAMP,
-    CONSTRAINT fk_facts_topic_id_topics_id
-        FOREIGN KEY (topic_id) REFERENCES topics (id)
+    CONSTRAINT fk_graph_facts_topic_id_graph_topics_id
+        FOREIGN KEY (topic_id) REFERENCES graph_topics (id)
 );
 
-COMMENT ON TABLE facts IS '事实表';
-COMMENT ON COLUMN facts.id IS '事实标识';
-COMMENT ON COLUMN facts.user_id IS '用户标识';
-COMMENT ON COLUMN facts.topic_id IS '主题 ID';
-COMMENT ON COLUMN facts.what IS '事实内容';
-COMMENT ON COLUMN facts.when_ IS '事实发生的时间描述';
-COMMENT ON COLUMN facts.where_ IS '事实发生的地点描述';
-COMMENT ON COLUMN facts.who IS '事实相关的主体描述';
-COMMENT ON COLUMN facts.why IS '事实发生的原因描述';
-COMMENT ON COLUMN facts.status IS '事实状态（如 pending、processed、failed）';
-COMMENT ON COLUMN facts.fact_kind IS '事实类型（如 conversation、event 等）';
-COMMENT ON COLUMN facts.occurred_start IS '事实发生的开始时间';
-COMMENT ON COLUMN facts.occurred_end IS '事实发生的结束时间';
-COMMENT ON COLUMN facts.created_at IS '创建时间戳';
-COMMENT ON COLUMN facts.updated_at IS '最后更新时间戳';
-COMMENT ON COLUMN facts.processed_at IS '事实被图谱化的时间戳';
+COMMENT ON TABLE graph_facts IS '事实表';
+COMMENT ON COLUMN graph_facts.id IS '事实标识';
+COMMENT ON COLUMN graph_facts.user_id IS '用户标识';
+COMMENT ON COLUMN graph_facts.topic_id IS '主题 ID';
+COMMENT ON COLUMN graph_facts.what IS '事实内容';
+COMMENT ON COLUMN graph_facts.when_ IS '事实发生的时间描述';
+COMMENT ON COLUMN graph_facts.where_ IS '事实发生的地点描述';
+COMMENT ON COLUMN graph_facts.who IS '事实相关的主体描述';
+COMMENT ON COLUMN graph_facts.why IS '事实发生的原因描述';
+COMMENT ON COLUMN graph_facts.status IS '事实状态（如 pending、processed、failed）';
+COMMENT ON COLUMN graph_facts.fact_kind IS '事实类型（如 conversation、event 等）';
+COMMENT ON COLUMN graph_facts.occurred_start IS '事实发生的开始时间';
+COMMENT ON COLUMN graph_facts.occurred_end IS '事实发生的结束时间';
+COMMENT ON COLUMN graph_facts.created_at IS '创建时间戳';
+COMMENT ON COLUMN graph_facts.updated_at IS '最后更新时间戳';
+COMMENT ON COLUMN graph_facts.processed_at IS '事实被图谱化的时间戳';
 
 -- 规范化实体表
-CREATE TABLE IF NOT EXISTS canonical_entities
+CREATE TABLE IF NOT EXISTS graph_canonical_entities
 (
     id               TEXT PRIMARY KEY,
     user_id          TEXT,
@@ -260,20 +260,20 @@ CREATE TABLE IF NOT EXISTS canonical_entities
     UNIQUE (user_id, name, entity_type)
 );
 
-COMMENT ON TABLE canonical_entities IS '规范化实体表';
-COMMENT ON COLUMN canonical_entities.id IS '实体标识';
-COMMENT ON COLUMN canonical_entities.user_id IS '用户标识';
-COMMENT ON COLUMN canonical_entities.name IS '实体名称';
-COMMENT ON COLUMN canonical_entities.entity_type IS '实体类型';
-COMMENT ON COLUMN canonical_entities.vector IS '实体的嵌入向量';
-COMMENT ON COLUMN canonical_entities.occurrence_count IS '实体出现次数';
-COMMENT ON COLUMN canonical_entities.first_seen_at IS '实体首次出现时间';
-COMMENT ON COLUMN canonical_entities.last_seen_at IS '实体最后出现时间';
-COMMENT ON COLUMN canonical_entities.created_at IS '创建时间戳';
-COMMENT ON COLUMN canonical_entities.updated_at IS '最后更新时间戳';
+COMMENT ON TABLE graph_canonical_entities IS '规范化实体表';
+COMMENT ON COLUMN graph_canonical_entities.id IS '实体标识';
+COMMENT ON COLUMN graph_canonical_entities.user_id IS '用户标识';
+COMMENT ON COLUMN graph_canonical_entities.name IS '实体名称';
+COMMENT ON COLUMN graph_canonical_entities.entity_type IS '实体类型';
+COMMENT ON COLUMN graph_canonical_entities.vector IS '实体的嵌入向量';
+COMMENT ON COLUMN graph_canonical_entities.occurrence_count IS '实体出现次数';
+COMMENT ON COLUMN graph_canonical_entities.first_seen_at IS '实体首次出现时间';
+COMMENT ON COLUMN graph_canonical_entities.last_seen_at IS '实体最后出现时间';
+COMMENT ON COLUMN graph_canonical_entities.created_at IS '创建时间戳';
+COMMENT ON COLUMN graph_canonical_entities.updated_at IS '最后更新时间戳';
 
 -- 实体表
-CREATE TABLE IF NOT EXISTS entities
+CREATE TABLE IF NOT EXISTS graph_entities
 (
     id             TEXT PRIMARY KEY,
     user_id        TEXT,
@@ -285,22 +285,22 @@ CREATE TABLE IF NOT EXISTS entities
     created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (user_id, text, entity_type),
-    CONSTRAINT fk_entities_canonical_id_canonical_entities_id
-        FOREIGN KEY (canonical_id) REFERENCES canonical_entities (id)
+    CONSTRAINT fk_graph_entities_canonical_id_graph_canonical_entities_id
+        FOREIGN KEY (canonical_id) REFERENCES graph_canonical_entities (id)
 );
 
-COMMENT ON TABLE entities IS '实体表';
-COMMENT ON COLUMN entities.id IS '实体标识';
-COMMENT ON COLUMN entities.user_id IS '用户标识';
-COMMENT ON COLUMN entities.text IS '实体原始提及文本';
-COMMENT ON COLUMN entities.entity_type IS '实体类型';
-COMMENT ON COLUMN entities.canonical_id IS '规范化实体标识';
-COMMENT ON COLUMN entities.canonical_text IS '规范化实体文本';
-COMMENT ON COLUMN entities.created_at IS '创建时间戳';
-COMMENT ON COLUMN entities.updated_at IS '最后更新时间戳';
+COMMENT ON TABLE graph_entities IS '实体表';
+COMMENT ON COLUMN graph_entities.id IS '实体标识';
+COMMENT ON COLUMN graph_entities.user_id IS '用户标识';
+COMMENT ON COLUMN graph_entities.text IS '实体原始提及文本';
+COMMENT ON COLUMN graph_entities.entity_type IS '实体类型';
+COMMENT ON COLUMN graph_entities.canonical_id IS '规范化实体标识';
+COMMENT ON COLUMN graph_entities.canonical_text IS '规范化实体文本';
+COMMENT ON COLUMN graph_entities.created_at IS '创建时间戳';
+COMMENT ON COLUMN graph_entities.updated_at IS '最后更新时间戳';
 
 -- 事实-实体关联表
-CREATE TABLE IF NOT EXISTS fact_entities
+CREATE TABLE IF NOT EXISTS graph_fact_entities
 (
     fact_id          TEXT,
     entity_id        TEXT,
@@ -308,21 +308,21 @@ CREATE TABLE IF NOT EXISTS fact_entities
     created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (fact_id, entity_id),
-    CONSTRAINT fk_fact_entities_fact_id_facts_id
-        FOREIGN KEY (fact_id) REFERENCES facts (id),
-    CONSTRAINT fk_fact_entities_entity_id_entities_id
-        FOREIGN KEY (entity_id) REFERENCES entities (id)
+    CONSTRAINT fk_graph_fact_entities_graph_fact_id_facts_id
+        FOREIGN KEY (fact_id) REFERENCES graph_facts (id),
+    CONSTRAINT fk_graph_fact_entities_entity_id_entities_id
+        FOREIGN KEY (entity_id) REFERENCES graph_entities (id)
 );
 
-COMMENT ON TABLE fact_entities IS '事实与实体的关联表';
-COMMENT ON COLUMN fact_entities.fact_id IS '事实标识';
-COMMENT ON COLUMN fact_entities.entity_id IS '实体标识';
-COMMENT ON COLUMN fact_entities.relation_to_user IS '实体与用户的关系描述';
-COMMENT ON COLUMN fact_entities.created_at IS '创建时间戳';
-COMMENT ON COLUMN fact_entities.updated_at IS '最后更新时间戳';
+COMMENT ON TABLE graph_fact_entities IS '事实与实体的关联表';
+COMMENT ON COLUMN graph_fact_entities.fact_id IS '事实标识';
+COMMENT ON COLUMN graph_fact_entities.entity_id IS '实体标识';
+COMMENT ON COLUMN graph_fact_entities.relation_to_user IS '实体与用户的关系描述';
+COMMENT ON COLUMN graph_fact_entities.created_at IS '创建时间戳';
+COMMENT ON COLUMN graph_fact_entities.updated_at IS '最后更新时间戳';
 
 -- 事实图构建过程表
-CREATE TABLE IF NOT EXISTS fact_processing_logs
+CREATE TABLE IF NOT EXISTS graph_fact_processing_logs
 (
     id         SERIAL PRIMARY KEY,
     fact_id    TEXT,
@@ -331,18 +331,18 @@ CREATE TABLE IF NOT EXISTS fact_processing_logs
     message    TEXT,
     created_at TIMESTAMP   DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP   DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_fact_graph_construction_fact_id_facts_id
-        FOREIGN KEY (fact_id) REFERENCES facts (id)
+    CONSTRAINT fk_graph_fact_processing_logs_fact_id_graph_facts_id
+        FOREIGN KEY (fact_id) REFERENCES graph_facts (id)
 );
 
-COMMENT ON TABLE fact_processing_logs IS '事实图构建过程日志';
-COMMENT ON COLUMN fact_processing_logs.id IS '日志记录标识';
-COMMENT ON COLUMN fact_processing_logs.fact_id IS '相关事实标识';
-COMMENT ON COLUMN fact_processing_logs.stage IS '处理阶段描述';
-COMMENT ON COLUMN fact_processing_logs.status IS '阶段状态（如 pending、completed、failed）';
-COMMENT ON COLUMN fact_processing_logs.message IS '阶段相关消息或错误信息';
-COMMENT ON COLUMN fact_processing_logs.created_at IS '创建时间戳';
-COMMENT ON COLUMN fact_processing_logs.updated_at IS '更新时间戳';
+COMMENT ON TABLE graph_fact_processing_logs IS '事实图构建过程日志';
+COMMENT ON COLUMN graph_fact_processing_logs.id IS '日志记录标识';
+COMMENT ON COLUMN graph_fact_processing_logs.fact_id IS '相关事实标识';
+COMMENT ON COLUMN graph_fact_processing_logs.stage IS '处理阶段描述';
+COMMENT ON COLUMN graph_fact_processing_logs.status IS '阶段状态（如 pending、completed、failed）';
+COMMENT ON COLUMN graph_fact_processing_logs.message IS '阶段相关消息或错误信息';
+COMMENT ON COLUMN graph_fact_processing_logs.created_at IS '创建时间戳';
+COMMENT ON COLUMN graph_fact_processing_logs.updated_at IS '更新时间戳';
 
 -- 基础数据插入
 
@@ -361,9 +361,13 @@ CREATE INDEX IF NOT EXISTS idx_vectors_user ON vectors (user_id);
 CREATE INDEX IF NOT EXISTS idx_waypoints_src ON waypoints (src_id);
 CREATE INDEX IF NOT EXISTS idx_waypoints_dst ON waypoints (dst_id);
 CREATE INDEX IF NOT EXISTS idx_stats_ts ON stats (ts);
-CREATE INDEX IF NOT EXISTS idx_facts_created_at ON facts (created_at);
-CREATE INDEX IF NOT EXISTS idx_facts_fact_kind ON facts (fact_kind);
-CREATE INDEX IF NOT EXISTS idx_fact_entities_fact_id ON fact_entities (fact_id);
-CREATE INDEX IF NOT EXISTS idx_fact_entities_entity_id ON fact_entities (entity_id);
-CREATE INDEX IF NOT EXISTS idx_entities_text ON entities (text);
-CREATE INDEX IF NOT EXISTS idx_entities_canonical_id ON entities (canonical_id);
+CREATE INDEX IF NOT EXISTS idx_graph_facts_created_at ON graph_facts (created_at);
+CREATE INDEX IF NOT EXISTS idx_graph_facts_fact_kind ON graph_facts (fact_kind);
+CREATE INDEX IF NOT EXISTS idx_graph_fact_entities_fact_id ON graph_fact_entities (fact_id);
+CREATE INDEX IF NOT EXISTS idx_graph_fact_entities_entity_id ON graph_fact_entities (entity_id);
+CREATE INDEX IF NOT EXISTS idx_graph_entities_text ON graph_entities (text);
+CREATE INDEX IF NOT EXISTS idx_graph_entities_canonical_id ON graph_entities (canonical_id);
+CREATE INDEX IF NOT EXISTS idx_graph_canonical_entities_name ON graph_canonical_entities (name);
+CREATE INDEX IF NOT EXISTS idx_graph_canonical_entities_user_id ON graph_canonical_entities (user_id);
+CREATE INDEX IF NOT EXISTS idx_graph_canonical_entities_entity_type ON graph_canonical_entities (entity_type);
+CREATE INDEX IF NOT EXISTS idx_graph_canonical_entities_entity_label ON graph_canonical_entities (entity_label);

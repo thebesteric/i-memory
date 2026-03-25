@@ -20,7 +20,7 @@ async def add_topic(user: IMemoryUser, topic: Topic):
 
     db.execute(
         """
-        INSERT INTO topics(id, user_id, name, summary, keywords, dialogue_ids, created_at, updated_at)
+        INSERT INTO graph_topics(id, user_id, name, summary, keywords, dialogue_ids, created_at, updated_at)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """,
         (
@@ -45,7 +45,7 @@ async def add_fact(user: IMemoryUser, fact: Fact, topic: Topic) -> Fact:
 
     db.execute(
         """
-        INSERT INTO facts (id, user_id, topic_id, what, when_, where_, who, why, status, fact_kind, occurred_start, occurred_end,
+        INSERT INTO graph_facts (id, user_id, topic_id, what, when_, where_, who, why, status, fact_kind, occurred_start, occurred_end,
                            created_at, updated_at, processed_at)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """,
@@ -79,7 +79,7 @@ async def add_entity(user: IMemoryUser, entity: Entity) -> Entity:
 
     db.execute(
         """
-        INSERT INTO entities (id, user_id, text, entity_type, canonical_id, canonical_text, occurrence_count,
+        INSERT INTO graph_entities (id, user_id, text, entity_type, canonical_id, canonical_text, occurrence_count,
                               first_seen_at, last_seen_at, created_at, updated_at)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
@@ -106,7 +106,7 @@ async def link_fact_entities(user: IMemoryUser, fact: Fact) -> None:
             entity = await add_entity(user=user, entity=entity)
         db.execute(
             """
-            INSERT INTO fact_entities (fact_id, entity_id, relation_to_user, created_at, updated_at)
+            INSERT INTO graph_fact_entities (fact_id, entity_id, relation_to_user, created_at, updated_at)
             VALUES (%s, %s, %s, %s, %s)
             """,
             (
