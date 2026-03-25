@@ -30,7 +30,7 @@ async def get_un_fact_join_mem_count(callback: Callable[[IMemoryUserIdentity, in
         callback(user_identity, un_fact_join_count)
 
 
-async def build_graph():
+async def graph_build():
     """
     构建图（由定时任务调用）
     """

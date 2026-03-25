@@ -54,7 +54,7 @@ def _build_job_definitions() -> list[JobDefinition]:
         JobDefinition(
             id="graph",
             name="Memory graph build",
-            func=graph.build_graph,
+            func=graph.graph_build,
             # seconds=max(1, int(getattr(env, "GRAPH_BUILD_INTERVAL_SECONDS", 60 * 30) or 60 * 30)),
             seconds=5,
             max_instances=1,
@@ -66,7 +66,7 @@ def _build_job_definitions() -> list[JobDefinition]:
             id="force_graph",
             name="Daily force graph build for cold users",
             func=graph.daily_force_graph_build,
-            seconds=60*60*24,  # 每24小时执行一次
+            seconds=60*60*24,  # TODO：每24小时执行一次，要能定义到具体的时间
             max_instances=1,
             coalesce=True,
             misfire_grace_time=600,
