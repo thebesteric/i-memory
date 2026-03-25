@@ -42,7 +42,7 @@ async def graph_build():
     await get_un_fact_join_mem_count(enqueue_if_reach_threshold)
 
 
-async def daily_force_graph_build():
+async def graph_build_daily_force():
     """
     每日强制图化：将长期未达阈值的用户也入队
     """
@@ -55,7 +55,7 @@ async def daily_force_graph_build():
     await get_un_fact_join_mem_count(enqueue_if_cold_user)
 
 
-async def process_user_identity_queue():
+async def process_user_queue():
     semantic_split = SemanticSplit()
     fact_extract = FactExtract()
     while True:

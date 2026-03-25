@@ -1,10 +1,11 @@
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
 from agile.utils import LogHelper
 from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_EXECUTED, JobExecutionEvent
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.triggers.cron import CronTrigger
 import asyncio
 
 from src.core.config import env
@@ -26,8 +27,10 @@ class JobDefinition:
     name: str
     # 实际执行的任务函数，支持同步或异步 callable
     func: Callable[..., Any]
-    # IntervalTrigger 的执行间隔，单位：秒
-    seconds: int
+    # 触发器类型: 'interval' 或 'cron'
+    trigger_type: Literal["interval", "cron"] = "interval"
+    # interval 时为 seconds，cron 时为 hour, minute 等
+    trigger_args: dict[str, Any] = field(default_factory=dict)
     # 调度执行时传给 func 的关键字参数
     kwargs: dict[str, Any] = field(default_factory=dict)
     # 同一个任务允许的最大并发实例数，避免重复堆积执行
@@ -45,7 +48,8 @@ def _build_job_definitions() -> list[JobDefinition]:
             id="decay",
             name="Periodic memory decay",
             func=decay.apply_decay,
-            seconds=max(1, int(getattr(env, "DECAY_INTERVAL_SECONDS", 60 * 5) or 60 * 5)),
+            trigger_type="interval",
+            trigger_args={"seconds": max(1, int(getattr(env, "DECAY_INTERVAL_SECONDS", 60 * 5) or 60 * 5))},
             max_instances=1,
             coalesce=True,
             misfire_grace_time=30,
@@ -55,18 +59,19 @@ def _build_job_definitions() -> list[JobDefinition]:
             id="graph",
             name="Memory graph build",
             func=graph.graph_build,
-            # seconds=max(1, int(getattr(env, "GRAPH_BUILD_INTERVAL_SECONDS", 60 * 30) or 60 * 30)),
-            seconds=3000,
+            trigger_type="interval",
+            trigger_args={"seconds": 5},
             max_instances=1,
             coalesce=True,
             misfire_grace_time=30,
         ),
-        # 每日强制图化任务
+        # 每日强制图化任务（每天 2:00 执行）
         JobDefinition(
             id="force_graph",
             name="Daily force graph build for cold users",
-            func=graph.daily_force_graph_build,
-            seconds=60*60*24,  # TODO：每24小时执行一次，要能定义到具体的时间
+            func=graph.graph_build_daily_force,
+            trigger_type="cron",
+            trigger_args={"hour": 2, "minute": 0, "second": 0},
             max_instances=1,
             coalesce=True,
             misfire_grace_time=600,
@@ -83,9 +88,15 @@ def _scheduler_listener(event: JobExecutionEvent):
 
 def _register_jobs(scheduler: AsyncIOScheduler):
     for job in _build_job_definitions():
+        if job.trigger_type == "interval":
+            trigger = IntervalTrigger(**job.trigger_args)
+        elif job.trigger_type == "cron":
+            trigger = CronTrigger(**job.trigger_args)
+        else:
+            raise ValueError(f"Unknown trigger_type: {job.trigger_type}")
         scheduler.add_job(
             job.func,
-            trigger=IntervalTrigger(seconds=job.seconds),
+            trigger=trigger,
             id=job.id,
             name=job.name,
             kwargs=job.kwargs,
@@ -94,7 +105,7 @@ def _register_jobs(scheduler: AsyncIOScheduler):
             coalesce=job.coalesce,
             misfire_grace_time=job.misfire_grace_time,
         )
-        logger.info(f"[TASKS] Registered job: id={job.id}, interval={job.seconds}s")
+        logger.info(f"[TASKS] Registered job: id={job.id}, trigger={job.trigger_type}, args={job.trigger_args}")
 
 
 def start_background_tasks() -> AsyncIOScheduler:
@@ -112,10 +123,10 @@ def start_background_tasks() -> AsyncIOScheduler:
     try:
         graph_worker_count = getattr(env, "GRAPH_WORKER_COUNT", 3)
         for i in range(graph_worker_count):
-            asyncio.create_task(graph.process_user_identity_queue())
-        logger.info(f"[TASKS] Started {graph_worker_count} process_user_identity_queue workers.")
+            asyncio.create_task(graph.process_user_queue())
+        logger.info(f"[TASKS] Started {graph_worker_count} process_user_queue workers.")
     except Exception as e:
-        logger.error(f"[TASKS] Failed to start process_user_identity_queue workers: {e}")
+        logger.error(f"[TASKS] Failed to start process_user_queue workers: {e}")
 
     return scheduler
 
