@@ -361,7 +361,7 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
         # =========== 第一路召回：BM25 召回（基于关键词匹配的传统检索方法，补充向量召回可能遗漏的相关记忆）===========
         bm25_ids = set()
         # 是否开启了 BM25 检索
-        if filters.config.bm25_enable or True:
+        if filters.config.bm25_enable:
             bm25_memories = dml_ops.find_mem_by_user(
                 user=user,
                 order_by=["t.created_at DESC"],

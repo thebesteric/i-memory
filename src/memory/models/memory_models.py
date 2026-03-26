@@ -75,7 +75,7 @@ class IMemoryFilters(BaseModel):
 
     user_identity: IMemoryUserIdentity = Field(..., description="用户身份信息")
     sectors: list[str] = Field(default_factory=list, description="检索扇区范围")
-    min_salience: float = Field(default=0.0, description="最小显著性过滤值")
+    min_salience: float = Field(default=0.0, ge=0.0, le=1.0, description="最小显著性过滤值")
     query_mode: QueryMode = Field(default="prefer", description="查询模式：vector/qa/prefer")
     config: IMemoryFiltersConfig = Field(default_factory=IMemoryFiltersConfig, description="相关查询配置")
 

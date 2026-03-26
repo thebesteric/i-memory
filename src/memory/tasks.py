@@ -66,7 +66,7 @@ def _build_job_definitions() -> list[JobDefinition]:
             max_instances=1,
             coalesce=True,
             misfire_grace_time=30,
-            enable=getattr(env, "GRAPH_BUILD_ENABLE", True),
+            enable=getattr(env, "GRAPH_BUILD_ENABLE", True)
         ),
         # 每日强制图化任务（每天 2:00 执行）
         JobDefinition(
@@ -78,7 +78,7 @@ def _build_job_definitions() -> list[JobDefinition]:
             max_instances=1,
             coalesce=True,
             misfire_grace_time=600,
-            enable=getattr(env, "GRAPH_BUILD_ENABLE", True),
+            enable=getattr(env, "GRAPH_BUILD_ENABLE", True)
         )
     ]
 
@@ -126,7 +126,7 @@ def start_background_tasks() -> AsyncIOScheduler:
     logger.info(f"[TASKS] Scheduler started, timezone={timezone}")
 
     # 启动 graph worker 协程（多并发）
-    graph_build_enable = getattr(env, "GRAPH_BUILD_ENABLE", True),
+    graph_build_enable = getattr(env, "GRAPH_BUILD_ENABLE", True)
     if graph_build_enable:
         try:
             graph_worker_count = getattr(env, "GRAPH_WORKER_COUNT", 3)
