@@ -23,6 +23,7 @@ class EnvConfig:
         # Web 服务配置
         self.WEB_HOST = env_helper.get("WEB_HOST", "127.0.0.1")
         self.WEB_PORT = env_helper.get("WEB_PORT", 8000)
+        self.WEB_DEBUG = env_helper.get("WEB_DEBUG", False)
 
         # 数据库配置
         self.POSTGRES_DB_HOST = env_helper.get("DB_HOST", "localhost")

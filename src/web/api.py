@@ -123,5 +123,5 @@ def create_app() -> FastAPI:
 if __name__ == '__main__':
     import uvicorn
 
-    debug = True
+    debug = env.WEB_DEBUG if env.WEB_DEBUG is not None else False
     uvicorn.run("src.web.api:create_app", host=env.WEB_HOST, port=env.WEB_PORT, reload=debug)
