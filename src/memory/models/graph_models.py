@@ -2,7 +2,10 @@ from datetime import datetime
 from enum import Enum
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
+from agile.utils import LogHelper
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator
+
+logger = LogHelper.get_logger()
 
 
 class RelationType(str, Enum):
@@ -102,16 +105,32 @@ class EntityType(str, Enum):
     """
     实体类型枚举
     """
-    PERSON = ("person", "人物")
-    ORGANIZATION = ("organization", "组织/机构")
-    LOCATION = ("location", "地点")
-    PRODUCT = ("product", "产品")
-    CONCEPT = ("concept", "抽象概念")
+    # 核心实体
+    PERSON = ("person", "人物/个体")
+    ORGANIZATION = ("organization", "组织/机构/公司/团体")
+    LOCATION = ("location", "地理位置/区域")
+
+    # 事物实体
+    PRODUCT = ("product", "产品/商品/物品")
+    SYSTEM = ("system", "系统/平台/软件/APP")
+    DEVICE = ("device", "设备/硬件/工具")
+    DOCUMENT = ("document", "文档/文件/资料")
+
+    # 概念/抽象实体
+    CONCEPT = ("concept", "抽象概念/术语/主题")
+    ROLE = ("role", "职位/角色/身份")
+    EVENT = ("event", "事件实体/历史事件")
     CAPABILITY = ("capability", "能力/功能")
     ATTRIBUTE = ("attribute", "属性/特征")
-    EVENT = ("event", "事件")
-    TIME = ("time", "时间")
-    OTHER = ("other", "其他")
+
+    # 规则/标准实体
+    RULE = ("rule", "规则/标准/条款/法律")
+
+    # 语言/技术实体
+    LANGUAGE = ("language", "语言/协议/技术框架")
+
+    # 其他无法归类
+    OTHER = ("other", "其他无法归类的实体类型")
 
     def __new__(cls, value: str, label: str):
         """支持元组形式的枚举值"""
@@ -185,9 +204,33 @@ class Entity(BaseModel):
 
     _id: str | None = PrivateAttr(None)
 
+    @classmethod
+    @field_validator('entity_type', mode='before')
+    def validate_entity_type(cls, v):
+        try:
+            e_type = EntityType.from_value(str(v))
+            return e_type if e_type is not None else EntityType.OTHER
+        except Exception as e:
+            logger.warning(e)
+            return EntityType.OTHER
+
+    @classmethod
+    @field_validator('relation_to_user', mode='before')
+    def validate_relation_to_user(cls, v):
+        try:
+            r_type = RelationType.from_value(str(v))
+            return r_type if r_type is not None else RelationType.OTHER
+        except Exception as e:
+            logger.warning(e)
+            return RelationType.OTHER
+
     @property
     def id(self):
         return self.model_extra.get("_id", None)
+
+    def set_id(self, id_value: str):
+        self._id = id_value
+        self.model_extra["_id"] = id_value
 
 
 class Topic(BaseModel):
@@ -210,6 +253,10 @@ class Topic(BaseModel):
     @property
     def summary_embedding(self):
         return self.model_extra.get("_summary_embedding", None)
+
+    def set_id(self, id_value: str):
+        self._id = id_value
+        self.model_extra["_id"] = id_value
 
 
 class Fact(BaseModel):
@@ -304,6 +351,10 @@ class Fact(BaseModel):
     @property
     def id(self):
         return self.model_extra.get("_id", None)
+
+    def set_id(self, id_value: str):
+        self._id = id_value
+        self.model_extra["_id"] = id_value
 
 
 class NodeType(str, Enum):

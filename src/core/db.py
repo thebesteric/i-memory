@@ -153,14 +153,17 @@ class DB:
         """
         self._run_migrations(conn)
 
-    def execute(self, sql: str, params: Tuple = None) -> int:
+    def execute(self, sql: str, params: Tuple = None, conn=None) -> int:
         """
         执行增删改SQL语句，返回受影响行数
         :param sql: SQL语句
         :param params: 参数
+        :param conn: 可选，外部传入的数据库连接
         :return:
         """
-        conn = self.get_conn()
+        external_conn = conn is not None
+        if not external_conn:
+            conn = self.get_conn()
         try:
             with conn.cursor() as cur:
                 cur.execute(sql, params)
@@ -174,16 +177,20 @@ class DB:
             caller = _get_caller_info() if logger.isEnabledFor(logging.INFO) else "unknown:unknown:0"
             raise Exception(f"[DB] (caller: {caller}) Execution failed: {str(e)}") from e
         finally:
-            self.put_conn(conn)
+            if not external_conn:
+                self.put_conn(conn)
 
-    def fetchone(self, sql: str, params: Optional[Tuple] = None) -> Dict[str, Any] | None:
+    def fetchone(self, sql: str, params: Optional[Tuple] = None, conn=None) -> Dict[str, Any] | None:
         """
         查询单条数据，返回字典格式
         :param sql: SQL查询语句
         :param params: 查询参数
+        :param conn: 可选，外部传入的数据库连接
         :return: 查询结果
         """
-        conn = self.get_conn()
+        external_conn = conn is not None
+        if not external_conn:
+            conn = self.get_conn()
         try:
             with conn.cursor(cursor_factory=DictCursor) as cur:
                 cur.execute(sql, params)
@@ -194,16 +201,20 @@ class DB:
         except Exception as e:
             raise Exception(f"Query failed: {str(e)}") from e
         finally:
-            self.put_conn(conn)
+            if not external_conn:
+                self.put_conn(conn)
 
-    def fetchall(self, sql: str, params: Optional[Tuple] = None) -> List[Dict[str, Any]]:
+    def fetchall(self, sql: str, params: Optional[Tuple] = None, conn=None) -> List[Dict[str, Any]]:
         """
         查询多条数据，返回字典列表格式
         :param sql: SQL查询语句
         :param params: 查询参数
+        :param conn: 可选，外部传入的数据库连接
         :return: 查询结果列表
         """
-        conn = self.get_conn()
+        external_conn = conn is not None
+        if not external_conn:
+            conn = self.get_conn()
         try:
             with conn.cursor(cursor_factory=DictCursor) as cur:
                 cur.execute(sql, params)
@@ -212,7 +223,8 @@ class DB:
         except Exception as e:
             raise Exception(f"Query failed: {str(e)}") from e
         finally:
-            self.put_conn(conn)
+            if not external_conn:
+                self.put_conn(conn)
 
     def commit(self, conn: Optional[psycopg2.extensions.connection] = None) -> None:
         """

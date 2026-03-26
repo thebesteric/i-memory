@@ -60,7 +60,7 @@ def _build_job_definitions() -> list[JobDefinition]:
             name="Memory graph build",
             func=graph.graph_build,
             trigger_type="interval",
-            trigger_args={"seconds": 5},
+            trigger_args={"seconds": max(1, int(getattr(env, "GRAPH_BUILD_INTERVAL_SECONDS", 60 * 30) or 60 * 30))},
             max_instances=1,
             coalesce=True,
             misfire_grace_time=30,

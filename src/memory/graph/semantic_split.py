@@ -2,6 +2,7 @@ import asyncio
 from datetime import datetime
 from typing import Any
 
+from agile.utils import timing
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.prompts import PromptTemplate
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
@@ -80,6 +81,7 @@ begin!!
         # 构建执行链
         return prompt_template | llm | output_parser
 
+    @timing
     async def invoke(self, dialogues: list[Dialogue]) -> SemanticsOutput:
         chain = self.get_chain()
         output: SemanticsOutput = await chain.ainvoke({"dialogues": dialogues})

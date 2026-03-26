@@ -1,4 +1,5 @@
 import datetime
+import json
 import uuid
 
 from agile.utils import LogHelper
@@ -13,11 +14,17 @@ logger = LogHelper.get_logger()
 db = get_db()
 
 
-async def add_topic(user: IMemoryUser, topic: Topic):
+async def add_topic(user: IMemoryUser, topic: Topic, conn=None):
+    """
+    添加主题
+    :param user:
+    :param topic:
+    :param conn:
+    :return:
+    """
     now = datetime.datetime.now()
     topic_id = str(uuid.uuid4())
-    topic._id = topic_id
-
+    topic.set_id(topic_id)
     db.execute(
         """
         INSERT INTO graph_topics(id, user_id, name, summary, keywords, dialogue_ids, created_at, updated_at)
@@ -28,25 +35,34 @@ async def add_topic(user: IMemoryUser, topic: Topic):
             user.id,
             topic.name,
             topic.summary,
-            topic.keywords or [],
-            topic.dialogue_ids or [],
+            json.dumps(topic.keywords or []),
+            json.dumps(topic.dialogue_ids or []),
             now,
             now
-        )
+        ),
+        conn=conn
     )
-    db.commit()
+    if conn is None:
+        db.commit()
     return topic
 
 
-async def add_fact(user: IMemoryUser, fact: Fact, topic: Topic) -> Fact:
+async def add_fact(user: IMemoryUser, fact: Fact, topic: Topic, conn=None) -> Fact:
+    """
+    添加事实
+    :param user:
+    :param fact:
+    :param topic:
+    :param conn:
+    :return:
+    """
     now = datetime.datetime.now()
     fact_id = str(uuid.uuid4())
-    fact._id = fact_id
-
+    fact.set_id(fact_id)
     db.execute(
         """
         INSERT INTO graph_facts (id, user_id, topic_id, what, when_, where_, who, why, status, fact_kind, occurred_start, occurred_end,
-                           created_at, updated_at, processed_at)
+                                 created_at, updated_at, processed_at)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """,
         (
@@ -65,45 +81,71 @@ async def add_fact(user: IMemoryUser, fact: Fact, topic: Topic) -> Fact:
             now,
             now,
             None
-        )
+        ),
+        conn=conn
     )
-    db.commit()
+    if conn is None:
+        db.commit()
     return fact
 
 
-async def add_entity(user: IMemoryUser, entity: Entity) -> Entity:
+async def add_entity(user: IMemoryUser, entity: Entity, conn=None) -> Entity:
+    """
+    添加实体
+    :param user:
+    :param entity:
+    :param conn:
+    :return:
+    """
+    text = getattr(entity, "text", None)
+    entity_type = getattr(entity.entity_type, 'name', EntityType.OTHER.name)
+
+    # 如果存在则不添加实体
+    existing = db.fetchone(
+        "SELECT id FROM graph_entities WHERE user_id = %s AND text = %s AND entity_type = %s",
+        (user.id, text, entity_type),
+        conn=conn
+    )
+    if existing:
+        entity.set_id(existing["id"])
+        return entity
+
     now = datetime.datetime.now()
     entity_id = str(uuid.uuid4())
-    entity._id = entity_id
-    entity_type = EntityType.from_value(entity.entity_type.lower())
-
+    entity.set_id(entity_id)
     db.execute(
         """
-        INSERT INTO graph_entities (id, user_id, text, entity_type, canonical_id, canonical_text, occurrence_count,
-                              first_seen_at, last_seen_at, created_at, updated_at)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO graph_entities (id, user_id, text, entity_type, canonical_id, canonical_text, created_at, updated_at)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             entity_id,
             user.id,
-            entity.text,
-            entity_type.name,
-            entity.canonical_id,
-            entity.canonical_text,
-            1,
-            now,
-            now,
+            text,
+            entity_type,
+            getattr(entity, 'canonical_id', None),
+            getattr(entity, 'canonical_text', None),
             now,
             now
-        ))
-    db.commit()
+        ),
+        conn=conn
+    )
+    if conn is None:
+        db.commit()
     return entity
 
 
-async def link_fact_entities(user: IMemoryUser, fact: Fact) -> None:
+async def link_fact_entities(user: IMemoryUser, fact: Fact, conn=None) -> None:
+    """
+    关联事实和实体关系
+    :param user:
+    :param fact:
+    :param conn:
+    :return:
+    """
     now = datetime.datetime.now()
     for entity in fact.entities:
         if not entity.id:
-            entity = await add_entity(user=user, entity=entity)
+            entity = await add_entity(user=user, entity=entity, conn=conn)
         db.execute(
             """
             INSERT INTO graph_fact_entities (fact_id, entity_id, relation_to_user, created_at, updated_at)
@@ -115,5 +157,58 @@ async def link_fact_entities(user: IMemoryUser, fact: Fact) -> None:
                 entity.relation_to_user,
                 now,
                 now
-            )
+            ),
+            conn=conn
         )
+    if conn is None:
+        db.commit()
+
+
+async def mark_memoires_to_fact_joined(m_ids: list[str], conn=None) -> int:
+    """
+    将记忆标记为已参与事实处理
+    :param m_ids:
+    :param conn:
+    :return:
+    """
+    if not m_ids:
+        return 0
+    format_strings = ','.join(['%s'] * len(m_ids))
+    query = f"UPDATE memories SET fact_joined = 1 WHERE id IN ({format_strings})"
+    affected_rows = db.execute(
+        query,
+        tuple(m_ids),
+        conn=conn
+    )
+    if conn is None:
+        db.commit()
+    return affected_rows
+
+
+async def increment_memoires_join_count(m_ids: list[str], discard_threshold: int = 2, conn=None) -> int:
+    """
+    将记忆的参与处理次数自增
+    如果 joined_count >= discard_threshold，且未参与过事实处理，则标记为 -1，标识丢弃，后续不参加任何事实处理逻辑
+    :param m_ids:
+    :param discard_threshold:
+    :param conn:
+    :return:
+    """
+    if not m_ids:
+        return 0
+    format_strings = ','.join(['%s'] * len(m_ids))
+    query = f"""
+        UPDATE memories 
+        SET 
+            joined_count = joined_count + 1,
+            fact_joined = CASE WHEN joined_count + 1 >= %s AND fact_joined = 0 THEN -1 ELSE fact_joined END
+        WHERE id IN ({format_strings})
+    """
+    affected_rows = db.execute(
+        query,
+        (discard_threshold,) + tuple(m_ids),
+        conn=conn
+    )
+    if conn is None:
+        db.commit()
+    return affected_rows

@@ -12,12 +12,13 @@ CREATE TABLE IF NOT EXISTS memories
     qa_pair_id     TEXT,
     content        TEXT,
     summary        TEXT,
-    fact_joined    BOOLEAN          DEFAULT FALSE,
     primary_sector TEXT,
     sectors        TEXT,
     tags           TEXT,
     compressed_vec BYTEA,
     meta           TEXT,
+    fact_joined    SMALLINT         DEFAULT 0,
+    joined_count   SMALLINT         DEFAULT 0,
     segment        INTEGER          DEFAULT 0,
     created_at     TIMESTAMP,
     updated_at     TIMESTAMP,
@@ -39,12 +40,13 @@ COMMENT ON COLUMN memories.qa_role IS '问答角色（human/assistant）';
 COMMENT ON COLUMN memories.qa_pair_id IS '问答对标识';
 COMMENT ON COLUMN memories.content IS '原始记忆内容';
 COMMENT ON COLUMN memories.summary IS '记忆摘要';
-COMMENT ON COLUMN memories.fact_joined IS '是否已参与事实处理';
 COMMENT ON COLUMN memories.primary_sector IS '主扇区/主题标签';
 COMMENT ON COLUMN memories.sectors IS '次级扇区/主题标签';
 COMMENT ON COLUMN memories.tags IS '用户或系统标签';
 COMMENT ON COLUMN memories.compressed_vec IS '压缩嵌入向量字节';
 COMMENT ON COLUMN memories.meta IS '元数据载荷（序列化）';
+COMMENT ON COLUMN memories.fact_joined IS '是否已参与事实处理，0 = 否，1 = 是，-1 = 丢弃';
+COMMENT ON COLUMN memories.joined_count IS '参与事实处理的次数';
 COMMENT ON COLUMN memories.segment IS '分段编号';
 COMMENT ON COLUMN memories.created_at IS '创建时间戳';
 COMMENT ON COLUMN memories.updated_at IS '最后更新时间戳';
@@ -181,8 +183,6 @@ COMMENT ON COLUMN segment.updated_at IS '最后更新时间戳';
 CREATE TABLE IF NOT EXISTS graph_topics
 (
     id           TEXT PRIMARY KEY,
-    tenant_id    TEXT,
-    project_id   TEXT,
     user_id      TEXT,
     name         TEXT NOT NULL,
     summary      TEXT,
@@ -194,8 +194,6 @@ CREATE TABLE IF NOT EXISTS graph_topics
 
 COMMENT ON TABLE graph_topics IS '主题表';
 COMMENT ON COLUMN graph_topics.id IS '主题标识';
-COMMENT ON COLUMN graph_topics.tenant_id IS '租户标识';
-COMMENT ON COLUMN graph_topics.project_id IS '项目标识';
 COMMENT ON COLUMN graph_topics.user_id IS '用户标识';
 COMMENT ON COLUMN graph_topics.name IS '主题名称';
 COMMENT ON COLUMN graph_topics.summary IS '主题摘要';
@@ -279,7 +277,6 @@ CREATE TABLE IF NOT EXISTS graph_entities
     user_id        TEXT,
     text           VARCHAR(500) NOT NULL,
     entity_type    VARCHAR(30)  NOT NULL,
-    entity_label   VARCHAR(50),
     canonical_id   TEXT,
     canonical_text TEXT,
     created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -356,7 +353,7 @@ CREATE INDEX IF NOT EXISTS idx_memories_sector ON memories (primary_sector);
 CREATE INDEX IF NOT EXISTS idx_memories_ts ON memories (last_seen_at);
 CREATE INDEX IF NOT EXISTS idx_memories_user ON memories (user_id);
 CREATE INDEX IF NOT EXISTS idx_memories_qa_pair_id ON memories (qa_pair_id);
-CREATE INDEX IF NOT EXISTS idx_memories_fact_joined ON memories (fact_joined) WHERE fact_joined = FALSE;
+CREATE INDEX IF NOT EXISTS idx_memories_fact_joined ON memories (fact_joined) WHERE fact_joined = 0;
 CREATE INDEX IF NOT EXISTS idx_vectors_user ON vectors (user_id);
 CREATE INDEX IF NOT EXISTS idx_waypoints_src ON waypoints (src_id);
 CREATE INDEX IF NOT EXISTS idx_waypoints_dst ON waypoints (dst_id);

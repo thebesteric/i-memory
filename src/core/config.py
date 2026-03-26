@@ -104,8 +104,13 @@ class EnvConfig:
         # ================ 图相关配置 ================
         # 图构建循环间隔（秒）
         self.GRAPH_BUILD_INTERVAL_SECONDS = env_helper.get("IM_GRAPH_BUILD_INTERVAL_SECONDS", 60 * 30)
+        # 图执行至少记忆数量
         self.GRAPH_MEM_COUNT_AT_LEAST = env_helper.get("IM_GRAPH_MEM_COUNT_AT_LEAST", 50)
+        # 图执行至多记忆数量
         self.GRAPH_MEM_COUNT_AT_MOST = env_helper.get("IM_GRAPH_MEM_COUNT_AT_MOST", 100)
+        # 记忆达到丢弃条件的阈值
+        self.GRAPH_MEM_DISCARD_THRESHOLD = env_helper.get("IM_GRAPH_MEM_DISCARD_THRESHOLD", 2)
+        # 图执行工作线程数
         self.GRAPH_WORKER_COUNT = env_helper.get("IM_GRAPH_WORKER_COUNT", 3)
 
 

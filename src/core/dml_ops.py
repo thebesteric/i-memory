@@ -107,7 +107,7 @@ class DMLOps:
         return self.db.fetchall(sql, (user.id, limit, offset))
 
     def find_un_fact_join_mem_by_user(self, user: IMemoryUser, limit=10, offset=0) -> List[Dict[str, Any]]:
-        sql = "SELECT * FROM memories WHERE fact_joined IS NOT TRUE AND user_id = %s ORDER BY created_at ASC LIMIT %s OFFSET %s"
+        sql = "SELECT * FROM memories WHERE fact_joined = 0 AND user_id = %s ORDER BY created_at ASC LIMIT %s OFFSET %s"
         return self.db.fetchall(sql, (user.id, limit, offset))
 
     def count_mem_by_user(self, user: IMemoryUser, conditions: list[str] = None) -> int:

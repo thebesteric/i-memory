@@ -1,3 +1,4 @@
+from agile.utils import timing
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.prompts import PromptTemplate
 
@@ -15,18 +16,18 @@ class FactExtract:
 1. **忠实原文**：what 字段应基于原始对话内容，不要添加对话中没有的信息
 2. **保留原始引述**：将关键的直接引述放入 direct_quotes
 
+## 实体标签类型
+解析出的实体，必须严格按照如下类型赋值，如果以下类型不满足，请使用 **other** 类型：
+{entity_types}
+
+## 关系标签类型
+解析出的实体与用户的关系，必须严格按照如下类型赋值，如果以下类型不满足，请使用 **other** 类型：
+{relation_types}
+
 ## 重要提醒
 1. 只提取对话中**明确提及**的信息
 2. 不要添加外部知识或过度推断
 3. 如果信息不完整，相关字段留空
-
-## 实体标签类型
-解析出的实体，必须严格按照如下类型赋值：
-{entity_types}
-
-## 关系标签类型
-解析出的实体与用户的关系，必须严格按照如下类型赋值：
-{relation_types}
 
 ## 输出格式
 {format_instructions}
@@ -65,10 +66,11 @@ begin!!
         # 构建执行链
         return prompt_template | llm | output_parser
 
+    @timing
     async def invoke(self, topic: Topic) -> Fact:
         memories = self.dml_ops.find_mem(topic.dialogue_ids)
         input_variables = {
-            "topic": topic.topic,
+            "topic": topic.name,
             "summary": topic.summary,
             "keywords": topic.keywords,
             "dialogues": [Dialogue.mem_to_dialogue(m) for m in memories]

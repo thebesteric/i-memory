@@ -27,6 +27,8 @@ class TestIMemoryAdd(unittest.TestCase):
     # @unittest.skip
     def test_add_memory(self):
         contents = [
+            ("你好", "human"),
+            ("你好呀，有什么可以帮助的么？", "assistant"),
             ("OpenClaw是什么，和普通大模型区别在哪？", "human"),
             ("它是本地部署的AI智能体执行框架，核心是执行任务，不是只聊天。", "assistant"),
             ("支持哪些平台？", "human"),
@@ -60,7 +62,9 @@ class TestIMemoryAdd(unittest.TestCase):
             ("进阶玩法有哪些？", "human"),
             ("多Agent协同、自定义技能、定时任务等。", "assistant"),
             ("它的定位是什么？", "human"),
-            ("本地开源、模型无关、多渠道、强执行的AI智能体。", "assistant")
+            ("本地开源、模型无关、多渠道、强执行的AI智能体。", "assistant"),
+            ("谢谢，我知道了", "human"),
+            ("不客气", "assistant"),
         ]
 
         async def batch_add_memories():
