@@ -89,10 +89,9 @@ async def add_fact(user: IMemoryUser, fact: Fact, topic: Topic, conn=None) -> Fa
     return fact
 
 
-async def add_entity(user: IMemoryUser, entity: Entity, conn=None) -> Entity:
+async def add_entity(entity: Entity, conn=None) -> Entity:
     """
     添加实体
-    :param user:
     :param entity:
     :param conn:
     :return:
@@ -100,14 +99,15 @@ async def add_entity(user: IMemoryUser, entity: Entity, conn=None) -> Entity:
     text = getattr(entity, "text", None)
     entity_type = getattr(entity.entity_type, 'name', EntityType.OTHER.name)
 
-    # 如果存在则不添加实体
+    # 如果存在则不添加实体（text 和 entity_type 相同，视为同一个实体）
     existing = db.fetchone(
-        "SELECT id FROM graph_entities WHERE user_id = %s AND text = %s AND entity_type = %s",
-        (user.id, text, entity_type),
+        "SELECT id FROM graph_entities WHERE text = %s AND entity_type = %s",
+        (text, entity_type),
         conn=conn
     )
     if existing:
         entity.set_id(existing["id"])
+        entity.set_canonical_id(existing["canonical_id"])
         return entity
 
     now = datetime.datetime.now()
@@ -115,11 +115,10 @@ async def add_entity(user: IMemoryUser, entity: Entity, conn=None) -> Entity:
     entity.set_id(entity_id)
     db.execute(
         """
-        INSERT INTO graph_entities (id, user_id, text, entity_type, canonical_id, canonical_text, created_at, updated_at)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO graph_entities (id, text, entity_type, canonical_id, canonical_text, created_at, updated_at)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
         """, (
             entity_id,
-            user.id,
             text,
             entity_type,
             getattr(entity, 'canonical_id', None),
@@ -134,10 +133,9 @@ async def add_entity(user: IMemoryUser, entity: Entity, conn=None) -> Entity:
     return entity
 
 
-async def link_fact_entities(user: IMemoryUser, fact: Fact, conn=None) -> None:
+async def link_fact_entities(fact: Fact, conn=None) -> None:
     """
     关联事实和实体关系
-    :param user:
     :param fact:
     :param conn:
     :return:
@@ -145,7 +143,7 @@ async def link_fact_entities(user: IMemoryUser, fact: Fact, conn=None) -> None:
     now = datetime.datetime.now()
     for entity in fact.entities:
         if not entity.id:
-            entity = await add_entity(user=user, entity=entity, conn=conn)
+            entity = await add_entity(entity=entity, conn=conn)
         db.execute(
             """
             INSERT INTO graph_fact_entities (fact_id, entity_id, relation_to_user, created_at, updated_at)

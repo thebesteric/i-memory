@@ -9,6 +9,8 @@
 # 解决方法：使用 dos2unix 工具将 run.sh 转换为 unix 格式
 # 安装：sudo apt install dos2unix
 # 命令：dos2unix run.sh
+# 使用方式：
+# ./run.sh start <env-mode>  # 启动程序，需指定环境模式
 
 # 配置项
 APP_NAME="i-memory"

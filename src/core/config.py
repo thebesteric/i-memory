@@ -102,6 +102,7 @@ class EnvConfig:
         self.USE_BERT_CLASSIFIER = env_helper.get("IM_USE_BERT_CLASSIFIER", True)
 
         # ================ 图相关配置 ================
+        self.GRAPH_BUILD_ENABLE = env_helper.get("IM_GRAPH_BUILD_ENABLE", True)
         # 图构建循环间隔（秒）
         self.GRAPH_BUILD_INTERVAL_SECONDS = env_helper.get("IM_GRAPH_BUILD_INTERVAL_SECONDS", 60 * 30)
         # 图执行至少记忆数量

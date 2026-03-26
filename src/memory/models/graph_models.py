@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from typing import Literal, Optional
+from typing import Literal, Optional, Any
 
 from agile.utils import LogHelper
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator
@@ -89,14 +89,14 @@ class RelationType(str, Enum):
         return None
 
     @classmethod
-    def from_label(cls, label: str) -> Optional["RelationType"]:
+    def from_name(cls, name: str) -> Optional["RelationType"]:
         """
-        根据中文标签获取枚举成员
-        :param label:
+        根据 name 获取枚举成员
+        :param name:
         :return:
         """
         for e in cls:
-            if e.label == label:
+            if e.name == name:
                 return e
         return None
 
@@ -180,14 +180,14 @@ class EntityType(str, Enum):
         return None
 
     @classmethod
-    def from_label(cls, label: str) -> Optional["EntityType"]:
+    def from_name(cls, name: str) -> Optional["EntityType"]:
         """
-        根据中文标签获取枚举成员
-        :param label:
+        根据 name 获取枚举成员
+        :param name:
         :return:
         """
         for e in cls:
-            if e.label == label:
+            if e.name == name:
                 return e
         return None
 
@@ -203,6 +203,7 @@ class Entity(BaseModel):
     relation_to_user: RelationType | None = Field(default=None, description="与用户的关系")
 
     _id: str | None = PrivateAttr(None)
+    _canonical_id: str | None = PrivateAttr(None)
 
     @classmethod
     @field_validator('entity_type', mode='before')
@@ -228,9 +229,48 @@ class Entity(BaseModel):
     def id(self):
         return self.model_extra.get("_id", None)
 
+    @property
+    def canonical_id(self):
+        return self.model_extra.get("_canonical_id", None)
+
     def set_id(self, id_value: str):
         self._id = id_value
         self.model_extra["_id"] = id_value
+
+    def set_canonical_id(self, canonical_id_value: str):
+        self._canonical_id = canonical_id_value
+        self.model_extra["_canonical_id"] = canonical_id_value
+
+
+class CanonicalEntity(BaseModel):
+    """
+    规范化实体
+    """
+    model_config = ConfigDict(arbitrary_types_allowed=True, extra="allow")
+
+    id: str = Field(..., description="主键")
+    name: str = Field(..., description="实体名称")
+    entity_type: EntityType = Field(..., description="实体类型")
+    vector: list[float] = Field(..., description="实体的向量表示")
+    occurrence_count: int = Field(default=1, description="出现次数")
+    first_seen_at: datetime = Field(..., description="首次出现时间")
+    last_seen_at: datetime = Field(..., description="最近出现时间")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+
+    @staticmethod
+    def from_dict(row: dict[str, Any]) -> "CanonicalEntity":
+        return CanonicalEntity(
+            id=row["id"],
+            name=row["name"],
+            entity_type=EntityType.from_name(row["entity_type"]),
+            vector=row["vector"],
+            occurrence_count=row["occurrence_count"],
+            first_seen_at=row["first_seen_at"],
+            last_seen_at=row["last_seen_at"],
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
 
 
 class Topic(BaseModel):

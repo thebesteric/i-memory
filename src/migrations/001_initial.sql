@@ -245,7 +245,6 @@ COMMENT ON COLUMN graph_facts.processed_at IS '事实被图谱化的时间戳';
 CREATE TABLE IF NOT EXISTS graph_canonical_entities
 (
     id               TEXT PRIMARY KEY,
-    user_id          TEXT,
     name             VARCHAR(500) NOT NULL,
     entity_type      VARCHAR(30)  NOT NULL,
     entity_label     VARCHAR(50),
@@ -255,12 +254,11 @@ CREATE TABLE IF NOT EXISTS graph_canonical_entities
     last_seen_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (user_id, name, entity_type)
+    UNIQUE (name, entity_type)
 );
 
 COMMENT ON TABLE graph_canonical_entities IS '规范化实体表';
 COMMENT ON COLUMN graph_canonical_entities.id IS '实体标识';
-COMMENT ON COLUMN graph_canonical_entities.user_id IS '用户标识';
 COMMENT ON COLUMN graph_canonical_entities.name IS '实体名称';
 COMMENT ON COLUMN graph_canonical_entities.entity_type IS '实体类型';
 COMMENT ON COLUMN graph_canonical_entities.vector IS '实体的嵌入向量';
@@ -274,21 +272,19 @@ COMMENT ON COLUMN graph_canonical_entities.updated_at IS '最后更新时间戳'
 CREATE TABLE IF NOT EXISTS graph_entities
 (
     id             TEXT PRIMARY KEY,
-    user_id        TEXT,
     text           VARCHAR(500) NOT NULL,
     entity_type    VARCHAR(30)  NOT NULL,
     canonical_id   TEXT,
     canonical_text TEXT,
     created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (user_id, text, entity_type),
+    UNIQUE (text, entity_type),
     CONSTRAINT fk_graph_entities_canonical_id_graph_canonical_entities_id
         FOREIGN KEY (canonical_id) REFERENCES graph_canonical_entities (id)
 );
 
 COMMENT ON TABLE graph_entities IS '实体表';
 COMMENT ON COLUMN graph_entities.id IS '实体标识';
-COMMENT ON COLUMN graph_entities.user_id IS '用户标识';
 COMMENT ON COLUMN graph_entities.text IS '实体原始提及文本';
 COMMENT ON COLUMN graph_entities.entity_type IS '实体类型';
 COMMENT ON COLUMN graph_entities.canonical_id IS '规范化实体标识';
@@ -365,6 +361,5 @@ CREATE INDEX IF NOT EXISTS idx_graph_fact_entities_entity_id ON graph_fact_entit
 CREATE INDEX IF NOT EXISTS idx_graph_entities_text ON graph_entities (text);
 CREATE INDEX IF NOT EXISTS idx_graph_entities_canonical_id ON graph_entities (canonical_id);
 CREATE INDEX IF NOT EXISTS idx_graph_canonical_entities_name ON graph_canonical_entities (name);
-CREATE INDEX IF NOT EXISTS idx_graph_canonical_entities_user_id ON graph_canonical_entities (user_id);
 CREATE INDEX IF NOT EXISTS idx_graph_canonical_entities_entity_type ON graph_canonical_entities (entity_type);
 CREATE INDEX IF NOT EXISTS idx_graph_canonical_entities_entity_label ON graph_canonical_entities (entity_label);

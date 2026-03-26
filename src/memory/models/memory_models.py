@@ -68,6 +68,8 @@ class IMemoryFilters(BaseModel):
     sectors: list[str] = Field(default_factory=list, description="检索扇区范围")
     min_salience: float = Field(default=0.0, description="最小显著性过滤值")
     query_mode: QueryMode = Field(default="prefer", description="查询模式：vector/qa/prefer")
+    bm25_enable: bool = Field(default=True, description="是否启用 BM25 关键词检索")
+    graph_enable: bool = Field(default=True, description="是否启用图检索")
     debug: bool = Field(default=False, description="是否启用调试模式")
 
 

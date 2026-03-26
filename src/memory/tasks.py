@@ -39,6 +39,8 @@ class JobDefinition:
     coalesce: bool = True
     # 错过触发后的宽限时间，超时后该次执行会被丢弃
     misfire_grace_time: int = 30
+    # 是否开启任务
+    enable: bool = True
 
 
 def _build_job_definitions() -> list[JobDefinition]:
@@ -64,6 +66,7 @@ def _build_job_definitions() -> list[JobDefinition]:
             max_instances=1,
             coalesce=True,
             misfire_grace_time=30,
+            enable=getattr(env, "GRAPH_BUILD_ENABLE", True),
         ),
         # 每日强制图化任务（每天 2:00 执行）
         JobDefinition(
@@ -75,6 +78,7 @@ def _build_job_definitions() -> list[JobDefinition]:
             max_instances=1,
             coalesce=True,
             misfire_grace_time=600,
+            enable=getattr(env, "GRAPH_BUILD_ENABLE", True),
         )
     ]
 
@@ -88,6 +92,8 @@ def _scheduler_listener(event: JobExecutionEvent):
 
 def _register_jobs(scheduler: AsyncIOScheduler):
     for job in _build_job_definitions():
+        if not job.enable:
+            continue
         if job.trigger_type == "interval":
             trigger = IntervalTrigger(**job.trigger_args)
         elif job.trigger_type == "cron":
@@ -120,13 +126,15 @@ def start_background_tasks() -> AsyncIOScheduler:
     logger.info(f"[TASKS] Scheduler started, timezone={timezone}")
 
     # 启动 graph worker 协程（多并发）
-    try:
-        graph_worker_count = getattr(env, "GRAPH_WORKER_COUNT", 3)
-        for i in range(graph_worker_count):
-            asyncio.create_task(graph.process_user_queue())
-        logger.info(f"[TASKS] Started {graph_worker_count} process_user_queue workers.")
-    except Exception as e:
-        logger.error(f"[TASKS] Failed to start process_user_queue workers: {e}")
+    graph_build_enable = getattr(env, "GRAPH_BUILD_ENABLE", True),
+    if graph_build_enable:
+        try:
+            graph_worker_count = getattr(env, "GRAPH_WORKER_COUNT", 3)
+            for i in range(graph_worker_count):
+                asyncio.create_task(graph.process_user_queue())
+            logger.info(f"[TASKS] Graph Started {graph_worker_count} process_user_queue workers.")
+        except Exception as e:
+            logger.error(f"[TASKS] Graph Failed to start process_user_queue workers: {e}")
 
     return scheduler
 

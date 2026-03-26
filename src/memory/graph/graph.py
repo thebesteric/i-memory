@@ -89,7 +89,7 @@ async def process_user_queue():
                         # 将 Fact 入库
                         fact = await graph_ops.add_fact(user, fact, topic, conn=conn)
                         # 将 Entity 入库
-                        await graph_ops.link_fact_entities(user, fact, conn=conn)
+                        await graph_ops.link_fact_entities(fact, conn=conn)
 
                     # 提取已经参与生成事实的记忆 ID 列表
                     mem_ids = set()

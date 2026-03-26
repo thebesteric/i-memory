@@ -35,22 +35,22 @@ testing = ["bitsandbytes", "datasets", "diffusers", "evaluate", "parameterized",
 
 [[package]]
 name = "agile"
-version = "0.1.8"
+version = "0.1.9"
 description = "An easy-to-use general-purpose Python utility toolkits"
 optional = false
 python-versions = "<4.0.0,>=3.12"
 groups = ["main"]
 files = [
-    {file = "agile-0.1.8-py3-none-any.whl", hash = "sha256:936dfb666c21ba1749e7724af731142f02d853f5b362b15ab50c96d07cb15395"},
-    {file = "agile-0.1.8.tar.gz", hash = "sha256:08c53e3c125b50d6be9e589e5a6801487cb919c2fdacbd5e3f99126df2f8039b"},
+    {file = "agile-0.1.9-py3-none-any.whl", hash = "sha256:c59ec036e6f4109ba1f546f0fcb022070882e34750b8f71c4fea0b40d837d708"},
+    {file = "agile-0.1.9.tar.gz", hash = "sha256:d77f3b2258e7cdebdcee32c201d0572372ce2e0519a4aaa575a3e782ab64b674"},
 ]
 
 [package.dependencies]
-build = ">=1.4.0,<2.0.0"
+build = ">=1.4.2,<2.0.0"
 cachetools = ">=7.0.5,<8.0.0"
 colorlog = ">=6.10.1,<7.0.0"
 jieba = ">=0.42.1,<0.43.0"
-langchain = ">=1.2.11,<2.0.0"
+langchain = ">=1.2.13,<2.0.0"
 numpy = ">=2.4.3,<3.0.0"
 pydantic = ">=2.12.5,<3.0.0"
 pymilvus = ">=2.6.10,<3.0.0"
@@ -447,14 +447,14 @@ crt = ["awscrt (==0.29.2)"]
 
 [[package]]
 name = "build"
-version = "1.4.0"
+version = "1.4.2"
 description = "A simple, correct Python build frontend"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "build-1.4.0-py3-none-any.whl", hash = "sha256:6a07c1b8eb6f2b311b96fcbdbce5dab5fe637ffda0fd83c9cac622e927501596"},
-    {file = "build-1.4.0.tar.gz", hash = "sha256:f1b91b925aa322be454f8330c6fb48b465da993d1e7e7e6fa35027ec49f3c936"},
+    {file = "build-1.4.2-py3-none-any.whl", hash = "sha256:7a4d8651ea877cb2a89458b1b198f2e69f536c95e89129dbf5d448045d60db88"},
+    {file = "build-1.4.2.tar.gz", hash = "sha256:35b14e1ee329c186d3f08466003521ed7685ec15ecffc07e68d706090bf161d1"},
 ]
 
 [package.dependencies]
@@ -1782,14 +1782,14 @@ files = [
 
 [[package]]
 name = "langchain"
-version = "1.2.12"
+version = "1.2.13"
 description = "Building applications with LLMs through composability"
 optional = false
 python-versions = "<4.0.0,>=3.10.0"
 groups = ["main"]
 files = [
-    {file = "langchain-1.2.12-py3-none-any.whl", hash = "sha256:60eff184b8f92c2610f5a4c9a97ad339a891adb01901e83e4df8e6c9c69cf852"},
-    {file = "langchain-1.2.12.tar.gz", hash = "sha256:ed705b5b293799f7e3e394387f398a1b71707542758283206c8c21415759d991"},
+    {file = "langchain-1.2.13-py3-none-any.whl", hash = "sha256:37d4526ac4b0cdd3d7706a6366124c30dc0771bf5340865b37cdc99d5e5ad9b1"},
+    {file = "langchain-1.2.13.tar.gz", hash = "sha256:d566ef67c8287e7f2e2df3c99bf3953a6beefd2a75a97fe56ecce905e21f3ef4"},
 ]
 
 [package.dependencies]
@@ -1801,6 +1801,7 @@ pydantic = ">=2.7.4,<3.0.0"
 anthropic = ["langchain-anthropic"]
 aws = ["langchain-aws"]
 azure-ai = ["langchain-azure-ai"]
+baseten = ["langchain-baseten (>=0.2.0)"]
 community = ["langchain-community"]
 deepseek = ["langchain-deepseek"]
 fireworks = ["langchain-fireworks"]
