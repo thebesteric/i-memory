@@ -178,20 +178,40 @@ def get_chat_model() -> BaseChatModel:
     if model_provider == ModelProvider.OPENAI.value:
         return MODEL_CACHE.get_or_set(
             ModelProvider.OPENAI.value,
-            lambda: ChatOpenAI(model=env.OPENAI_MODEL, temperature=0.0, api_key=env.OPENAI_API_KEY, base_url=env.OPENAI_BASE_URL),
+            lambda: ChatOpenAI(
+                model=env.OPENAI_MODEL,
+                temperature=0.0,
+                api_key=env.OPENAI_API_KEY,
+                base_url=env.OPENAI_BASE_URL,
+                extra_body={"enable_thinking": False}
+            ),
             on_set=lambda k, v: logger.info(f"Using OpenAI model: {env.OPENAI_MODEL}")
         )
     if model_provider == ModelProvider.GEMINI.value:
         from langchain_google_genai import ChatGoogleGenerativeAI
         return MODEL_CACHE.get_or_set(
             ModelProvider.GEMINI.value,
-            lambda: ChatGoogleGenerativeAI(model=env.GEMINI_MODEL, api_key=env.GEMINI_API_KEY, base_url=env.GEMINI_BASE_URL),
+            lambda: ChatGoogleGenerativeAI(
+                model=env.GEMINI_MODEL,
+                temperature=0.0,
+                api_key=env.GEMINI_API_KEY,
+                base_url=env.GEMINI_BASE_URL,
+                include_thoughts=False,
+                thinking_level="minimal",  # Gemini 3+，"minimal", "low", "medium", "high" (default for Pro)
+                thinking_budget=0  # Gemini 2.5，0 (off), -1 (dynamic), or a positive integer (token limit)
+            ),
             on_set=lambda k, v: logger.info(f"Using Gemini chat model: {env.GEMINI_MODEL}")
         )
     if model_provider == ModelProvider.DASHSCOPE.value:
         return MODEL_CACHE.get_or_set(
             ModelProvider.DASHSCOPE.value,
-            lambda: ChatOpenAI(model=env.DASHSCOPE_MODEL, temperature=0.0, api_key=env.DASHSCOPE_API_KEY, base_url=env.DASHSCOPE_BASE_URL),
+            lambda: ChatOpenAI(
+                model=env.DASHSCOPE_MODEL,
+                temperature=0.0,
+                api_key=env.DASHSCOPE_API_KEY,
+                base_url=env.DASHSCOPE_BASE_URL,
+                extra_body={"enable_thinking": False}
+            ),
             on_set=lambda k, v: logger.info(f"Using DashScope model: {env.DASHSCOPE_MODEL}")
         )
 
