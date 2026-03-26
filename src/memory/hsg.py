@@ -23,7 +23,8 @@ from src.core.waypoints import Waypoints, Expansion
 from src.core import user_ops
 from src.memory.decay import Decay
 from src.memory.embed import embed_multi_sector, calc_mean_vec, embed, embed_batch
-from src.memory.models.memory_models import IMemoryFilters, IMemoryItemDebugInfo, IMemoryItemInfo, IMemoryUserIdentity, IMemoryUser, QARole
+from src.memory.models.memory_models import IMemoryFilters, IMemoryItemDebugInfo, IMemoryItemInfo, IMemoryUserIdentity, IMemoryUser, QARole, \
+    IMemoryFiltersConfig
 from src.core.user_summary import update_user_summary
 from src.ops.dynamic_memory import calc_cross_sector_resonance_score, apply_retrieval_trace_reinforcement_to_memory, \
     propagate_associative_reinforcement_to_linked_nodes
@@ -322,6 +323,7 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
     start_q = time.time()
     decay.inc_q()
     filters = filters or IMemoryFilters(user_identity=IMemoryUserIdentity())
+    filters.config = filters.config or IMemoryFiltersConfig()
 
     user_identity = filters.user_identity
     # 用户合法性检查
@@ -356,10 +358,10 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
         # 召回的记忆 ID 集合
         ids = set()
 
-        # 第一路召回：BM25 召回（基于关键词匹配的传统检索方法，补充向量召回可能遗漏的相关记忆）
+        # =========== 第一路召回：BM25 召回（基于关键词匹配的传统检索方法，补充向量召回可能遗漏的相关记忆）===========
         bm25_ids = set()
         # 是否开启了 BM25 检索
-        if filters.bm25_enable or True:
+        if filters.config.bm25_enable or True:
             bm25_memories = dml_ops.find_mem_by_user(
                 user=user,
                 order_by=["t.created_at DESC"],
@@ -368,7 +370,7 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
             bm25_search_wrapped = timing(bm25_searcher.search)
             bm25_ids = set(bm25_search_wrapped(query, docs=bm25_memories, top_k=top_k * 3))
 
-        # 第二路召回：向量召回（相似度匹配逻辑）
+        # =========== 第二路召回：向量召回（相似度匹配逻辑）===========
         # 存储各扇区检索结果
         sector_result = {}
         for sector in sectors:
@@ -400,7 +402,7 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
         # 是否置信度高
         high_conf = avg_sim >= 0.55
 
-        # 第三路召回：图扩展召回（按需）
+        # =========== 第三路召回：图扩展召回（按需）===========
         # 若平均相似度 < 0.55（低置信），触发图遍历扩展
         expansion: List[Expansion] = []
         if not high_conf:
@@ -501,7 +503,7 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
                 metadata=json.loads(mem["meta"] or {})
             )
             # 调试信息
-            if filters and filters.debug:
+            if filters.config.debug:
                 item.debug = IMemoryItemDebugInfo(
                     sim_adjust=sim_adjust,
                     token_overlap=token_overlap,
