@@ -1,4 +1,3 @@
-import datetime
 import json
 import asyncio
 from typing import Dict, List
@@ -8,7 +7,7 @@ from agile.utils import LogHelper
 from src.core.config import env
 from src.core.db import get_db
 from src.core import user_ops
-from src.memory.models.memory_models import IMemoryUser
+from src.memory.memory_models import IMemoryUser
 
 logger = LogHelper.get_logger()
 
@@ -94,7 +93,7 @@ async def update_user_summary(user: IMemoryUser):
 
 async def auto_update_user_summaries():
     # 查询所有用户
-    users = await user_ops.find_user()
+    users = await user_ops.find_user(status=1)
     updated = 0
     for user in users:
         await update_user_summary(user)

@@ -4,7 +4,7 @@ from typing import Any, List
 from agile.utils import LogHelper
 
 from src.ai.client.base_model_registrar import BaseModelRegistrar
-from src.memory.models.memory_models import IMemoryItemInfo, IMemoryFilters, IMemoryUserIdentity
+from src.memory.memory_models import IMemoryItemInfo, IMemoryFilters, IMemoryUserIdentity
 
 
 logger = LogHelper.get_logger()

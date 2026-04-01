@@ -3,12 +3,12 @@ from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.prompts import PromptTemplate
 
 from src.core.components import get_chat_model
-from src.core.dml_ops import dml_ops
-from src.memory.graph.semantic_split import Topic, Dialogue
-from src.memory.models.graph_models import Fact, EntityType, RelationType
+from src.core.mem_ops import mem_ops
+from src.memory.graph.semantic_spliter import Topic, Dialogue
+from src.memory.graph.graph_models import Fact, EntityType, RelationType
 
 
-class FactExtract:
+class FactExtractor:
     PROMPT = """
 你是一个语义信息提取专家。请将以下语义主题单元转换为结构化的 Fact。
 
@@ -28,6 +28,7 @@ class FactExtract:
 1. 只提取对话中**明确提及**的信息
 2. 不要添加外部知识或过度推断
 3. 如果信息不完整，相关字段留空
+4. 关于实体名称的提取，请务必确保准确无误，避免歧义，名称规范化
 
 ## 输出格式
 {format_instructions}
@@ -41,7 +42,7 @@ begin!!
 """
 
     def __init__(self):
-        self.dml_ops = dml_ops
+        self.mem_ops = mem_ops
 
     @classmethod
     def get_chain(cls):
@@ -68,7 +69,7 @@ begin!!
 
     @timing
     async def invoke(self, topic: Topic) -> Fact:
-        memories = self.dml_ops.find_mem(topic.dialogue_ids)
+        memories = self.mem_ops.find_mem_by_ids(topic.dialogue_ids)
         input_variables = {
             "topic": topic.name,
             "summary": topic.summary,

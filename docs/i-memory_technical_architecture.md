@@ -117,7 +117,7 @@ flowchart TD
 
 ## 4.6 存储与基础设施层
 
-- 关系库访问：`src/core/db.py`, `src/core/dml_ops.py`
+- 关系库访问：`src/core/db.py`, `src/core/mem_ops.py`
 - 向量存储抽象：`src/core/vector/base_vector_store.py`
 - Postgres 向量后端：`src/core/vector/postgres_vector_store.py`
 - Redis 向量后端：`src/core/vector/redis_vector_store.py`
@@ -554,6 +554,6 @@ sequenceDiagram
 
 - 写入调用链：`memory_router.add -> IMemory.add -> ingest_document -> add_hsg_memory`
 - 检索调用链：`memory_router.search -> IMemory.search -> query_hsg_memories`
-- 历史查询链：`memory_router.history -> IMemory.history -> dml_ops.all_mem_by_user`
+- 历史查询链：`memory_router.history -> IMemory.history -> mem_ops.all_mem_by_user`
 
 该文档可作为二次开发、架构评审、性能优化与交付对齐的统一技术基线。

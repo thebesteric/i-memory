@@ -1,16 +1,16 @@
 import asyncio
 import unittest
 
-from src.memory.graph.fact_extract import FactExtract
-from src.memory.graph.semantic_split import Topic
-from src.memory.models.graph_models import Fact
+from src.memory.graph.fact_extractor import FactExtractor
+from src.memory.graph.semantic_spliter import Topic
+from src.memory.graph.graph_models import Fact
 
 
 class TestSemanticSplit(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.fact_extract = FactExtract()
+        cls.fact_extract = FactExtractor()
 
     def test_extract(self):
         topic = Topic(

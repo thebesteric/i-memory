@@ -4,7 +4,7 @@ from typing import List, Dict, Optional, Any
 import numpy as np
 
 from src.core.components import get_embed_model
-from src.core.dml_ops import dml_ops
+from src.core.mem_ops import mem_ops
 
 
 async def embed_batch(txt: str, sectors: List[str]) -> list[list[float]]:
@@ -33,7 +33,7 @@ async def embed_multi_sector(uid: str, txt: str, secs: List[str], chunks: Option
     @return: 包含每个 sector 的名称、生成的向量和向量维度的列表
     """
     # 日志记录（开始）
-    dml_ops.ins_log(id=uid, model="multi-sector", status="pending", ts=int(time.time() * 1000), err=None)
+    mem_ops.ins_log(id=uid, model="multi-sector", status="pending", ts=int(time.time() * 1000), err=None)
 
     res = []
     try:
@@ -45,11 +45,11 @@ async def embed_multi_sector(uid: str, txt: str, secs: List[str], chunks: Option
             res.append({"sector": s, "vector": v, "dim": len(v)})
 
         # 日志记录（完成）
-        dml_ops.upd_log(id=uid, status="completed", err=None)
+        mem_ops.upd_log(id=uid, status="completed", err=None)
         return res
     except Exception as e:
         # 日志记录（失败）
-        dml_ops.upd_log(id=uid, status="failed", err=str(e))
+        mem_ops.upd_log(id=uid, status="failed", err=str(e))
         raise e
 
 

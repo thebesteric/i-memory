@@ -4,14 +4,18 @@ import uuid
 
 from agile.utils import LogHelper
 
+from src.core.components import get_embed_model
 from src.core.db import get_db
-from src.memory.graph.semantic_split import Topic
-from src.memory.models.graph_models import Fact, Entity, EntityType
-from src.memory.models.memory_models import IMemoryUser
+from src.memory.graph.entity_canonicalize import EntityCanonicalize
+from src.memory.graph.semantic_spliter import Topic
+from src.memory.graph.graph_models import Fact, Entity, EntityType
+from src.memory.memory_models import IMemoryUser
 
 logger = LogHelper.get_logger()
 
 db = get_db()
+embed_model = get_embed_model()
+entity_canonicalize = EntityCanonicalize(threshold=0.85)
 
 
 async def add_topic(user: IMemoryUser, topic: Topic, conn=None):
@@ -25,16 +29,21 @@ async def add_topic(user: IMemoryUser, topic: Topic, conn=None):
     now = datetime.datetime.now()
     topic_id = str(uuid.uuid4())
     topic.set_id(topic_id)
+
+    # 对 summary 进行向量化
+    vector = await embed_model.embed(topic.summary)
+
     db.execute(
         """
-        INSERT INTO graph_topics(id, user_id, name, summary, keywords, dialogue_ids, created_at, updated_at)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO graph_topics(id, user_id, name, summary, vector, keywords, dialogue_ids, created_at, updated_at)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """,
         (
             topic_id,
             user.id,
             topic.name,
             topic.summary,
+            vector,
             json.dumps(topic.keywords or []),
             json.dumps(topic.dialogue_ids or []),
             now,
@@ -50,20 +59,31 @@ async def add_topic(user: IMemoryUser, topic: Topic, conn=None):
 async def add_fact(user: IMemoryUser, fact: Fact, topic: Topic, conn=None) -> Fact:
     """
     添加事实
-    :param user:
-    :param fact:
-    :param topic:
-    :param conn:
+    :param user: 用户
+    :param fact: 事实
+    :param topic: 话题
+    :param conn: 数据库连接对象
     :return:
     """
     now = datetime.datetime.now()
     fact_id = str(uuid.uuid4())
     fact.set_id(fact_id)
+
+    # 事实的语义向量（由 5W 组合生成）
+    parts = []
+    if fact.what: parts.append(f"What: {fact.what}")
+    if fact.who: parts.append(f"Who: {fact.who}")
+    if fact.when: parts.append(f"When: {fact.when}")
+    if fact.where: parts.append(f"Where: {fact.where}")
+    if fact.why: parts.append(f"Why: {fact.why}")
+
+    vector = await get_embed_model().embed(" | ".join(parts))
+
     db.execute(
         """
-        INSERT INTO graph_facts (id, user_id, topic_id, what, when_, where_, who, why, status, fact_kind, occurred_start, occurred_end,
+        INSERT INTO graph_facts (id, user_id, topic_id, what, when_, where_, who, why, confidence, vector, fact_kind, occurred_start, occurred_end,
                                  created_at, updated_at, processed_at)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """,
         (
             fact_id,
@@ -74,7 +94,8 @@ async def add_fact(user: IMemoryUser, fact: Fact, topic: Topic, conn=None) -> Fa
             fact.where,
             fact.who,
             fact.why,
-            "pending",
+            fact.confidence,
+            vector,
             fact.fact_kind or "conversation",
             fact.occurred_start,
             fact.occurred_end,
@@ -89,61 +110,77 @@ async def add_fact(user: IMemoryUser, fact: Fact, topic: Topic, conn=None) -> Fa
     return fact
 
 
-async def add_entity(entity: Entity, conn=None) -> Entity:
+async def add_entity(user: IMemoryUser, entity: Entity, conn=None) -> Entity:
     """
     添加实体
-    :param entity:
-    :param conn:
+    :param user: 用户
+    :param entity: 实体
+    :param conn: 数据库连接对象
     :return:
     """
+    if entity.id is not None:
+        return entity
+
     text = getattr(entity, "text", None)
     entity_type = getattr(entity.entity_type, 'name', EntityType.OTHER.name)
 
     # 如果存在则不添加实体（text 和 entity_type 相同，视为同一个实体）
     existing = db.fetchone(
-        "SELECT id FROM graph_entities WHERE text = %s AND entity_type = %s",
-        (text, entity_type),
+        "SELECT id, user_id, canonical_id FROM graph_entities WHERE user_id = %s AND text = %s AND entity_type = %s",
+        (user.id, text, entity_type),
         conn=conn
     )
     if existing:
         entity.set_id(existing["id"])
+        entity.set_user_id(existing["user_id"])
         entity.set_canonical_id(existing["canonical_id"])
         return entity
+
+    # 标准化实体
+    canonical_entity = await entity_canonicalize.canonicalize(user, entity, conn=conn)
 
     now = datetime.datetime.now()
     entity_id = str(uuid.uuid4())
     entity.set_id(entity_id)
+
+    # 添加实体
     db.execute(
         """
-        INSERT INTO graph_entities (id, text, entity_type, canonical_id, canonical_text, created_at, updated_at)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO graph_entities (id, user_id, text, entity_type, canonical_id, canonical_name, created_at, updated_at)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             entity_id,
+            user.id,
             text,
             entity_type,
-            getattr(entity, 'canonical_id', None),
-            getattr(entity, 'canonical_text', None),
+            canonical_entity.id or None,
+            canonical_entity.name or None,
             now,
             now
         ),
         conn=conn
     )
+
     if conn is None:
         db.commit()
     return entity
 
 
-async def link_fact_entities(fact: Fact, conn=None) -> None:
+async def link_fact_entities(user: IMemoryUser, fact: Fact, conn=None) -> None:
     """
     关联事实和实体关系
-    :param fact:
-    :param conn:
+    :param user: 用户
+    :param fact: 事实
+    :param conn: 数据库连接对象
     :return:
     """
     now = datetime.datetime.now()
     for entity in fact.entities:
         if not entity.id:
-            entity = await add_entity(entity=entity, conn=conn)
+            # 添加实体
+            entity = await add_entity(user=user, entity=entity, conn=conn)
+
+        # 添加与 Fact 的关系映射
         db.execute(
             """
             INSERT INTO graph_fact_entities (fact_id, entity_id, relation_to_user, created_at, updated_at)
@@ -158,6 +195,7 @@ async def link_fact_entities(fact: Fact, conn=None) -> None:
             ),
             conn=conn
         )
+
     if conn is None:
         db.commit()
 

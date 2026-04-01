@@ -14,7 +14,7 @@ from src.core.components import get_sector_classifier, get_vector_store, MEMORIE
 from src.core.config import env
 from src.core.constants import SECTOR_RELATIONSHIPS, HYBRID_PARAMS, get_dynamic_sector_weights
 from src.core.db import get_db
-from src.core.dml_ops import dml_ops
+from src.core.mem_ops import mem_ops
 from src.core.extract_essence import ExtractEssence
 from src.core.score import compute_tag_match_score, compute_hybrid_score
 from src.core.sector_classify import SECTOR_CONFIGS, ClassifyResult, SectorClassifier
@@ -23,9 +23,11 @@ from src.core.waypoints import Waypoints, Expansion
 from src.core import user_ops
 from src.memory.decay import Decay
 from src.memory.embed import embed_multi_sector, calc_mean_vec, embed, embed_batch
-from src.memory.models.memory_models import IMemoryFilters, IMemoryItemDebugInfo, IMemoryItemInfo, IMemoryUserIdentity, IMemoryUser, QARole, \
+from src.memory.memory_models import IMemoryFilters, IMemoryItemDebugInfo, IMemoryItemInfo, IMemoryUserIdentity, IMemoryUser, QARole, \
     IMemoryFiltersConfig
 from src.core.user_summary import update_user_summary
+from src.memory.user import user_profile_ops
+from src.memory.user.user_profile_models import UserProfile
 from src.ops.dynamic_memory import calc_cross_sector_resonance_score, apply_retrieval_trace_reinforcement_to_memory, \
     propagate_associative_reinforcement_to_linked_nodes
 from src.tools.chunking import chunk_text
@@ -115,7 +117,7 @@ async def add_hsg_memory(user_identity: IMemoryUserIdentity,
     vec = await embed_model.embed(content)
 
     # 构建 SQL 查询，查询该用户的记忆，包含租户和项目过滤（如果提供了租户和项目信息），并且只查询有向量的记忆
-    user_memories = dml_ops.find_mem_by_user(user, order_by=["t.salience DESC", "t.last_seen_at DESC"], limit=100)
+    user_memories = mem_ops.find_mem_by_user(user, order_by=["t.salience DESC", "t.last_seen_at DESC"], limit=100)
 
     # 初始化最佳相似记忆（相似度，记忆记录）
     best_sim_mem_similarity = tuple()
@@ -193,9 +195,9 @@ async def add_hsg_memory(user_identity: IMemoryUserIdentity,
         # 最终显著性限定在 0.0~1.0 之间，防止过高或为负
         init_sal = max(0.0, min(1.0, 0.4 + 0.1 * len(cls_ret.additional)))
 
-        # 调用 dml_ops.ins_mem，将记忆内容、摘要、sector、标签、元数据等插入数据库
+        # 调用 mem_ops.ins_mem，将记忆内容、摘要、sector、标签、元数据等插入数据库
         mid = str(uuid.uuid4())
-        dml_ops.ins_mem(
+        mem_ops.ins_mem(
             id=mid,
             user_id=user.id,
             segment=cur_seg,
@@ -291,7 +293,7 @@ async def reinforce_memories(effective_k_list):
                 pru = await propagate_associative_reinforcement_to_linked_nodes(_item.id, reinforcement_sal, wps)
                 for u in pru:
                     # 获取关联记忆
-                    linked_mem = dml_ops.get_mem(u["node_id"])
+                    linked_mem = mem_ops.get_mem(u["node_id"])
                     if linked_mem:
                         # “当前时间” 与 “关联记忆最后访问时间” 的间隔天数
                         time_diff = (now - linked_mem["last_seen_at"]).total_seconds() / 86400.0
@@ -312,7 +314,7 @@ async def reinforce_memories(effective_k_list):
 
 
 @timing
-async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilters = None) -> List[IMemoryItemInfo]:
+async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilters = None) -> dict[str, list[IMemoryItemInfo] | UserProfile]:
     """
     基于混合评分机制（内容相似度、关键词重叠、路标关联、时间衰减等）进行记忆检索
     @param query: 查询文本
@@ -362,7 +364,7 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
         bm25_ids = set()
         # 是否开启了 BM25 检索
         if filters.config.bm25_enable:
-            bm25_memories = dml_ops.find_mem_by_user(
+            bm25_memories = mem_ops.find_mem_by_user(
                 user=user,
                 order_by=["t.created_at DESC"],
                 limit=2000
@@ -413,7 +415,7 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
                 ids.add(exp.id)
 
         # 获取候选记忆内容
-        memories = dml_ops.find_mem(list(ids))
+        memories = mem_ops.find_mem_by_ids(list(ids))
 
         # 提前计算每个候选的关键词重叠分数
         res_list: List[IMemoryItemInfo] = []
@@ -534,7 +536,15 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
         MEMORIES_CACHE.set(cache_key, effective_k_list)
         logger.info(
             f"[HSG] Query processed in {time.time() - start_q:.3f} seconds. Query: '{query}' Expected: {effective_k}, Actual: {len(effective_k_list)} returned.")
-        return effective_k_list
+
+        # 查询用户画像
+        user_profile = None
+        if filters.config and filters.config.user_profile_enable:
+            user_profile = await user_profile_ops.get_user_profile(user, query_cache=True)
+
+        # 返回结果
+        return {"user_profile": user_profile, "memories": effective_k_list}
+
     finally:
         decay.dec_q()
 

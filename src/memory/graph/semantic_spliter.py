@@ -1,14 +1,13 @@
-import asyncio
 from datetime import datetime
 from typing import Any
 
 from agile.utils import timing
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.prompts import PromptTemplate
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.core.components import get_chat_model
-from src.memory.models.graph_models import Topic
+from src.memory.graph.graph_models import Topic
 
 
 class Dialogue(BaseModel):
@@ -33,7 +32,7 @@ class SemanticsOutput(BaseModel):
     topics: list[Topic] = Field(default_factory=list, description="相关主题对象")
 
 
-class SemanticSplit:
+class SemanticSpliter:
     PROMPT = """
 你是一个信息提取专家。请将以下对话按语义主题切分成多个独立的知识单元。
 
@@ -54,7 +53,8 @@ class SemanticSplit:
 {format_instructions}
 
 begin!!
-对话内容：{dialogues}
+## 对话内容
+{dialogues}
 """
 
     def __init__(self):

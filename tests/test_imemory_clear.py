@@ -3,7 +3,7 @@ import unittest
 
 from src.imemory import IMemory
 
-from src.memory.models.memory_models import IMemoryUserIdentity, IMemoryFilters, IMemoryItemInfo
+from src.memory.memory_models import IMemoryUserIdentity
 
 
 # @unittest.skip("Skipping TestIMemory")

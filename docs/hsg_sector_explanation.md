@@ -32,7 +32,7 @@ HSG 的分扇区机制就是为这三点服务。
    - `primary`（主扇区）
    - `additional`（辅扇区列表）
 2. `all_secs = [primary] + additional` 形成该记忆的扇区视图。
-3. `dml_ops.ins_mem(...)` 把 `primary_sector` 和 `sectors` 持久化到数据库。
+3. `mem_ops.ins_mem(...)` 把 `primary_sector` 和 `sectors` 持久化到数据库。
 4. `embed_multi_sector(mid, content, all_secs, chunks...)` 为每个扇区生成向量。
 5. `vector_store.store_vector(mid, sector, vector, ...)` 分扇区存入向量库。
 6. `calc_mean_vec(...)` 生成均值向量，补充全局表示（并可压缩存储）。

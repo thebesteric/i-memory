@@ -16,7 +16,7 @@ from typing import List, Dict
 
 from agile.utils import timing
 
-from src.core.dml_ops import dml_ops
+from src.core.mem_ops import mem_ops
 from src.core.sector_classify import SECTOR_KEY_INDEX_MAPPING
 
 # ======================== 学习率和衰减系数 ========================
@@ -198,7 +198,7 @@ async def propagate_associative_reinforcement_to_linked_nodes(sid: str, salience
                 wt = wp["weight"]      # 连接权重
 
         步骤2：从数据库查询目标节点的当前数据
-            ld = dml_ops.get_mem(tid)  # 如果节点不存在，跳过此节点
+            ld = mem_ops.get_mem(tid)  # 如果节点不存在，跳过此节点
             if ld: ...
 
         步骤3：获取目标节点的当前显著性（无则为 0）
@@ -267,7 +267,7 @@ async def propagate_associative_reinforcement_to_linked_nodes(sid: str, salience
         wt = wp["weight"]  # 连接权重（0.0-1.0）
 
         # 从数据库查询目标节点
-        ld = dml_ops.get_mem(tid)
+        ld = mem_ops.get_mem(tid)
         if ld:
             # 获取目标节点的当前显著性
             curr = ld["salience"] or 0

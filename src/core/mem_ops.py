@@ -3,13 +3,13 @@ from typing import Optional, Any, Dict, List
 from agile.utils import singleton, timing
 
 from src.core.db import DB, get_db
-from src.memory.models.memory_models import IMemoryUser
+from src.memory.memory_models import IMemoryUser
 
 db = get_db()
 
 
 @singleton
-class DMLOps:
+class MemOps:
 
     def __init__(self):
         self.db: DB = db
@@ -51,14 +51,6 @@ class DMLOps:
         self.db.commit()
         return affected_rows
 
-    @timing
-    def find_mem(self, mids: list[str]) -> List[Dict[str, Any]]:
-        if not mids:
-            return []
-        format_strings = ','.join(['%s'] * len(mids))
-        query = f"SELECT * FROM memories WHERE id IN ({format_strings})"
-        return self.db.fetchall(query, tuple(mids))
-
     def get_mem(self, mid: str) -> Dict[str, Any] | None:
         return self.db.fetchone("SELECT * FROM memories WHERE id = %s", (mid,))
 
@@ -74,6 +66,14 @@ class DMLOps:
         affected_rows = self.db.execute("UPDATE embed_logs SET status = %s, err = %s WHERE id = %s", (status, err, id))
         self.db.commit()
         return affected_rows
+
+    @timing
+    def find_mem_by_ids(self, mids: list[str]) -> List[Dict[str, Any]]:
+        if not mids:
+            return []
+        format_strings = ','.join(['%s'] * len(mids))
+        query = f"SELECT * FROM memories WHERE id IN ({format_strings})"
+        return self.db.fetchall(query, tuple(mids))
 
     @timing
     def find_mem_by_user(self, user: IMemoryUser, order_by: List[str], limit=10, offset=0) -> List[Dict[str, Any]]:
@@ -102,12 +102,28 @@ class DMLOps:
         final_sql = " ".join(sql_parts)
         return self.db.fetchall(final_sql, tuple(params))
 
+    def find_mem_by_conditions(self, *, conditions: list[str], order_by: List[str] = None, params: list[Any] = None, limit: int = None, offset: int = 0) -> List[Dict[str, Any]]:
+        if not conditions:
+            return []
+
+        sql_parts = [
+            "SELECT * FROM memories WHERE 1=1"
+        ]
+        sql_parts.append("AND " + " AND ".join(conditions))
+
+        if order_by:
+            order_by_clause = ", ".join(order_by)
+            sql_parts.append(f"ORDER BY {order_by_clause}")
+
+        if limit is not None:
+            sql_parts.append("LIMIT %s OFFSET %s")
+            params = params + [limit, offset]
+
+        final_sql = " ".join(sql_parts)
+        return self.db.fetchall(final_sql, tuple(params or []))
+
     def all_mem_by_user(self, user: IMemoryUser, limit=10, offset=0) -> List[Dict[str, Any]]:
         sql = "SELECT * FROM memories WHERE user_id = %s ORDER BY created_at DESC LIMIT %s OFFSET %s"
-        return self.db.fetchall(sql, (user.id, limit, offset))
-
-    def find_un_fact_join_mem_by_user(self, user: IMemoryUser, limit=10, offset=0) -> List[Dict[str, Any]]:
-        sql = "SELECT * FROM memories WHERE fact_joined = 0 AND user_id = %s ORDER BY created_at ASC LIMIT %s OFFSET %s"
         return self.db.fetchall(sql, (user.id, limit, offset))
 
     def count_mem_by_user(self, user: IMemoryUser, conditions: list[str] = None) -> int:
@@ -149,4 +165,4 @@ class DMLOps:
         return affected_rows
 
 
-dml_ops = DMLOps()
+mem_ops = MemOps()

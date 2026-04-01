@@ -44,21 +44,22 @@ class JobDefinition:
 
 
 def _build_job_definitions() -> list[JobDefinition]:
+    from src.memory.user import user_profile
     return [
-        # 记忆衰减任务
+        # 记忆衰减任务（每 60 分钟执行一次）
         JobDefinition(
-            id="decay",
+            id="memory_decay",
             name="Periodic memory decay",
             func=decay.apply_decay,
             trigger_type="interval",
-            trigger_args={"seconds": max(1, int(getattr(env, "DECAY_INTERVAL_SECONDS", 60 * 5) or 60 * 5))},
+            trigger_args={"seconds": max(1, int(getattr(env, "DECAY_INTERVAL_SECONDS", 60 * 60) or 60 * 60))},
             max_instances=1,
             coalesce=True,
             misfire_grace_time=30,
         ),
-        # 图构建任务
+        # 图构建任务（每 30 分钟执行一次）
         JobDefinition(
-            id="graph",
+            id="graph_build",
             name="Memory graph build",
             func=graph.graph_build,
             trigger_type="interval",
@@ -70,7 +71,7 @@ def _build_job_definitions() -> list[JobDefinition]:
         ),
         # 每日强制图化任务（每天 2:00 执行）
         JobDefinition(
-            id="force_graph",
+            id="force_graph_build",
             name="Daily force graph build for cold users",
             func=graph.graph_build_daily_force,
             trigger_type="cron",
@@ -79,6 +80,18 @@ def _build_job_definitions() -> list[JobDefinition]:
             coalesce=True,
             misfire_grace_time=600,
             enable=getattr(env, "GRAPH_BUILD_ENABLE", True)
+        ),
+        # 用户画像任务（每天 5:00 执行）
+        JobDefinition(
+            id="user_profile",
+            name="Describe user profile",
+            func=user_profile.describe_user_profile,
+            trigger_type="cron",
+            trigger_args={"hour": 5, "minute": 0, "second": 0},
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=600,
+            enable=getattr(env, "USER_PROFILE_ENABLE", True),
         )
     ]
 
@@ -125,7 +138,7 @@ def start_background_tasks() -> AsyncIOScheduler:
     scheduler.start()
     logger.info(f"[TASKS] Scheduler started, timezone={timezone}")
 
-    # 启动 graph worker 协程（多并发）
+    # 是否开启图构建
     graph_build_enable = getattr(env, "GRAPH_BUILD_ENABLE", True)
     if graph_build_enable:
         try:

@@ -4,17 +4,18 @@ import uuid
 from agile.utils import LogHelper
 
 from src.core.db import get_db
-from src.memory.models.memory_models import IMemoryUserIdentity, IMemoryUser
+from src.memory.memory_models import IMemoryUserIdentity, IMemoryUser
 
 logger = LogHelper.get_logger()
 
 db = get_db()
 
 
-async def find_user(order_by: list[str] = None, limit=10, offset=0) -> list[IMemoryUser]:
+async def find_user(*, order_by: list[str] = None, status: int | None = None, limit=10, offset=0) -> list[IMemoryUser]:
     """
     查询所有用户
     :param order_by: 排序调节
+    :param status: 用户状态，0 = 禁用，1 = 启用，None = 全部
     :param limit: 数量限制
     :param offset: 偏移量
     :return:
@@ -23,6 +24,11 @@ async def find_user(order_by: list[str] = None, limit=10, offset=0) -> list[IMem
         "SELECT * FROM users t"
     ]
 
+    params = []
+    if status is not None:
+        sql_parts.append("WHERE status = %s")
+        params.append(status)
+
     # 拼接排序
     if order_by:
         order_by_clause = ", ".join(order_by)
@@ -30,7 +36,7 @@ async def find_user(order_by: list[str] = None, limit=10, offset=0) -> list[IMem
 
     # 分页
     sql_parts.append(f"LIMIT %s OFFSET %s")
-    params = [str(limit), str(offset)]
+    params.extend([limit, offset])
 
     final_sql = " ".join(sql_parts)
     users = db.fetchall(final_sql, tuple(params))

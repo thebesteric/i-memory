@@ -3,9 +3,7 @@ from typing import List, Optional
 
 from agile.utils import LogHelper
 
-from src.core.config import env
-from src.core.constants import VectorStoreProvider
-from src.memory.models.memory_models import IMemoryFilters, IMemoryUserIdentity, IMemoryUser
+from src.memory.memory_models import IMemoryUser
 
 logger = LogHelper.get_logger()
 

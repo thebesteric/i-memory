@@ -8,10 +8,10 @@ from agile.utils import LogHelper
 
 from src.core import user_ops
 from src.core.db import get_db
-from src.core.dml_ops import dml_ops
+from src.core.mem_ops import mem_ops
 from src.core.waypoints import Waypoints
 from src.memory.hsg import add_hsg_memory
-from src.memory.models.memory_models import IMemoryConfig, IMemoryUserIdentity, QARole, IMemoryUser
+from src.memory.memory_models import IMemoryConfig, IMemoryUserIdentity, QARole
 from src.ops.extract import extract_text
 
 logger = LogHelper.get_logger()
@@ -165,7 +165,7 @@ async def mk_root(user_identity: IMemoryUserIdentity,
             "ingested_at": now.strftime("%Y-%m-%d %H:%M:%S")
         })
 
-        dml_ops.ins_mem(
+        mem_ops.ins_mem(
             id=mid,
             content=content,
             user_id=user.id,

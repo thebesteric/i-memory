@@ -11,9 +11,10 @@ from src.core import user_ops
 from src.core.components import get_milvus_manager
 from src.core.config import env
 from src.core.db import get_db
-from src.core.dml_ops import dml_ops
+from src.core.mem_ops import mem_ops
 from src.memory.hsg import query_hsg_memories
-from src.memory.models.memory_models import IMemoryConfig, IMemoryFilters, IMemoryUserIdentity, IMemoryItemInfo, QARole, IMemoryUser
+from src.memory.memory_models import IMemoryConfig, IMemoryFilters, IMemoryUserIdentity, IMemoryItemInfo, QARole, IMemoryUser
+from src.memory.user.user_profile_models import UserProfile
 from src.ops.ingest import ingest_document
 
 logger = LogHelper.get_logger()
@@ -24,7 +25,7 @@ class IMemory:
 
     def __init__(self, user_identity: IMemoryUserIdentity = None):
         self.default_user_identity: IMemoryUserIdentity = user_identity or IMemoryUserIdentity()
-        self.dml_ops = dml_ops
+        self.mem_ops = mem_ops
         self._openai = OpenAIRegistrar(self)
         self.db = get_db()
         self.milvus_manager: MilvusManager | None = None
@@ -87,7 +88,7 @@ class IMemory:
                      query: str,
                      *,
                      limit: int = 10,
-                     filters: IMemoryFilters = None) -> List[IMemoryItemInfo]:
+                     filters: IMemoryFilters = None) -> dict[str, list[IMemoryItemInfo] | UserProfile]:
         """
         搜索记忆内容
         :param query: 查询文本
@@ -107,7 +108,7 @@ class IMemory:
         :param memory_id: 记忆标识
         :return: 记忆内容
         """
-        return self.dml_ops.get_mem(memory_id)
+        return self.mem_ops.get_mem(memory_id)
 
     async def delete(self, memory_id: str) -> int:
         """
@@ -115,7 +116,7 @@ class IMemory:
         :param memory_id: 记忆标识
         :return: 删除结果
         """
-        return self.dml_ops.del_mem(memory_id)
+        return self.mem_ops.del_mem(memory_id)
 
     async def clear(self, user_identity: IMemoryUserIdentity = None) -> int:
         """
@@ -124,7 +125,7 @@ class IMemory:
         :return:
         """
         user = await self._get_user_by_identity(user_identity or self.default_user_identity)
-        return self.dml_ops.del_mem_by_user(user)
+        return self.mem_ops.del_mem_by_user(user)
 
     async def history(self,
                       *,
@@ -139,9 +140,9 @@ class IMemory:
         :return: 记忆历史列表
         """
         user = await self._get_user_by_identity(user_identity or self.default_user_identity)
-        total = self.dml_ops.count_mem_by_user(user)
+        total = self.mem_ops.count_mem_by_user(user)
         offset = (current - 1) * size
-        rows = self.dml_ops.all_mem_by_user(user, size, offset)
+        rows = self.mem_ops.all_mem_by_user(user, size, offset)
         return PagingResponse(
             records=[dict(r) for r in rows],
             total=total,

@@ -89,7 +89,7 @@ class EnvConfig:
         self.SIMILARITY_THRESHOLD = env_helper.get("IM_SIMILARITY_THRESHOLD", 0.95)
 
         # ================ 衰减相关配置 ================
-        # 衰减线程数
+        # 衰减并发线程数
         self.DECAY_THREADS = env_helper.get("IM_DECAY_THREADS", 3)
         # 衰减冷阈值
         self.DECAY_COLD_THRESHOLD = env_helper.get("IM_DECAY_COLD_THRESHOLD", 0.25)
@@ -103,6 +103,7 @@ class EnvConfig:
         self.USE_BERT_CLASSIFIER = env_helper.get("IM_USE_BERT_CLASSIFIER", True)
 
         # ================ 图相关配置 ================
+        # 是否开启图构建功能
         self.GRAPH_BUILD_ENABLE = env_helper.get("IM_GRAPH_BUILD_ENABLE", True)
         # 图构建循环间隔（秒）
         self.GRAPH_BUILD_INTERVAL_SECONDS = env_helper.get("IM_GRAPH_BUILD_INTERVAL_SECONDS", 60 * 30)
@@ -114,6 +115,13 @@ class EnvConfig:
         self.GRAPH_MEM_DISCARD_THRESHOLD = env_helper.get("IM_GRAPH_MEM_DISCARD_THRESHOLD", 2)
         # 图执行工作线程数
         self.GRAPH_WORKER_COUNT = env_helper.get("IM_GRAPH_WORKER_COUNT", 3)
+
+        # ================ 用户画像相关配置 ================
+        # 是否开启用户画像功能
+        # 是否开启图构建功能
+        self.USER_PROFILE_ENABLE = env_helper.get("IM_USER_PROFILE_ENABLE", True)
+        # 用户画像并发线程数量
+        self.USER_PROFILE_THREADS = env_helper.get("IM_USER_PROFILE_THREADS", 5)
 
 
 def _load_env_file():

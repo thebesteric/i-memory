@@ -1,7 +1,7 @@
 import asyncio
 import unittest
 
-from src.memory.graph.semantic_split import Dialogue, SemanticSplit, SemanticsOutput
+from src.memory.graph.semantic_spliter import Dialogue, SemanticSpliter, SemanticsOutput
 
 
 class TestSemanticSplit(unittest.TestCase):
@@ -46,9 +46,9 @@ class TestSemanticSplit(unittest.TestCase):
             Dialogue(id="34", content="本地开源、模型无关、多渠道、强执行的AI智能体。", role="assistant", created_at="2026-03-23 15:43"),
             Dialogue(id="35", content="好的。谢谢", role="human", created_at="2026-03-23 15:44"),
         ]
-        cls.semantic_split = SemanticSplit()
+        cls.semantic_spliter = SemanticSpliter()
 
     def test_split(self):
-        output: SemanticsOutput = asyncio.run(self.semantic_split.invoke(self.dialogues))
+        output: SemanticsOutput = asyncio.run(self.semantic_spliter.invoke(self.dialogues))
         for topic in output.topics:
             print(topic)

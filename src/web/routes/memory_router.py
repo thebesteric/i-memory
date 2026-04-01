@@ -6,8 +6,12 @@ from agile.web.common_result import gen_response_model, R
 from fastapi import APIRouter
 from fastapi.params import Path, Body
 
+from src.core import user_ops
+from src.core.components import USER_PROFILE_CACHE
 from src.imemory import IMemory
-from src.memory.models.memory_models import IMemoryItemInfo, IMemoryUserIdentity
+from src.memory.memory_models import IMemoryItemInfo, IMemoryUserIdentity, IMemoryUser
+from src.memory.user import user_profile_ops
+from src.memory.user.user_profile_models import UserProfile
 from src.web.models.web_models import AddMemoryRequest, SearchMemoryRequest, HistoryMemoryRequest
 
 from typing import Any
@@ -46,7 +50,7 @@ async def add(req: AddMemoryRequest):
     summary="搜索相关记忆内容",
     response_model=gen_response_model(
         "SearchResponse",
-        data_type=list[IMemoryItemInfo],
+        data_type=dict[str, list[IMemoryItemInfo] | UserProfile | None],
         data_desc="匹配的记忆内容列表",
     ),
     description="根据查询关键词和可选过滤条件，检索相关记忆内容。支持分页和多条件过滤。"
@@ -57,7 +61,7 @@ async def search(req: SearchMemoryRequest):
     :param req: 搜索记忆请求模型
     :return: 搜索结果列表
     """
-    results: List[IMemoryItemInfo] = await mem.search(
+    results: dict[str, list[IMemoryItemInfo] | UserProfile] = await mem.search(
         query=req.query,
         limit=req.limit,
         filters=req.filters
@@ -147,6 +151,24 @@ async def clear_memory(user_identity: IMemoryUserIdentity = Body(..., descriptio
     """
     affected_rows = await mem.clear(user_identity=user_identity)
     return R.success(data={"affected_rows": affected_rows})
+
+
+@router.post(
+    "/user_profile",
+    summary="获取用户画像",
+    response_model=gen_response_model(
+        "UserProfileResponse",
+        data_type=UserProfile | None,
+        data_desc="用户行为画像"
+    )
+)
+async def get_user_profile(user_identity: IMemoryUserIdentity = Body(..., description="用户身份")):
+    user = await user_ops.get_user(user_identity)
+    if not user:
+        raise ValueError(f"User not found for identity: {user_identity}")
+    # 查询用户画像
+    user_profile: UserProfile = await user_profile_ops.get_user_profile(user, query_cache=True)
+    return R.success(data=user_profile)
 
 
 def _handle_memories(memories: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

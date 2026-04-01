@@ -7,8 +7,8 @@ from pydantic import BaseModel, Field
 
 from src.core import user_ops
 from src.core.db import get_db
-from src.core.dml_ops import dml_ops
-from src.memory.models.memory_models import IMemoryUserIdentity, IMemoryUser
+from src.core.mem_ops import mem_ops
+from src.memory.memory_models import IMemoryUserIdentity, IMemoryUser
 from src.tools.vectors import buf_to_vec, cos_sim
 
 logger = LogHelper.get_logger()
@@ -108,7 +108,7 @@ class Waypoints:
         """
         # 获取当前用户的所有记忆
         max_result = 1000
-        memories = dml_ops.all_mem_by_user(user, limit=max_result, offset=0) if user.id else dml_ops.all_mem(limit=max_result, offset=0)
+        memories = mem_ops.all_mem_by_user(user, limit=max_result, offset=0) if user.id else mem_ops.all_mem(limit=max_result, offset=0)
         best = None
         best_sim = -1.0
 

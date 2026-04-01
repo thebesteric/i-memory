@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from enum import Enum
 from typing import Literal, Optional, Any
@@ -13,6 +14,7 @@ class RelationType(str, Enum):
     人与人之间关系类型枚举
     """
     # 家人亲属
+    SELF = ("self", "自己")
     FAMILY = ("family", "家人")
     PARENT = ("parent", "父母")
     CHILD = ("child", "子女")
@@ -198,11 +200,12 @@ class Entity(BaseModel):
     """
     model_config = ConfigDict(arbitrary_types_allowed=True, extra="allow")
 
-    text: str = Field(..., description="事实中出现的具体命名实体")
+    text: str = Field(..., description="事实中出现的具体命名实体（命名尽可能规范）")
     entity_type: EntityType = Field(..., description="实体类型")
     relation_to_user: RelationType | None = Field(default=None, description="与用户的关系")
 
     _id: str | None = PrivateAttr(None)
+    _user_id: str | None = PrivateAttr(None)
     _canonical_id: str | None = PrivateAttr(None)
 
     @classmethod
@@ -230,12 +233,20 @@ class Entity(BaseModel):
         return self.model_extra.get("_id", None)
 
     @property
+    def user_id(self):
+        return self.model_extra.get("_user_id", None)
+
+    @property
     def canonical_id(self):
         return self.model_extra.get("_canonical_id", None)
 
     def set_id(self, id_value: str):
         self._id = id_value
         self.model_extra["_id"] = id_value
+
+    def set_user_id(self, user_id: str):
+        self._user_id = user_id
+        self.model_extra["_user_id"] = user_id
 
     def set_canonical_id(self, canonical_id_value: str):
         self._canonical_id = canonical_id_value
@@ -264,7 +275,7 @@ class CanonicalEntity(BaseModel):
             id=row["id"],
             name=row["name"],
             entity_type=EntityType.from_name(row["entity_type"]),
-            vector=row["vector"],
+            vector=row["vector"] if isinstance(row["vector"], list) else json.loads(row["vector"]),
             occurrence_count=row["occurrence_count"],
             first_seen_at=row["first_seen_at"],
             last_seen_at=row["last_seen_at"],
@@ -284,19 +295,23 @@ class Topic(BaseModel):
     _id: str | None = PrivateAttr(None)
 
     # 私有字段，用于后面将 summary 进行向量嵌入
-    _summary_embedding: list[float] | None = PrivateAttr(default=None)
+    _vector: list[float] | None = PrivateAttr(default=None)
 
     @property
     def id(self):
         return self.model_extra.get("_id", None)
 
     @property
-    def summary_embedding(self):
-        return self.model_extra.get("_summary_embedding", None)
+    def vector(self):
+        return self.model_extra.get("_vector", None)
 
     def set_id(self, id_value: str):
         self._id = id_value
         self.model_extra["_id"] = id_value
+
+    def set_vector(self, vector_value: list[float]):
+        self._vector = vector_value
+        self.model_extra["_vector"] = vector_value
 
 
 class Fact(BaseModel):
@@ -348,6 +363,11 @@ class Fact(BaseModel):
                     "禁止表述为：“用户很喜欢” 或 “为了帮助用户”"
     )
 
+    confidence: float = Field(
+        default=0.0, ge=0.0, le=1.0,
+        description="置信度：0.0~1.0 之间的浮点数，表示事实的准确程度或重要性，0 表示完全不确定，1 表示完全确定"
+    )
+
     fact_kind: Literal["conversation", "event"] = Field(
         default="conversation",
         description="事实类型 - event：可确定具体日期的事件（已设定发生日期），conversation：常规信息（无发生日期）",
@@ -368,33 +388,41 @@ class Fact(BaseModel):
         description="从事实中提取的命名实体、具体事物以及抽象概念。"
                     "包括：人物姓名、组织机构、地点、重要物品（如 “咖啡机”，“汽车”），"
                     "以及抽象概念/主题（如 “友谊”，“职业发展”，“庆典”）。"
-                    "提取所有有助于关联相关事实的内容。",
+                    "提取所有有助于关联相关事实的内容。注意：提取的实体名称要规范化",
     )
 
-    # 私有字段，用于设置语义，列表的第一个为主语义，其他为辅助语义
-    _sectors: list[Literal["episodic", "semantic", "procedural", "emotional", "reflective"]] = PrivateAttr(...)
     # 私有字段：主键
     _id: str | None = PrivateAttr(None)
 
-    def add_sectors(self, sectors: list[Literal["episodic", "semantic", "procedural", "emotional", "reflective"]]):
-        """
-        添加语义类型
-        :param sectors:
-        :return:
-        """
-        self._sectors = sectors
+    # 私有字段：用于设置语义，列表的第一个为主语义，其他为辅助语义
+    _sectors: list[Literal["episodic", "semantic", "procedural", "emotional", "reflective"]] = PrivateAttr(...)
 
-    @property
-    def sectors(self) -> list[str]:
-        return self.model_extra.get("_sectors", [])
+    # 私有字段：事实的语义向量（由 5W 组合生成）
+    _vector: list[float] | None = PrivateAttr(default=None)
 
     @property
     def id(self):
         return self.model_extra.get("_id", None)
 
+    @property
+    def vector(self):
+        return self.model_extra.get("_vector", None)
+
+    @property
+    def sectors(self) -> list[str]:
+        return self.model_extra.get("_sectors", [])
+
     def set_id(self, id_value: str):
         self._id = id_value
         self.model_extra["_id"] = id_value
+
+    def set_vector(self, vector_value: list[float]):
+        self._vector = vector_value
+        self.model_extra["_vector"] = vector_value
+
+    def set_sectors(self, sectors: list[Literal["episodic", "semantic", "procedural", "emotional", "reflective"]]):
+        self._sectors = sectors
+        self.model_extra["_sectors"] = sectors
 
 
 class NodeType(str, Enum):

@@ -5,7 +5,7 @@ import redis
 from agile.utils import LogHelper, singleton, timing
 
 from src.core.vector.base_vector_store import BaseVectorStore, VectorRow, VectorSearch
-from src.memory.models.memory_models import IMemoryFilters, IMemoryUserIdentity, IMemoryUser
+from src.memory.memory_models import IMemoryUser
 
 logger = LogHelper.get_logger()
 

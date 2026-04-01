@@ -11,7 +11,7 @@ from src.core.components import get_vector_store
 from src.core.config import env
 from src.core.constants import HYBRID_PARAMS
 from src.core.db import get_db, DB
-from src.core.dml_ops import dml_ops
+from src.core.mem_ops import mem_ops
 from src.core.sector_classify import SECTOR_CONFIGS, SectorCfg
 from src.core.vector.base_vector_store import BaseVectorStore
 from src.tools.text import canonical_tokens_from_text
@@ -253,7 +253,7 @@ class Decay:
         if not self.cfg.regeneration_enabled and not self.cfg.reinforce_on_query:
             return
 
-        m = dml_ops.get_mem(mem_id)
+        m = mem_ops.get_mem(mem_id)
         if not m: return
 
         updated = False

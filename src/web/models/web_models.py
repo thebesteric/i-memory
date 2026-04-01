@@ -2,7 +2,7 @@ from typing import Optional, Dict, List, Any
 
 from pydantic import BaseModel, Field
 
-from src.memory.models.memory_models import IMemoryFilters, IMemoryUserIdentity, QARole, QueryMode
+from src.memory.memory_models import IMemoryFilters, IMemoryUserIdentity, QARole
 
 
 class AddMemoryRequest(BaseModel):
