@@ -1,4 +1,8 @@
 from enum import Enum
+from typing import Literal
+
+# 扇区类型
+SectorType = Literal["episodic", "semantic", "procedural", "emotional", "reflective"]
 
 # 记忆扇区关联度定义
 SECTOR_RELATIONSHIPS = {

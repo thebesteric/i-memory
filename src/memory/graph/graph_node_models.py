@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from src.core.constants import SectorType
+
 
 class NodeType(str, Enum):
     """
@@ -45,8 +47,7 @@ class FactNode(BaseNode):
     fact_kind: Literal["conversation", "event"] = Field(..., description="事件类型")
     occurred_start: datetime | None = Field(default=None, description="事件发生的开始时间")
     occurred_end: datetime | None = Field(default=None, description="事件发生的结束时间")
-    sectors: list[Literal["episodic", "semantic", "procedural", "emotional", "reflective"]] = Field(
-        default_factory=list, description="记忆类型标签")
+    sectors: list[SectorType] = Field(default_factory=list, description="记忆类型标签")
 
 
 class EventNode(BaseNode):
@@ -55,6 +56,7 @@ class EventNode(BaseNode):
     可以通过边关联：发生时间、地点、涉及人物等
     """
     node_type: NodeType = NodeType.EVENT
+
     description: str = Field(..., description="核心事件的简要描述")
 
 
@@ -63,6 +65,7 @@ class PersonNode(BaseNode):
     人物节点
     """
     node_type: NodeType = NodeType.PERSON
+
     name: str = Field(..., description="姓名")
     aliases: list[str] = Field(default_factory=list, description="别名或昵称")
     background: str | None = Field(default=None, description="背景信息（从 who 字段积累）")
@@ -74,6 +77,7 @@ class LocationNode(BaseNode):
     地点节点
     """
     node_type: NodeType = NodeType.LOCATION
+
     name: str = Field(..., description="完整地点名称")
     hierarchy: str | None = Field(default=None, description="层级关系，如 '中国/安徽/合肥'")
 
@@ -83,6 +87,7 @@ class TimeNode(BaseNode):
     时间节点
     """
     node_type: NodeType = NodeType.TIME
+
     expression: str = Field(..., description="原始时间表述")
     timestamp: datetime | None = Field(..., description="标准化后的事实发生时间")
     is_range: bool = Field(default=False, description="是否为时间段")
@@ -97,6 +102,7 @@ class ConceptNode(BaseNode):
     可以通过边关联相关事件、人物等
     """
     node_type: NodeType = NodeType.CONCEPT
+
     definition: str | None = Field(default=None, description="概念定义或描述")
 
 
@@ -105,6 +111,7 @@ class EntityNode(BaseNode):
     具体实体节点 - 从 entities 中提取的具体事物
     """
     node_type: NodeType = NodeType.ENTITY
+
     entity_type: str = Field(..., description="实体类型")
     description: str | None = Field(default=None, description="实体描述")
 
@@ -114,8 +121,8 @@ class SectorNode(BaseNode):
     记忆类型节点 - 用于分类记忆
     """
     node_type: NodeType = NodeType.SECTOR
-    sector_type: Literal["episodic", "semantic", "procedural", "emotional", "reflective"] = Field(...,
-                                                                                                  description="语义类型")
+
+    sector_type: SectorType = Field(..., description="语义类型")
     primary: bool = Field(default=False, description="是否为主扇区")
     score: float = Field(default=0.0, description="相关性得分")
 
@@ -125,6 +132,7 @@ class EmotionNode(BaseNode):
     情感节点 - 从 why 中提取的情绪
     """
     node_type: NodeType = NodeType.EMOTION
+
     emotion_type: str = Field(..., description="情感类型")
     intensity: float = Field(default=0.0, description="情感强度 0-1 之间的数值，表示情感的强烈程度")
     context: str | None = Field(default=None, description="上下文描述")
@@ -135,6 +143,7 @@ class MotivationNode(BaseNode):
     动机节点 - 从why中提取的动机、目标
     """
     node_type: NodeType = NodeType.MOTIVATION
+
     motivation_type: str = Field(..., description="动机类型")
     description: str = Field(default=None, description="描述")
 
