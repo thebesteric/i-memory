@@ -317,7 +317,8 @@ CREATE TABLE IF NOT EXISTS graph_entities
     canonical_name TEXT,
     created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (text, entity_type),
+    CONSTRAINT uq_graph_entities_user_text_type
+        UNIQUE (user_id, text, entity_type),
     CONSTRAINT fk_graph_entities_canonical_id_graph_canonical_entities_id
         FOREIGN KEY (canonical_id) REFERENCES graph_canonical_entities (id)
 );
@@ -358,6 +359,7 @@ COMMENT ON COLUMN graph_fact_entities.updated_at IS '最后更新时间戳';
 CREATE TABLE IF NOT EXISTS graph_entity_relations
 (
     id            SERIAL PRIMARY KEY,
+    user_id       TEXT,
     source_id     TEXT,
     target_id     TEXT,
     relation_type VARCHAR(50),
@@ -365,6 +367,10 @@ CREATE TABLE IF NOT EXISTS graph_entity_relations
     fact_ids      JSONB     DEFAULT '[]',
     created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_graph_entity_relations_no_self
+        CHECK (source_id <> target_id),
+    CONSTRAINT uq_graph_entity_relations_user_src_dst_type
+        UNIQUE (user_id, source_id, target_id, relation_type),
     CONSTRAINT fk_graph_entity_relations_source_id_graph_canonical_entities_id
         FOREIGN KEY (source_id) REFERENCES graph_entities (id),
     CONSTRAINT fk_graph_entity_relations_target_id_graph_canonical_entities_id
@@ -404,3 +410,5 @@ CREATE INDEX IF NOT EXISTS idx_graph_canonical_entities_user_id ON graph_canonic
 CREATE INDEX IF NOT EXISTS idx_graph_canonical_entities_entity_type ON graph_canonical_entities (entity_type);
 CREATE INDEX IF NOT EXISTS idx_graph_canonical_entities_entity_label ON graph_canonical_entities (entity_label);
 CREATE INDEX IF NOT EXISTS idx_graph_canonical_entities_vector ON graph_canonical_entities USING hnsw (vector vector_cosine_ops);
+CREATE INDEX IF NOT EXISTS idx_graph_entity_relations_user_id ON graph_entity_relations (user_id);
+CREATE INDEX IF NOT EXISTS idx_graph_entity_relations_relation_type ON graph_entity_relations (relation_type);

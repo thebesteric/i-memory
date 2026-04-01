@@ -81,8 +81,8 @@ async def add_fact(user: IMemoryUser, fact: Fact, topic: Topic, conn=None) -> Fa
 
     db.execute(
         """
-        INSERT INTO graph_facts (id, user_id, topic_id, what, when_, where_, who, why, confidence, vector, fact_kind, occurred_start, occurred_end,
-                                 created_at, updated_at, processed_at)
+        INSERT INTO graph_facts (id, user_id, topic_id, what, when_, where_, who, why, confidence, vector, fact_kind,
+                                 occurred_start, occurred_end, created_at, updated_at, processed_at)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """,
         (
@@ -142,11 +142,15 @@ async def add_entity(user: IMemoryUser, entity: Entity, conn=None) -> Entity:
     now = datetime.datetime.now()
     entity_id = str(uuid.uuid4())
     entity.set_id(entity_id)
+    entity.set_user_id(user.id)
+    if canonical_entity.id:
+        entity.set_canonical_id(canonical_entity.id)
 
     # 添加实体
     db.execute(
         """
-        INSERT INTO graph_entities (id, user_id, text, entity_type, canonical_id, canonical_name, created_at, updated_at)
+        INSERT INTO graph_entities (id, user_id, text, entity_type, canonical_id, canonical_name,
+                                    created_at, updated_at)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             entity_id,
@@ -185,6 +189,9 @@ async def link_fact_entities(user: IMemoryUser, fact: Fact, conn=None) -> None:
             """
             INSERT INTO graph_fact_entities (fact_id, entity_id, relation_to_user, created_at, updated_at)
             VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (fact_id, entity_id)
+                DO UPDATE SET relation_to_user = EXCLUDED.relation_to_user,
+                              updated_at       = EXCLUDED.updated_at
             """,
             (
                 fact.id,
