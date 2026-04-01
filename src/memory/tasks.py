@@ -9,8 +9,9 @@ from apscheduler.triggers.cron import CronTrigger
 import asyncio
 
 from src.core.config import env
-from src.memory.graph import graph
 from src.memory.hsg import decay
+from src.memory.graph import graph_builder
+from src.memory.user import user_profile_builder
 
 logger = LogHelper.get_logger()
 
@@ -44,7 +45,6 @@ class JobDefinition:
 
 
 def _build_job_definitions() -> list[JobDefinition]:
-    from src.memory.user import user_profile
     return [
         # 记忆衰减任务（每 60 分钟执行一次）
         JobDefinition(
@@ -61,7 +61,7 @@ def _build_job_definitions() -> list[JobDefinition]:
         JobDefinition(
             id="graph_build",
             name="Memory graph build",
-            func=graph.graph_build,
+            func=graph_builder.graph_build,
             trigger_type="interval",
             trigger_args={"seconds": max(1, int(getattr(env, "GRAPH_BUILD_INTERVAL_SECONDS", 60 * 30) or 60 * 30))},
             max_instances=1,
@@ -73,7 +73,7 @@ def _build_job_definitions() -> list[JobDefinition]:
         JobDefinition(
             id="force_graph_build",
             name="Daily force graph build for cold users",
-            func=graph.graph_build_daily_force,
+            func=graph_builder.graph_build_daily_force,
             trigger_type="cron",
             trigger_args={"hour": 2, "minute": 0, "second": 0},
             max_instances=1,
@@ -85,7 +85,7 @@ def _build_job_definitions() -> list[JobDefinition]:
         JobDefinition(
             id="user_profile",
             name="Describe user profile",
-            func=user_profile.describe_user_profile,
+            func=user_profile_builder.describe_user_profile,
             trigger_type="cron",
             trigger_args={"hour": 5, "minute": 0, "second": 0},
             max_instances=1,
@@ -144,7 +144,7 @@ def start_background_tasks() -> AsyncIOScheduler:
         try:
             graph_worker_count = getattr(env, "GRAPH_WORKER_COUNT", 3)
             for i in range(graph_worker_count):
-                asyncio.create_task(graph.process_user_queue())
+                asyncio.create_task(graph_builder.process_user_queue())
             logger.info(f"[TASKS] Graph Started {graph_worker_count} process_user_queue workers.")
         except Exception as e:
             logger.error(f"[TASKS] Graph Failed to start process_user_queue workers: {e}")

@@ -290,7 +290,7 @@ class Topic(BaseModel):
     name: str = Field(..., description="主题")
     summary: str = Field(..., description="内容简介（精简，紧凑，能够表达核心含义）")
     keywords: list[str] = Field(default_factory=list, description="关键词/信息，尽可能细分")
-    dialogue_ids: list[str] = Field(..., description="原始对话 ID 列表，表示这个知识单元包含了哪些原始对话内容")
+    dialogue_ids: list[str] = Field(..., description="原始对话 ID 列表，表示这个知识单元包含了哪些原始对话 ID")
 
     _id: str | None = PrivateAttr(None)
 

@@ -15,7 +15,7 @@ from src.memory.user.user_profile_models import UserProfile
 
 logger = LogHelper.get_logger()
 
-# In-process per-user lock map to avoid duplicate profile builds for the same user.
+# 进程内按用户维度的锁映射表，用于避免为同一用户重复构建用户画像。
 _USER_PROFILE_LOCKS: dict[str, asyncio.Lock] = {}
 _LOCKS_GUARD = asyncio.Lock()
 
