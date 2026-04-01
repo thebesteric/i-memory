@@ -39,7 +39,7 @@ async def _process_user_profile(user: IMemoryUser, yesterday_end: datetime.datet
     """
     user_lock = await _get_user_lock(str(user.id))
     if user_lock.locked():
-        logger.info(f"Skip reentrant user profile build, User ID: {user.id}")
+        logger.info(f"[USER_PROFILE] Skip reentrant user profile build, User ID: {user.id}")
         return False
 
     async with user_lock:
@@ -52,7 +52,7 @@ async def _process_user_profile(user: IMemoryUser, yesterday_end: datetime.datet
                 order_by=["created_at ASC"],
             )
             if not memories:
-                logger.info(f"No memory found for User ID: {user.id}")
+                logger.info(f"[USER_PROFILE] No memory found for User ID: {user.id}")
                 return False
 
             user_profile: UserProfile = await user_profile_extractor.invoke(user, memories=memories)
@@ -60,7 +60,7 @@ async def _process_user_profile(user: IMemoryUser, yesterday_end: datetime.datet
                 user_profile = await user_profile_ops.upsert_user_profile(user, user_profile, conn=conn)
                 affected_rows = await user_profile_ops.mark_memoires_to_profile_joined([m["id"] for m in memories], conn=conn)
                 logger.info(
-                    f"User profile updated, User ID: {user.id}, Profile ID: {user_profile.id}, Associated memories: {affected_rows}"
+                    f"[USER_PROFILE] User profile updated, User ID: {user.id}, Profile ID: {user_profile.id}, Associated memories: {affected_rows}"
                 )
             return True
 
@@ -78,7 +78,7 @@ async def describe_user_profile():
     # 查询所有用户
     users: list[IMemoryUser] = await user_ops.find_user(status=1)
     if not users:
-        logger.info("No active user found for profile describe job")
+        logger.info("[USER_PROFILE] No active user found for profile describe job")
         return
 
     concurrency = max(1, max_concurrency)
@@ -92,11 +92,11 @@ async def describe_user_profile():
     success_count = 0
     for idx, result in enumerate(results):
         if isinstance(result, Exception):
-            logger.exception(f"Failed to describe user profile, User ID: {users[idx].id}, Error: {result}")
+            logger.exception(f"[USER_PROFILE] Failed to describe user profile, User ID: {users[idx].id}, Error: {result}")
             continue
         if result:
             success_count += 1
 
     logger.info(
-        f"User profile describe finished, total_users: {len(users)}, success_users: {success_count}, failed_users: {sum(isinstance(r, Exception) for r in results)}"
+        f"[USER_PROFILE] User profile describe finished, total_users: {len(users)}, success_users: {success_count}, failed_users: {sum(isinstance(r, Exception) for r in results)}"
     )

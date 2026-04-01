@@ -106,10 +106,10 @@ async def process_user_queue():
                 # 将所有召回的记忆 joined_count + 1，超过一定次数的记忆将被丢弃
                 await graph_ops.increment_memoires_join_count(un_fact_join_memories_ids, env.GRAPH_MEM_DISCARD_THRESHOLD, conn=conn)
 
-                logger.info(f"===============================")
+                logger.info(f"[GRAPH] Finished processing user: {user.id}, processed memories: {len(un_fact_join_memories_ids)}, generated facts: {len(facts)}")
 
         except Exception as e:
-            logger.error(f"Error processing user: {user.id}, error: {e}")
+            logger.error(f"[GRAPH] Error processing user: {user.id}, error: {e}")
             raise e
         finally:
             # 处理完成后移除用户 ID，允许后续重新入队
