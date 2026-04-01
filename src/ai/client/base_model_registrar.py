@@ -2,8 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from src.memory.memory import IMemory
-
+    from src.imemory import IMemory
 
 class BaseModelRegistrar(ABC):
     """
