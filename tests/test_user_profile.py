@@ -9,11 +9,7 @@ class TestSessionExtractor(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.memories = mem_ops.find_mem_by_conditions(
-            conditions=["user_id = %s", "profile_joined = 0", "created_at < %s"],
-            params=["76d09a00-c869-4bf5-a686-b344ba3d3d3b", "2026-03-31 23:59:59"],
-            order_by=["created_at ASC"],
-        )
+        pass
 
     def test(self):
         asyncio.run(describe_user_profile())

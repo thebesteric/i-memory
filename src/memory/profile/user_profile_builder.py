@@ -70,7 +70,7 @@ async def describe_user_profile():
     """
     用户画像（由定时任务调用）
     """
-    max_concurrency = env.USER_PROFILE_THREADS or 5
+    concurrency = max(1, env.USER_PROFILE_THREADS or 5)
     now = datetime.datetime.now()
     # 获取昨天的 23:59:59
     yesterday = now - datetime.timedelta(days=1)
@@ -82,7 +82,6 @@ async def describe_user_profile():
         logger.info("[USER_PROFILE] No active user found.")
         return
 
-    concurrency = max(1, max_concurrency)
     semaphore = asyncio.Semaphore(concurrency)
     tasks = [_process_user_profile(user, yesterday_end, semaphore) for user in users]
     results = await asyncio.gather(*tasks, return_exceptions=True)
