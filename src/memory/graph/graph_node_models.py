@@ -1,16 +1,21 @@
-from datetime import datetime
-from enum import Enum
-from typing import Literal
+from datetime import datetime, timezone
+from typing import Any, Literal
 
+from agile.commons.enum import LabeledStrEnum
 from pydantic import BaseModel, Field
 
 from src.core.constants import SectorType
 
 
-class NodeType(str, Enum):
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+class NodeType(LabeledStrEnum):
     """
     节点类型枚举
     """
+
     FACT = ("fact", "事实节点")
     EVENT = ("event", "事件节点")
     PERSON = ("person", "人物节点")
@@ -22,27 +27,53 @@ class NodeType(str, Enum):
     MOTIVATION = ("motivation", "动机节点")
 
 
-class BaseNode(BaseModel):
+class ExtractionTrace(BaseModel):
+    """统一溯源字段：用于回溯抽取来源和模型版本。"""
+
+    source_ref: str | None = Field(default=None, description="来源标识（如会话ID/消息ID）")
+    source_turn_id: str | None = Field(default=None, description="来源轮次ID")
+    source_span_start: int | None = Field(default=None, description="来源文本片段起始偏移")
+    source_span_end: int | None = Field(default=None, description="来源文本片段结束偏移")
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0, description="抽取置信度")
+    extractor_version: str | None = Field(default=None, description="抽取器/提示词版本")
+    created_at: datetime = Field(default_factory=_utcnow, description="创建时间")
+    updated_at: datetime | None = Field(default=None, description="更新时间")
+
+
+class BaseNode(ExtractionTrace):
     """
     基础节点模型
     """
+
     node_id: str = Field(..., description="唯一标识符")
     node_type: NodeType = Field(..., description="节点类型")
     name: str = Field(..., description="节点名称")
-    properties: dict = Field(default_factory=dict, description="额外属性")
+    properties: dict[str, Any] = Field(default_factory=dict, description="额外属性")
 
 
 class FactNode(BaseNode):
     """
     事实节点 - 对应一条完整的 Fact
     """
+
     node_type: NodeType = NodeType.FACT
 
+    # 原始文本槽位（raw）
     what: str = Field(..., description="事件的发生经过和细节描述")
-    when: str | None = Field(default=None, description="事件发生时间")
-    where: str | None = Field(default=None, description="事件发生地点")
-    who: str | None = Field(default=None, description="涉及人员/实体")
-    why: str | None = Field(default=None, description="重要性所在")
+    when: str | None = Field(default=None, description="事件发生时间（原始文本）")
+    where: str | None = Field(default=None, description="事件发生地点（原始文本）")
+    who: str | None = Field(default=None, description="涉及人员/实体（原始文本）")
+    why: str | None = Field(default=None, description="重要性所在（原始文本）")
+
+    # 规范化图链接（normalized），与 EdgeType 一一对应
+    what_node_ids: list[str] = Field(default_factory=list, description="HAS_WHAT 关联的 Event 节点ID")
+    time_node_ids: list[str] = Field(default_factory=list, description="HAS_WHEN 关联的 Time 节点ID")
+    location_node_ids: list[str] = Field(default_factory=list, description="HAS_WHERE 关联的 Location 节点ID")
+    person_node_ids: list[str] = Field(default_factory=list, description="HAS_WHO 关联的 Person 节点ID")
+    reason_node_ids: list[str] = Field(default_factory=list,
+                                       description="HAS_WHY 关联的 Concept/Emotion/Motivation 节点ID")
+    entity_node_ids: list[str] = Field(default_factory=list, description="CONTAINS_ENTITY 关联的 Entity 节点ID")
+
     fact_kind: Literal["conversation", "event"] = Field(..., description="事件类型")
     occurred_start: datetime | None = Field(default=None, description="事件发生的开始时间")
     occurred_end: datetime | None = Field(default=None, description="事件发生的结束时间")
@@ -68,7 +99,7 @@ class PersonNode(BaseNode):
     name: str = Field(..., description="姓名")
     aliases: list[str] = Field(default_factory=list, description="别名或昵称")
     background: str | None = Field(default=None, description="背景信息（从 who 字段积累）")
-    relationships: dict = Field(default_factory=dict, description="与其他人物关系")
+    relationships: dict[str, Any] = Field(default_factory=dict, description="与其他人物关系")
 
 
 class LocationNode(BaseNode):
@@ -88,7 +119,7 @@ class TimeNode(BaseNode):
     node_type: NodeType = NodeType.TIME
 
     expression: str = Field(..., description="原始时间表述")
-    timestamp: datetime | None = Field(..., description="标准化后的事实发生时间")
+    timestamp: datetime | None = Field(default=None, description="标准化后的事实发生时间")
     is_range: bool = Field(default=False, description="是否为时间段")
     is_recurring: bool = Field(default=False, description="是否为重复事件")
     start: datetime | None = Field(default=None, description="开始时间")
@@ -133,12 +164,14 @@ class MotivationNode(BaseNode):
     node_type: NodeType = NodeType.MOTIVATION
 
     motivation_type: str = Field(..., description="动机类型")
-    description: str = Field(default=None, description="描述")
+    description: str | None = Field(default=None, description="描述")
 
-class EdgeType(str, Enum):
+
+class EdgeType(LabeledStrEnum):
     """
     边类型枚举
     """
+
     # Fact 与各字段的连接
     HAS_WHAT = ("has_what", "Fact -> Event")
     HAS_WHEN = ("has_when", "Fact -> Time")
@@ -161,12 +194,15 @@ class EdgeType(str, Enum):
     PART_OF = ("part_of", "整体-部分关系")
 
 
-class Edge(BaseModel):
+class Edge(ExtractionTrace):
     """
     边模型
     """
+
+    edge_id: str | None = Field(default=None, description="边ID（可选；未提供时可由业务层生成）")
     fact_id: str | None = Field(default=None, description="来源的 Fact ID")
     source_id: str = Field(..., description="源节点 ID")
     target_id: str = Field(..., description="目标节点 ID")
     edge_type: EdgeType = Field(..., description="边类型")
-    properties: dict = Field(default_factory=dict, description="额外属性，如权重、时间戳等")
+    properties: dict[str, Any] = Field(default_factory=dict, description="额外属性，如权重、时间戳等")
+    evidence_refs: list[str] = Field(default_factory=list, description="证据引用列表（如原始消息ID）")

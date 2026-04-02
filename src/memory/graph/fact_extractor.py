@@ -57,8 +57,8 @@ begin!!
             template=cls.PROMPT,
             input_variables=["topic", "summary", "keywords", "dialogues"],
             partial_variables={
-                "entity_types": EntityType.get_prompt_description(),
-                "relation_types": RelationType.get_prompt_description(),
+                "entity_types": EntityType.get_format_instructions(),
+                "relation_types": RelationType.get_format_instructions(),
                 "format_instructions": output_parser.get_format_instructions()
             }
         )

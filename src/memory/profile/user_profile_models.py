@@ -1,12 +1,12 @@
 from datetime import datetime
-from enum import Enum
-from typing import Literal, Any, Optional
+from typing import Literal, Any, cast
 import json
 
+from agile.commons.enum import LabeledStrEnum
 from pydantic import BaseModel, Field, ConfigDict, PrivateAttr
 
 
-class Personality(str, Enum):
+class Personality(LabeledStrEnum):
     EXTROVERT = ("extrovert", "外向")
     INTROVERT = ("introvert", "内向")
     AMBITIOUS = ("ambitious", "有野心")
@@ -23,61 +23,6 @@ class Personality(str, Enum):
     EMOTIONAL = ("emotional", "感性")
     THOUGHTFUL = ("thoughtful", "温柔/体贴")
     OTHER = ("other", "其他")
-
-    def __new__(cls, value: str, label: str):
-        """支持元组形式的枚举值"""
-        obj = str.__new__(cls)
-        obj._value_ = value
-        obj._label = label
-        return obj
-
-    @property
-    def label(self) -> str:
-        return self._label
-
-    def display(self) -> str:
-        """获取显示文本"""
-        return f"{self.value} ({self.label})"
-
-    @classmethod
-    def get_all_labels(cls) -> list[tuple[str, str]]:
-        """
-        获取所有类型的 value 和 label 列表
-        :return:
-        """
-        return [(e.value, e.label) for e in cls]
-
-    @classmethod
-    def get_prompt_description(cls) -> str:
-        """生成用于提示词的描述"""
-        lines = []
-        for e in cls:
-            lines.append(f"  - {e.value}：{e.label}")
-        return "\n".join(lines)
-
-    @classmethod
-    def from_value(cls, value: str) -> Optional["Personality"]:
-        """
-        根据 value 获取枚举成员
-        :param value:
-        :return:
-        """
-        for e in cls:
-            if e.value == value:
-                return e
-        return None
-
-    @classmethod
-    def from_name(cls, name: str) -> Optional["Personality"]:
-        """
-        根据 name 获取枚举成员
-        :param name:
-        :return:
-        """
-        for e in cls:
-            if e.name == name:
-                return e
-        return None
 
 
 class Location(BaseModel):
@@ -116,7 +61,8 @@ class Habit(BaseModel):
     name: str = Field(..., description="习惯名称")
     confidence: float = Field(default=0.0, ge=0.0, le=1.0, description="习惯置信度")
     description: str | None = Field(default=None, description="习惯描述")
-    evidences: dict[str, str] = Field(default_factory=list, description="习惯形成的证据列表，key 是对话 ID，value 是提取理由")
+    evidences: dict[str, str] = Field(default_factory=list,
+                                      description="习惯形成的证据列表，key 是对话 ID，value 是提取理由")
     created_at: datetime = Field(default_factory=datetime.now, description="首次创建时间")
     updated_at: datetime = Field(default_factory=datetime.now, description="最近一次更新时间")
 
@@ -168,13 +114,16 @@ class Tag(BaseModel):
     """
     model_config = ConfigDict(arbitrary_types_allowed=True, extra="allow")
 
-    name: str = Field(..., description="标签名称（标签名称一定有代表性，能够准确的描述用户某些特征，如：科技控、时尚达人、万事通）")
+    name: str = Field(...,
+                      description="标签名称（标签名称一定有代表性，能够准确的描述用户某些特征，如：科技控、时尚达人、万事通）")
     weight: float = Field(default=0.0, ge=0.0, le=1.0, description="标签权重")
     sub_tags: list[str] = Field(default_factory=list, description="子标签列表")
     created_at: datetime = Field(default_factory=datetime.now, description="首次提及时间")
     updated_at: datetime = Field(default_factory=datetime.now, description="最近一次提及时间")
-    source: Literal["explicit", "implicit"] = Field(default="explicit", description="标签来源：explicit（显式）或 implicit（隐式）")
-    evidences: dict[str, str] = Field(default_factory=list, description="标签形成的证据列表，key 是对话 ID，value 是提取理由")
+    source: Literal["explicit", "implicit"] = Field(default="explicit",
+                                                    description="标签来源：explicit（显式）或 implicit（隐式）")
+    evidences: dict[str, str] = Field(default_factory=list,
+                                      description="标签形成的证据列表，key 是对话 ID，value 是提取理由")
 
 
 class UserProfile(BaseModel):
@@ -237,19 +186,19 @@ class UserProfile(BaseModel):
         preferences_data = parse_json_field(row.get("preferences"), {})
         tags_data = parse_json_field(row.get("tags"), [])
 
-        # Filter invalid/empty values from personality list
+        # 从个性列表中过滤掉无效/空值
         if "personality" in demographic_data and isinstance(demographic_data["personality"], list):
             valid_personality_names = {e.name for e in Personality}
             demographic_data["personality"] = [
                 p for p in demographic_data["personality"]
                 if isinstance(p, str) and p and p in valid_personality_names
             ]
-        demographic = Demographic(**demographic_data) if demographic_data else Demographic()
-        attributes = Attributes(**attributes_data) if attributes_data else Attributes()
-        preferences = Preferences(**preferences_data) if preferences_data else Preferences()
+        demographic = Demographic(**cast(dict[str, Any], demographic_data)) if demographic_data else Demographic()
+        attributes = Attributes(**cast(dict[str, Any], attributes_data)) if attributes_data else Attributes()
+        preferences = Preferences(**cast(dict[str, Any], preferences_data)) if preferences_data else Preferences()
         tags = [Tag(**tag) for tag in tags_data]
 
-        # Compose UserProfile
+        # 创建用户画像
         user_profile = UserProfile(
             demographic=demographic,
             attributes=attributes,
@@ -257,10 +206,10 @@ class UserProfile(BaseModel):
             tags=tags
         )
 
-        # Set private attributes
+        # 设置私有字段
         user_id = row.get("user_id")
         if user_id:
-            user_profile.set_user_id(user_id)
+            user_profile.set_user_id(str(user_id))
         is_active = row.get("is_active")
         if is_active is not None:
             user_profile.set_is_active(bool(is_active))

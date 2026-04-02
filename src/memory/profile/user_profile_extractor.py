@@ -164,7 +164,7 @@ begin!! 请开始分析并生成更新后的用户画像
             input_variables=["current_user_profile", "dialogues"],
             partial_variables={
                 "current_time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "personalities": Personality.get_prompt_description(),
+                "personalities": Personality.get_format_instructions(),
                 "format_instructions": output_parser.get_format_instructions()
             }
         )

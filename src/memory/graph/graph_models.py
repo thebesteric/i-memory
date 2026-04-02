@@ -1,15 +1,15 @@
 import json
 from datetime import datetime
-from enum import Enum
-from typing import Literal, Optional, Any
+from typing import Literal, Any
 
+from agile.commons.enum import LabeledStrEnum
 from agile.utils import LogHelper
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator
 
 logger = LogHelper.get_logger()
 
 
-class RelationType(str, Enum):
+class RelationType(LabeledStrEnum):
     """
     人与人之间关系类型枚举
     """
@@ -43,67 +43,8 @@ class RelationType(str, Enum):
     STRANGER = ("stranger", "陌生人")
     OTHER = ("other", "其他")
 
-    def __new__(cls, value: str, label: str):
-        """支持元组形式的枚举值"""
-        obj = str.__new__(cls)
-        obj._value_ = value
-        obj._label = label
-        return obj
 
-    @property
-    def label(self) -> str:
-        """
-        获取中文标签
-        :return:
-        """
-        return self._label
-
-    def display(self) -> str:
-        """获取显示文本"""
-        return f"{self.value} ({self.label})"
-
-    @classmethod
-    def get_all_labels(cls) -> list[tuple[str, str]]:
-        """
-        获取所有类型的 value 和 label 列表
-        :return:
-        """
-        return [(e.value, e.label) for e in cls]
-
-    @classmethod
-    def get_prompt_description(cls) -> str:
-        """生成用于提示词的描述"""
-        lines = []
-        for e in cls:
-            lines.append(f"  - {e.value}：{e.label}")
-        return "\n".join(lines)
-
-    @classmethod
-    def from_value(cls, value: str) -> Optional["RelationType"]:
-        """
-        根据 value 获取枚举成员
-        :param value:
-        :return:
-        """
-        for e in cls:
-            if e.value == value:
-                return e
-        return None
-
-    @classmethod
-    def from_name(cls, name: str) -> Optional["RelationType"]:
-        """
-        根据 name 获取枚举成员
-        :param name:
-        :return:
-        """
-        for e in cls:
-            if e.name == name:
-                return e
-        return None
-
-
-class EntityType(str, Enum):
+class EntityType(LabeledStrEnum):
     """
     实体类型枚举
     """
@@ -133,65 +74,6 @@ class EntityType(str, Enum):
 
     # 其他无法归类
     OTHER = ("other", "其他无法归类的实体类型")
-
-    def __new__(cls, value: str, label: str):
-        """支持元组形式的枚举值"""
-        obj = str.__new__(cls)
-        obj._value_ = value
-        obj._label = label
-        return obj
-
-    @property
-    def label(self) -> str:
-        """
-        获取中文标签
-        :return:
-        """
-        return self._label
-
-    def display(self) -> str:
-        """获取显示文本"""
-        return f"{self.value} ({self.label})"
-
-    @classmethod
-    def get_all_labels(cls) -> list[tuple[str, str]]:
-        """
-        获取所有类型的 value 和 label 列表
-        :return:
-        """
-        return [(e.value, e.label) for e in cls]
-
-    @classmethod
-    def get_prompt_description(cls) -> str:
-        """生成用于提示词的描述"""
-        lines = []
-        for e in cls:
-            lines.append(f"  - {e.value}：{e.label}")
-        return "\n".join(lines)
-
-    @classmethod
-    def from_value(cls, value: str) -> Optional["EntityType"]:
-        """
-        根据 value 获取枚举成员
-        :param value:
-        :return:
-        """
-        for e in cls:
-            if e.value == value:
-                return e
-        return None
-
-    @classmethod
-    def from_name(cls, name: str) -> Optional["EntityType"]:
-        """
-        根据 name 获取枚举成员
-        :param name:
-        :return:
-        """
-        for e in cls:
-            if e.name == name:
-                return e
-        return None
 
 
 class Entity(BaseModel):
@@ -261,7 +143,7 @@ class CanonicalEntity(BaseModel):
 
     id: str = Field(..., description="主键")
     name: str = Field(..., description="实体名称")
-    entity_type: EntityType = Field(..., description="实体类型")
+    entity_type: EntityType | None = Field(default=None, description="实体类型")
     vector: list[float] = Field(..., description="实体的向量表示")
     occurrence_count: int = Field(default=1, description="出现次数")
     first_seen_at: datetime = Field(..., description="首次出现时间")
