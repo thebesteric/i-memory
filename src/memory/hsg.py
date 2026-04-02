@@ -26,8 +26,8 @@ from src.memory.embed import embed_multi_sector, calc_mean_vec, embed, embed_bat
 from src.memory.memory_models import IMemoryFilters, IMemoryItemDebugInfo, IMemoryItemInfo, IMemoryUserIdentity, IMemoryUser, QARole, \
     IMemoryFiltersConfig
 from src.core.user_summary import update_user_summary
-from src.memory.user import user_profile_ops
-from src.memory.user.user_profile_models import UserProfile
+from src.memory.profile import user_profile_ops
+from src.memory.profile.user_profile_models import UserProfile
 from src.ops.dynamic_memory import calc_cross_sector_resonance_score, apply_retrieval_trace_reinforcement_to_memory, \
     propagate_associative_reinforcement_to_linked_nodes
 from src.tools.chunking import chunk_text

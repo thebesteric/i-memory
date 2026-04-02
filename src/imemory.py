@@ -14,7 +14,7 @@ from src.core.db import get_db
 from src.core.mem_ops import mem_ops
 from src.memory.hsg import query_hsg_memories
 from src.memory.memory_models import IMemoryConfig, IMemoryFilters, IMemoryUserIdentity, IMemoryItemInfo, QARole, IMemoryUser
-from src.memory.user.user_profile_models import UserProfile
+from src.memory.profile.user_profile_models import UserProfile
 from src.ops.ingest import ingest_document
 
 logger = LogHelper.get_logger()

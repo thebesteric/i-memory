@@ -9,8 +9,8 @@ from src.core.components import get_chat_model
 from src.core.mem_ops import mem_ops
 from src.memory.graph.semantic_spliter import Dialogue
 from src.memory.memory_models import IMemoryUser
-from src.memory.user import user_profile_ops
-from src.memory.user.user_profile_models import UserProfile, Personality
+from src.memory.profile import user_profile_ops
+from src.memory.profile.user_profile_models import UserProfile, Personality
 
 
 class UserProfileExtractor:

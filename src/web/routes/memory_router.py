@@ -7,11 +7,10 @@ from fastapi import APIRouter
 from fastapi.params import Path, Body
 
 from src.core import user_ops
-from src.core.components import USER_PROFILE_CACHE
 from src.imemory import IMemory
-from src.memory.memory_models import IMemoryItemInfo, IMemoryUserIdentity, IMemoryUser
-from src.memory.user import user_profile_ops
-from src.memory.user.user_profile_models import UserProfile
+from src.memory.memory_models import IMemoryItemInfo, IMemoryUserIdentity
+from src.memory.profile import user_profile_ops
+from src.memory.profile.user_profile_models import UserProfile
 from src.web.models.web_models import AddMemoryRequest, SearchMemoryRequest, HistoryMemoryRequest
 
 from typing import Any

@@ -9,9 +9,9 @@ from src.core.config import env
 from src.core.db import transaction
 from src.core.mem_ops import mem_ops
 from src.memory.memory_models import IMemoryUser
-from src.memory.user import user_profile_ops
-from src.memory.user.user_profile_extractor import UserProfileExtractor
-from src.memory.user.user_profile_models import UserProfile
+from src.memory.profile import user_profile_ops
+from src.memory.profile.user_profile_extractor import UserProfileExtractor
+from src.memory.profile.user_profile_models import UserProfile
 
 logger = LogHelper.get_logger()
 

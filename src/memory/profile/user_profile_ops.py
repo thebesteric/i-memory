@@ -7,7 +7,7 @@ from agile.utils import LogHelper
 from src.core.components import USER_PROFILE_CACHE
 from src.core.db import get_db
 from src.memory.memory_models import IMemoryUser
-from src.memory.user.user_profile_models import UserProfile
+from src.memory.profile.user_profile_models import UserProfile
 
 logger = LogHelper.get_logger()
 db = get_db()

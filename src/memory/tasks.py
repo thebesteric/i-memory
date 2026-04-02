@@ -12,7 +12,7 @@ from src.core.config import env
 from src.memory.hsg import decay
 from src.memory.graph import graph_builder
 from src.memory.session import session_builder
-from src.memory.user import user_profile_builder
+from src.memory.profile import user_profile_builder
 
 logger = LogHelper.get_logger()
 
