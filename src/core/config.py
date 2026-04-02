@@ -118,10 +118,19 @@ class EnvConfig:
 
         # ================ 用户画像相关配置 ================
         # 是否开启用户画像功能
-        # 是否开启图构建功能
         self.USER_PROFILE_ENABLE = env_helper.get("IM_USER_PROFILE_ENABLE", True)
+        # 用户画像至少记忆数量
+        self.USER_PROFILE_AT_LEAST = env_helper.get("IM_USER_PROFILE_AT_LEAST", 10)
         # 用户画像并发线程数量
         self.USER_PROFILE_THREADS = env_helper.get("IM_USER_PROFILE_THREADS", 5)
+
+        # ================ 会话总结相关配置 ================
+        # 是否开启会话总结功能
+        self.SESSION_BUILD_ENABLE = env_helper.get("IM_SESSION_BUILD_ENABLE", True)
+        # 会话总结至少记忆数量
+        self.SESSION_BUILD_AT_LEAST = env_helper.get("IM_SESSION_BUILD_AT_LEAST", 10)
+        # 会话总结并发线程数量
+        self.SESSION_BUILD_THREADS = env_helper.get("IM_SESSION_BUILD_THREADS", 5)
 
 
 def _load_env_file():

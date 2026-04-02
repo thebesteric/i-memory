@@ -18,7 +18,6 @@ class NodeType(str, Enum):
     TIME = ("time", "时间节点")
     CONCEPT = ("concept", "概念节点")
     ENTITY = ("entity", "实体节点")
-    SECTOR = ("sector", "记忆类型节点")
     EMOTION = ("emotion", "情感/情绪节点")
     MOTIVATION = ("motivation", "动机节点")
 
@@ -116,17 +115,6 @@ class EntityNode(BaseNode):
     description: str | None = Field(default=None, description="实体描述")
 
 
-class SectorNode(BaseNode):
-    """
-    记忆类型节点 - 用于分类记忆
-    """
-    node_type: NodeType = NodeType.SECTOR
-
-    sector_type: SectorType = Field(..., description="语义类型")
-    primary: bool = Field(default=False, description="是否为主扇区")
-    score: float = Field(default=0.0, description="相关性得分")
-
-
 class EmotionNode(BaseNode):
     """
     情感节点 - 从 why 中提取的情绪
@@ -140,26 +128,24 @@ class EmotionNode(BaseNode):
 
 class MotivationNode(BaseNode):
     """
-    动机节点 - 从why中提取的动机、目标
+    动机节点 - 从 why 中提取的动机、目标
     """
     node_type: NodeType = NodeType.MOTIVATION
 
     motivation_type: str = Field(..., description="动机类型")
     description: str = Field(default=None, description="描述")
 
-
 class EdgeType(str, Enum):
     """
-    边类型枚举 - Fact 与各字段的连接
+    边类型枚举
     """
+    # Fact 与各字段的连接
     HAS_WHAT = ("has_what", "Fact -> Event")
     HAS_WHEN = ("has_when", "Fact -> Time")
     HAS_WHERE = ("has_where", "Fact -> Location")
     HAS_WHO = ("has_who", "Fact -> Person")
     HAS_WHY = ("has_why", "Fact -> Concept/Emotion/Motivation")
     CONTAINS_ENTITY = ("contains_entity", "Fact -> Entity")
-
-    BELONGS_TO_SECTOR = ("belongs_to_sector", "Fact -> Sector")
 
     # 实体之间的关系
     RELATED_TO = ("related_to", "通用关系")

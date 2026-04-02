@@ -6,6 +6,7 @@ from langchain_core.prompts import PromptTemplate
 
 from src.core.components import get_chat_model
 from src.memory.graph.semantic_spliter import Dialogue
+from src.memory.memory_models import IMemoryUser
 from src.memory.session.session_models import Sessions
 
 

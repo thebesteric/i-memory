@@ -179,21 +179,25 @@ async def link_fact_entities(user: IMemoryUser, fact: Fact, conn=None) -> None:
     :return:
     """
     now = datetime.datetime.now()
+
     for entity in fact.entities:
         if not entity.id:
             # 添加实体
             entity = await add_entity(user=user, entity=entity, conn=conn)
 
         # 添加与 Fact 的关系映射
+        _id = str(uuid.uuid4())
         db.execute(
             """
-            INSERT INTO graph_fact_entities (fact_id, entity_id, relation_to_user, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s)
-            ON CONFLICT (fact_id, entity_id)
+            INSERT INTO graph_fact_entities (id, user_id, fact_id, entity_id, relation_to_user, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (user_id, fact_id, entity_id)
                 DO UPDATE SET relation_to_user = EXCLUDED.relation_to_user,
                               updated_at       = EXCLUDED.updated_at
             """,
             (
+                _id,
+                user.id,
                 fact.id,
                 entity.id,
                 entity.relation_to_user,

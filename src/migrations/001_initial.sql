@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS memories
     compressed_vec BYTEA,
     meta           TEXT,
     profile_joined SMALLINT         DEFAULT 0,
+    session_joined SMALLINT         DEFAULT 0,
     fact_joined    SMALLINT         DEFAULT 0,
     joined_count   SMALLINT         DEFAULT 0,
     segment        INTEGER          DEFAULT 0,
@@ -47,6 +48,7 @@ COMMENT ON COLUMN memories.tags IS '用户或系统标签';
 COMMENT ON COLUMN memories.compressed_vec IS '压缩嵌入向量字节';
 COMMENT ON COLUMN memories.meta IS '元数据载荷（序列化）';
 COMMENT ON COLUMN memories.profile_joined IS '是否已参与用户画像处理，0 = 否，1 = 是';
+COMMENT ON COLUMN memories.session_joined IS '是否已参与会话总结处理，0 = 否，1 = 是';
 COMMENT ON COLUMN memories.fact_joined IS '是否已参与事实处理，0 = 否，1 = 是，-1 = 丢弃';
 COMMENT ON COLUMN memories.joined_count IS '参与事实处理的次数';
 COMMENT ON COLUMN memories.segment IS '分段编号';
@@ -59,6 +61,27 @@ COMMENT ON COLUMN memories.version IS '版本标记';
 COMMENT ON COLUMN memories.mean_dim IS '均值嵌入维度';
 COMMENT ON COLUMN memories.mean_vec IS '均值嵌入向量字节';
 COMMENT ON COLUMN memories.feedback_score IS '用户反馈得分';
+
+-- 会话总结表
+CREATE TABLE IF NOT EXISTS sessions
+(
+    id           TEXT PRIMARY KEY,
+    user_id      TEXT,
+    summary      TEXT,
+    dialogue_ids JSONB DEFAULT '[]',
+    key_facts    JSONB DEFAULT '[]',
+    created_at   TIMESTAMP,
+    updated_at   TIMESTAMP
+);
+
+COMMENT ON TABLE sessions IS '会话总结表';
+COMMENT ON COLUMN sessions.id IS '主键';
+COMMENT ON COLUMN sessions.user_id IS '用户标识';
+COMMENT ON COLUMN sessions.summary IS '会话摘要';
+COMMENT ON COLUMN sessions.dialogue_ids IS '相关对话标识列表';
+COMMENT ON COLUMN sessions.key_facts IS '会话中的关键事实列表';
+COMMENT ON COLUMN sessions.created_at IS '创建时间戳';
+COMMENT ON COLUMN sessions.updated_at IS '最后更新时间戳';
 
 -- 嵌入向量表
 
@@ -324,7 +347,7 @@ CREATE TABLE IF NOT EXISTS graph_entities
 );
 
 COMMENT ON TABLE graph_entities IS '实体表';
-COMMENT ON COLUMN graph_entities.id IS '实体标识';
+COMMENT ON COLUMN graph_entities.id IS '主键';
 COMMENT ON COLUMN graph_entities.user_id IS '用户标识';
 COMMENT ON COLUMN graph_entities.text IS '实体原始提及文本';
 COMMENT ON COLUMN graph_entities.entity_type IS '实体类型';
@@ -336,12 +359,15 @@ COMMENT ON COLUMN graph_entities.updated_at IS '最后更新时间戳';
 -- 事实-实体关联表
 CREATE TABLE IF NOT EXISTS graph_fact_entities
 (
+    id               TEXT PRIMARY KEY,
+    user_id          TEXT,
     fact_id          TEXT,
     entity_id        TEXT,
     relation_to_user TEXT,
     created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (fact_id, entity_id),
+    CONSTRAINT uq_graph_fact_entities_user_fact_entity
+        UNIQUE (user_id, fact_id, entity_id),
     CONSTRAINT fk_graph_fact_entities_graph_fact_id_facts_id
         FOREIGN KEY (fact_id) REFERENCES graph_facts (id),
     CONSTRAINT fk_graph_fact_entities_entity_id_entities_id
@@ -349,6 +375,8 @@ CREATE TABLE IF NOT EXISTS graph_fact_entities
 );
 
 COMMENT ON TABLE graph_fact_entities IS '事实与实体的关联表';
+COMMENT ON COLUMN graph_fact_entities.id IS '主键';
+COMMENT ON COLUMN graph_fact_entities.user_id IS '用户标识';
 COMMENT ON COLUMN graph_fact_entities.fact_id IS '事实标识';
 COMMENT ON COLUMN graph_fact_entities.entity_id IS '实体标识';
 COMMENT ON COLUMN graph_fact_entities.relation_to_user IS '实体与用户的关系描述';
@@ -358,7 +386,7 @@ COMMENT ON COLUMN graph_fact_entities.updated_at IS '最后更新时间戳';
 -- 实体-实体关联表
 CREATE TABLE IF NOT EXISTS graph_entity_relations
 (
-    id            SERIAL PRIMARY KEY,
+    id            TEXT PRIMARY KEY,
     user_id       TEXT,
     source_id     TEXT,
     target_id     TEXT,
@@ -377,6 +405,17 @@ CREATE TABLE IF NOT EXISTS graph_entity_relations
         FOREIGN KEY (target_id) REFERENCES graph_entities (id)
 );
 
+COMMENT ON TABLE graph_entity_relations IS '实体与实体之间的关联表';
+COMMENT ON COLUMN graph_entity_relations.id IS '主键';
+COMMENT ON COLUMN graph_entity_relations.user_id IS '用户标识';
+COMMENT ON COLUMN graph_entity_relations.source_id IS '源实体标识';
+COMMENT ON COLUMN graph_entity_relations.target_id IS '目标实体标识';
+COMMENT ON COLUMN graph_entity_relations.relation_type IS '关系类型';
+COMMENT ON COLUMN graph_entity_relations.relation_desc IS '关系描述';
+COMMENT ON COLUMN graph_entity_relations.fact_ids IS '与该实体关系相关的事实标识列表';
+COMMENT ON COLUMN graph_entity_relations.created_at IS '创建时间戳';
+COMMENT ON COLUMN graph_entity_relations.updated_at IS '最后更新时间戳';
+
 -- 基础数据插入
 
 INSERT INTO segment (current_segment)
@@ -390,6 +429,7 @@ CREATE INDEX IF NOT EXISTS idx_memories_ts ON memories (last_seen_at);
 CREATE INDEX IF NOT EXISTS idx_memories_user ON memories (user_id);
 CREATE INDEX IF NOT EXISTS idx_memories_qa_pair_id ON memories (qa_pair_id);
 CREATE INDEX IF NOT EXISTS idx_memories_fact_joined ON memories (fact_joined) WHERE fact_joined = 0;
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions (user_id);
 CREATE INDEX IF NOT EXISTS idx_vectors_user ON vectors (user_id);
 CREATE INDEX IF NOT EXISTS idx_vectors_v ON vectors USING hnsw (v vector_cosine_ops);
 CREATE INDEX IF NOT EXISTS idx_waypoints_src ON waypoints (src_id);
@@ -400,6 +440,7 @@ CREATE INDEX IF NOT EXISTS idx_graph_facts_created_at ON graph_facts (created_at
 CREATE INDEX IF NOT EXISTS idx_graph_facts_fact_kind ON graph_facts (fact_kind);
 CREATE INDEX IF NOT EXISTS idx_graph_facts_occurred_start_end ON graph_facts (occurred_start, occurred_end);
 CREATE INDEX IF NOT EXISTS idx_graph_facts_vector ON graph_facts USING hnsw (vector vector_cosine_ops);
+CREATE INDEX IF NOT EXISTS idx_graph_fact_entities_user_id ON graph_fact_entities (user_id);
 CREATE INDEX IF NOT EXISTS idx_graph_fact_entities_fact_id ON graph_fact_entities (fact_id);
 CREATE INDEX IF NOT EXISTS idx_graph_fact_entities_entity_id ON graph_fact_entities (entity_id);
 CREATE INDEX IF NOT EXISTS idx_graph_entities_user_id ON graph_entities (user_id);

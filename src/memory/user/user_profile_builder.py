@@ -29,7 +29,8 @@ async def _get_user_lock(user_id: str) -> asyncio.Lock:
         return lock
 
 
-async def _process_user_profile(user: IMemoryUser, yesterday_end: datetime.datetime, semaphore: asyncio.Semaphore) -> bool:
+async def _process_user_profile(user: IMemoryUser, yesterday_end: datetime.datetime,
+                                semaphore: asyncio.Semaphore) -> bool:
     """
     构建用户画像
     :param user: 用户
@@ -45,23 +46,23 @@ async def _process_user_profile(user: IMemoryUser, yesterday_end: datetime.datet
     async with user_lock:
         async with semaphore:
             user_profile_extractor = UserProfileExtractor()
-            memories = await asyncio.to_thread(
-                mem_ops.find_mem_by_conditions,
-                conditions=["user_id = %s", "profile_joined = 0", "created_at < %s"],
-                params=[user.id, yesterday_end],
-                order_by=["created_at ASC"],
-            )
+            memories = await asyncio.to_thread(mem_ops.find_mem_by_conditions,
+                conditions=["user_id = %s", "profile_joined = 0", "created_at < %s"], params=[user.id, yesterday_end],
+                order_by=["created_at ASC"], )
+
+            memories_at_least = max(env.USER_PROFILE_AT_LEAST or 10, 10)
             if not memories:
-                logger.info(f"[USER_PROFILE] No memory found for User ID: {user.id}")
+                logger.info(
+                    f"[USER_PROFILE] No memory found for User ID: {user.id} at {yesterday_end.strftime("%Y-%m-%d %H:%M:%S")} or less than {memories_at_least}")
                 return False
 
             user_profile: UserProfile = await user_profile_extractor.invoke(user, memories=memories)
             with contextmanager(transaction)() as conn:
                 user_profile = await user_profile_ops.upsert_user_profile(user, user_profile, conn=conn)
-                affected_rows = await user_profile_ops.mark_memoires_to_profile_joined([m["id"] for m in memories], conn=conn)
+                affected_rows = await user_profile_ops.mark_memoires_to_profile_joined([m["id"] for m in memories],
+                                                                                       conn=conn)
                 logger.info(
-                    f"[USER_PROFILE] User profile updated, User ID: {user.id}, Profile ID: {user_profile.id}, Associated memories: {affected_rows}"
-                )
+                    f"[USER_PROFILE] User profile updated, User ID: {user.id}, Profile ID: {user_profile.id}, Associated memories: {affected_rows}")
             return True
 
 
@@ -71,32 +72,29 @@ async def describe_user_profile():
     """
     max_concurrency = env.USER_PROFILE_THREADS or 5
     now = datetime.datetime.now()
-    yesterday = now - datetime.timedelta(days=1)
     # 获取昨天的 23:59:59
+    yesterday = now - datetime.timedelta(days=1)
     yesterday_end = yesterday.replace(hour=23, minute=59, second=59, microsecond=0)
 
     # 查询所有用户
     users: list[IMemoryUser] = await user_ops.find_user(status=1)
     if not users:
-        logger.info("[USER_PROFILE] No active user found for profile describe job")
+        logger.info("[USER_PROFILE] No active user found.")
         return
 
     concurrency = max(1, max_concurrency)
     semaphore = asyncio.Semaphore(concurrency)
-    tasks = [
-        _process_user_profile(user, yesterday_end, semaphore)
-        for user in users
-    ]
+    tasks = [_process_user_profile(user, yesterday_end, semaphore) for user in users]
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
     success_count = 0
     for idx, result in enumerate(results):
         if isinstance(result, Exception):
-            logger.exception(f"[USER_PROFILE] Failed to describe user profile, User ID: {users[idx].id}, Error: {result}")
+            logger.exception(
+                f"[USER_PROFILE] Failed to describe user profile, User ID: {users[idx].id}, Error: {result}")
             continue
         if result:
             success_count += 1
 
     logger.info(
-        f"[USER_PROFILE] User profile describe finished, total_users: {len(users)}, success_users: {success_count}, failed_users: {sum(isinstance(r, Exception) for r in results)}"
-    )
+        f"[USER_PROFILE] User profile describe finished, total_users: {len(users)}, success_users: {success_count}, failed_users: {sum(isinstance(r, Exception) for r in results)}")

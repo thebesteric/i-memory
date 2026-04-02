@@ -11,6 +11,7 @@ import asyncio
 from src.core.config import env
 from src.memory.hsg import decay
 from src.memory.graph import graph_builder
+from src.memory.session import session_builder
 from src.memory.user import user_profile_builder
 
 logger = LogHelper.get_logger()
@@ -80,6 +81,18 @@ def _build_job_definitions() -> list[JobDefinition]:
             coalesce=True,
             misfire_grace_time=600,
             enable=getattr(env, "GRAPH_BUILD_ENABLE", True)
+        ),
+        # 会话总结任务（每天 3:00 执行）
+        JobDefinition(
+            id="session_build",
+            name="Daily session build",
+            func=session_builder.session_build,
+            trigger_type="cron",
+            trigger_args={"hour": 3, "minute": 0, "second": 0},
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=600,
+            enable=getattr(env, "SESSION_BUILD_ENABLE", True)
         ),
         # 用户画像任务（每天 5:00 执行）
         JobDefinition(
