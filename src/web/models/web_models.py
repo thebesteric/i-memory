@@ -1,4 +1,4 @@
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict, List, Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -42,3 +42,62 @@ class CanonicalRelationsRequest(BaseModel):
     canonical_id: str = Field(..., min_length=1, description="规范化实体 ID")
     limit: Optional[int] = Field(default=100, ge=1, le=999, description="最多返回关系数量")
 
+
+class GraphPagingBaseRequest(BaseModel):
+    user_identity: IMemoryUserIdentity = Field(..., description="用户身份")
+    current: Optional[int] = Field(default=1, ge=1, description="当前页码")
+    size: Optional[int] = Field(default=20, ge=1, le=100, description="每页记录数")
+
+
+class GraphFactsFilters(BaseModel):
+    topic_id: Optional[str] = Field(default=None, description="按主题 ID 过滤")
+    fact_kind: Optional[str] = Field(default=None, description="按事实类型过滤（conversation/event）")
+    min_confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="最小置信度")
+    max_confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="最大置信度")
+    keyword: Optional[str] = Field(default=None, description="在 what/who/where/why 字段中模糊匹配")
+
+
+class GraphFactsRequest(GraphPagingBaseRequest):
+    filters: Optional[GraphFactsFilters] = Field(default=None, description="事实筛选条件")
+
+
+class GraphFactEntitiesRequest(GraphPagingBaseRequest):
+    fact_id: str = Field(..., min_length=1, description="事实 ID")
+
+
+class GraphEntityRelationFilters(BaseModel):
+    fact_id: Optional[str] = Field(default=None, description="按证据 fact_id 过滤")
+    edge_relations: Optional[List[str]] = Field(default=None, description="按边关系过滤")
+    infer_sources: Optional[List[str]] = Field(default=None, description="按推断来源过滤")
+    min_confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="最小置信度")
+    max_confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="最大置信度")
+    related_canonical_id: Optional[str] = Field(default=None, description="按关联实体 ID 过滤")
+
+
+class GraphEntityRelationsRequest(GraphPagingBaseRequest):
+    canonical_id: str = Field(..., min_length=1, description="规范化实体 ID")
+    filters: Optional[GraphEntityRelationFilters] = Field(default=None, description="实体关系筛选条件")
+
+
+class GraphEntityTopicsRequest(GraphPagingBaseRequest):
+    canonical_id: str = Field(..., min_length=1, description="规范化实体 ID")
+
+
+class GraphTopicMemoriesRequest(GraphPagingBaseRequest):
+    topic_id: str = Field(..., min_length=1, description="主题 ID")
+
+
+class GraphExploreRequest(BaseModel):
+    user_identity: IMemoryUserIdentity = Field(..., description="用户身份")
+    seed_type: Literal["canonical", "fact", "topic"] = Field(..., description="探索起点类型")
+    seed_id: str = Field(..., min_length=1, description="探索起点 ID")
+    current: Optional[int] = Field(default=1, ge=1, description="当前页码")
+    size: Optional[int] = Field(default=20, ge=1, le=100, description="起点分页大小")
+    relation_size: Optional[int] = Field(default=20, ge=1, le=100, description="每个实体关系扩展上限")
+    entity_size: Optional[int] = Field(default=20, ge=1, le=100, description="每个事实实体扩展上限")
+    include_relations_on_topic_entities: Optional[bool] = Field(
+        default=False,
+        description="topic 起点下是否继续扩展实体关系"
+    )
+    max_nodes: Optional[int] = Field(default=None, ge=1, le=5000, description="返回节点数上限")
+    max_edges: Optional[int] = Field(default=None, ge=1, le=10000, description="返回边数上限")

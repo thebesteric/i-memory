@@ -172,14 +172,14 @@ class EdgeRelation(LabeledStrEnum):
     边关系枚举（Fact 的结构边类型）
     """
     RELATED_TO = ("related_to", "通用关系（有明确关联但不属于上述具体类型）")
-    CO_OCCURS_WITH = ("co_occurs_with", "共现关系")
     CAUSES = ("causes", "因果关系（一个实体导致另一个实体的发生或存在）")
     LOCATED_IN = ("located_in", "地点包含关系（物理或行政层面中的一个实体位于另一个实体内部）")
     KNOWS = ("knows", "人物之间的认识关系")
     WORKED_WITH = ("worked_with", "人物之间的合作/共事关系")
-    PRECEDES = ("precedes", "在时间、位置或顺序上先于、在…… 之前发生 / 出现")
+    PRECEDES = ("precedes", "在时间、位置或顺序上先于、在...之前发生/出现")
     SAME_AS = ("same_as", "实体等同关系（用于消歧），两个文本指向同一实体（如\"Elon Musk\"和\"马斯克\"）")
-    PART_OF = ("part_of", "整体-部分关系（如团队→组织，章节→书籍）")
+    PART_OF = ("part_of", "整体-部分关系（如：团队是组织的一部分；章节是书籍的一部分）")
+    CO_OCCURS_WITH = ("co_occurs_with", "共现关系（兜底通用的关系）")
 
 
 class EdgeType(LabeledStrEnum):

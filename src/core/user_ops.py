@@ -44,7 +44,7 @@ async def find_user(*, order_by: list[str] = None, status: int | None = None, li
     return [IMemoryUser.from_dict(u) for u in users]
 
 
-async def get_user(user_identity: IMemoryUserIdentity, using_cache: bool = False) -> IMemoryUser:
+async def get_user(user_identity: IMemoryUserIdentity, using_cache: bool = False) -> IMemoryUser | None:
     """
     获取用户信息
     :param user_identity: 用户身份

@@ -16,6 +16,7 @@ from src.memory.graph.graph_node_models import EdgeRelation
 from src.memory.graph.semantic_spliter import Topic
 from src.memory.graph.graph_models import Fact, Entity, EntityType, InferSource, RelationInferenceResult
 from src.memory.memory_models import IMemoryUser
+from src.web.models.web_models import GraphEntityRelationFilters, GraphFactsFilters
 
 logger = LogHelper.get_logger()
 
@@ -641,3 +642,301 @@ def find_canonical_relations(user_id: str, canonical_id: str, limit: int = 100, 
             LIMIT %s
             """
     return db.fetchall(query, (user_id, canonical_id, canonical_id, limit), conn=conn)
+
+
+def find_user_facts_page(
+        user_id: str,
+        current: int = 1,
+        size: int = 20,
+        filters: GraphFactsFilters | None = None,
+        conn=None,
+) -> tuple[int, list[dict]]:
+    current = max(1, int(current or 1))
+    size = max(1, int(size or 20))
+    offset = (current - 1) * size
+
+    where_clauses = ["user_id = %s"]
+    where_params: list[Any] = [user_id]
+
+    if filters:
+        topic_id = filters.topic_id
+        if topic_id:
+            where_clauses.append("topic_id = %s")
+            where_params.append(topic_id)
+
+        fact_kind = filters.fact_kind
+        if fact_kind:
+            where_clauses.append("fact_kind = %s")
+            where_params.append(fact_kind)
+
+        min_confidence = filters.min_confidence
+        if min_confidence is not None:
+            where_clauses.append("confidence >= %s")
+            where_params.append(min_confidence)
+
+        max_confidence = filters.max_confidence
+        if max_confidence is not None:
+            where_clauses.append("confidence <= %s")
+            where_params.append(max_confidence)
+
+        keyword = (filters.keyword or "").strip()
+        if keyword:
+            where_clauses.append("(what ILIKE %s OR who ILIKE %s OR where_ ILIKE %s OR why ILIKE %s)")
+            like = f"%{keyword}%"
+            where_params.extend([like, like, like, like])
+
+    where_sql = " AND ".join(where_clauses)
+
+    total_row = db.fetchone(
+        f"SELECT COUNT(1) AS total FROM graph_facts WHERE {where_sql}",
+        tuple(where_params),
+        conn=conn,
+    )
+    total = int((total_row or {}).get("total") or 0)
+
+    rows = db.fetchall(
+        f"""
+        SELECT id,
+               user_id,
+               topic_id,
+               what,
+               when_ AS when_text,
+               where_ AS where_text,
+               who,
+               why,
+               confidence,
+               fact_kind,
+               occurred_start,
+               occurred_end,
+               created_at,
+               updated_at,
+               processed_at
+        FROM graph_facts
+        WHERE {where_sql}
+        ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
+        LIMIT %s OFFSET %s
+        """,
+        tuple(where_params + [size, offset]),
+        conn=conn,
+    )
+    return total, rows
+
+
+def find_fact_canonical_entities_page(
+        user_id: str,
+        fact_id: str,
+        current: int = 1,
+        size: int = 20,
+        conn=None,
+) -> tuple[int, list[dict]]:
+    current = max(1, int(current or 1))
+    size = max(1, int(size or 20))
+    offset = (current - 1) * size
+
+    total_row = db.fetchone(
+        """
+        SELECT COUNT(1) AS total
+        FROM graph_fact_entities fe
+        WHERE fe.user_id = %s AND fe.fact_id = %s AND fe.canonical_id IS NOT NULL
+        """,
+        (user_id, fact_id),
+        conn=conn,
+    )
+    total = int((total_row or {}).get("total") or 0)
+
+    rows = db.fetchall(
+        """
+        SELECT fe.id,
+               fe.user_id,
+               fe.fact_id,
+               fe.entity_id,
+               fe.canonical_id,
+               fe.relation_to_user,
+               fe.created_at,
+               fe.updated_at,
+               ce.name AS canonical_name,
+               ce.entity_type AS canonical_entity_type,
+               ge.text AS entity_text,
+               ge.entity_type AS entity_type
+        FROM graph_fact_entities fe
+                 LEFT JOIN graph_canonical_entities ce ON fe.canonical_id = ce.id
+                 LEFT JOIN graph_entities ge ON fe.entity_id = ge.id
+        WHERE fe.user_id = %s
+          AND fe.fact_id = %s
+          AND fe.canonical_id IS NOT NULL
+        ORDER BY fe.updated_at DESC NULLS LAST, fe.created_at DESC NULLS LAST
+        LIMIT %s OFFSET %s
+        """,
+        (user_id, fact_id, size, offset),
+        conn=conn,
+    )
+    return total, rows
+
+
+def find_entity_relations_page(
+        user_id: str,
+        canonical_id: str,
+        current: int = 1,
+        size: int = 20,
+        filters: GraphEntityRelationFilters | None = None,
+        conn=None,
+) -> tuple[int, list[dict]]:
+    current = max(1, int(current or 1))
+    size = max(1, int(size or 20))
+    offset = (current - 1) * size
+
+    where_clauses = ["user_id = %s", "(source_canonical_id = %s OR target_canonical_id = %s)"]
+    where_params: list[Any] = [user_id, canonical_id, canonical_id]
+
+    if filters:
+        if filters.edge_relations:
+            where_clauses.append("edge_relation = ANY(%s)")
+            where_params.append(filters.edge_relations)
+        if filters.infer_sources:
+            where_clauses.append("infer_source = ANY(%s)")
+            where_params.append(filters.infer_sources)
+        if filters.min_confidence is not None:
+            where_clauses.append("confidence >= %s")
+            where_params.append(filters.min_confidence)
+        if filters.max_confidence is not None:
+            where_clauses.append("confidence <= %s")
+            where_params.append(filters.max_confidence)
+        if filters.related_canonical_id:
+            where_clauses.append("(source_canonical_id = %s OR target_canonical_id = %s)")
+            where_params.extend([filters.related_canonical_id, filters.related_canonical_id])
+        if filters.fact_id:
+            where_clauses.append("fact_ids @> %s::jsonb")
+            where_params.append(json.dumps([filters.fact_id]))
+
+    where_sql = " AND ".join(where_clauses)
+
+    total_row = db.fetchone(
+        f"""
+        SELECT COUNT(1) AS total
+        FROM graph_entity_relations
+        WHERE {where_sql}
+        """,
+        tuple(where_params),
+        conn=conn,
+    )
+    total = int((total_row or {}).get("total") or 0)
+
+    rows = db.fetchall(
+        f"""
+        SELECT id,
+               user_id,
+               source_canonical_id,
+               target_canonical_id,
+               edge_relation,
+               relation_evidence,
+               infer_source,
+               confidence,
+               fact_ids,
+               created_at,
+               updated_at
+        FROM graph_entity_relations
+        WHERE {where_sql}
+        ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
+        LIMIT %s OFFSET %s
+        """,
+        tuple(where_params + [size, offset]),
+        conn=conn,
+    )
+    return total, rows
+
+
+def find_entity_topics_page(
+        user_id: str,
+        canonical_id: str,
+        current: int = 1,
+        size: int = 20,
+        conn=None,
+) -> tuple[int, list[dict]]:
+    current = max(1, int(current or 1))
+    size = max(1, int(size or 20))
+    offset = (current - 1) * size
+
+    total_row = db.fetchone(
+        """
+        SELECT COUNT(DISTINCT gt.id) AS total
+        FROM graph_fact_entities fe
+                 JOIN graph_facts gf ON fe.fact_id = gf.id
+                 JOIN graph_topics gt ON gt.id = gf.topic_id
+        WHERE fe.user_id = %s
+          AND fe.canonical_id = %s
+        """,
+        (user_id, canonical_id),
+        conn=conn,
+    )
+    total = int((total_row or {}).get("total") or 0)
+
+    rows = db.fetchall(
+        """
+        SELECT gt.id,
+               gt.user_id,
+               gt.name,
+               gt.summary,
+               gt.keywords,
+               gt.dialogue_ids,
+               gt.created_at,
+               gt.updated_at,
+               COUNT(DISTINCT gf.id) AS fact_count,
+               COALESCE(jsonb_array_length(gt.dialogue_ids), 0) AS dialogue_count
+        FROM graph_fact_entities fe
+                 JOIN graph_facts gf ON fe.fact_id = gf.id
+                 JOIN graph_topics gt ON gt.id = gf.topic_id
+        WHERE fe.user_id = %s
+          AND fe.canonical_id = %s
+        GROUP BY gt.id, gt.user_id, gt.name, gt.summary, gt.keywords, gt.dialogue_ids, gt.created_at, gt.updated_at
+        ORDER BY gt.updated_at DESC NULLS LAST, gt.created_at DESC NULLS LAST
+        LIMIT %s OFFSET %s
+        """,
+        (user_id, canonical_id, size, offset),
+        conn=conn,
+    )
+    return total, rows
+
+
+def find_topic_memories_page(
+        user_id: str,
+        topic_id: str,
+        current: int = 1,
+        size: int = 20,
+        conn=None,
+) -> tuple[int, list[dict]]:
+    current = max(1, int(current or 1))
+    size = max(1, int(size or 20))
+    offset = (current - 1) * size
+
+    total_row = db.fetchone(
+        """
+        SELECT COUNT(DISTINCT m.id) AS total
+        FROM graph_topics gt
+                 JOIN LATERAL jsonb_array_elements_text(gt.dialogue_ids) d(dialogue_id) ON TRUE
+                 JOIN memories m ON m.id = d.dialogue_id
+        WHERE gt.user_id = %s
+          AND gt.id = %s
+          AND m.user_id = %s
+        """,
+        (user_id, topic_id, user_id),
+        conn=conn,
+    )
+    total = int((total_row or {}).get("total") or 0)
+
+    rows = db.fetchall(
+        """
+        SELECT DISTINCT m.*
+        FROM graph_topics gt
+                 JOIN LATERAL jsonb_array_elements_text(gt.dialogue_ids) d(dialogue_id) ON TRUE
+                 JOIN memories m ON m.id = d.dialogue_id
+        WHERE gt.user_id = %s
+          AND gt.id = %s
+          AND m.user_id = %s
+        ORDER BY m.updated_at DESC NULLS LAST, m.created_at DESC NULLS LAST
+        LIMIT %s OFFSET %s
+        """,
+        (user_id, topic_id, user_id, size, offset),
+        conn=conn,
+    )
+    return total, rows
+
