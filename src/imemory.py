@@ -13,8 +13,7 @@ from src.core.config import env
 from src.core.db import get_db
 from src.core.mem_ops import mem_ops
 from src.memory.hsg import query_hsg_memories
-from src.memory.memory_models import IMemoryConfig, IMemoryFilters, IMemoryUserIdentity, IMemoryItemInfo, QARole, IMemoryUser
-from src.memory.profile.user_profile_models import UserProfile
+from src.memory.memory_models import IMemoryConfig, IMemoryFilters, IMemoryUserIdentity, QARole, IMemoryUser, IMemorySearchResult
 from src.ops.ingest import ingest_document
 
 logger = LogHelper.get_logger()
@@ -87,8 +86,8 @@ class IMemory:
     async def search(self,
                      query: str,
                      *,
-                     limit: int = 10,
-                     filters: IMemoryFilters = None) -> dict[str, list[IMemoryItemInfo] | UserProfile]:
+                     limit: int | None = None,
+                     filters: IMemoryFilters = None) -> IMemorySearchResult:
         """
         搜索记忆内容
         :param query: 查询文本
@@ -96,11 +95,13 @@ class IMemory:
         :param filters: 过滤条件
         :return: 搜索结果列表
         """
+        search_limit: int = limit or 10
+
         # 创建 MemoryFilters 对象
         if not filters:
             filters = IMemoryFilters(user_identity=self.default_user_identity)
         # 执行查询
-        return await query_hsg_memories(query, limit, filters)
+        return await query_hsg_memories(query, search_limit, filters)
 
     async def get(self, memory_id: str) -> Dict[str, Any] | None:
         """
@@ -130,8 +131,8 @@ class IMemory:
     async def history(self,
                       *,
                       user_identity: IMemoryUserIdentity = None,
-                      current: int = 1,
-                      size: int = 10) -> PagingResponse:
+                      current: int | None = None,
+                      size: int | None = None) -> PagingResponse:
         """
         获取用户记忆历史
         :param user_identity: 用户身份
@@ -139,6 +140,9 @@ class IMemory:
         :param size: 每页大小
         :return: 记忆历史列表
         """
+        current = current or 1
+        size = size or 10
+
         user = await self._get_user_by_identity(user_identity or self.default_user_identity)
         total = self.mem_ops.count_mem_by_user(user)
         offset = (current - 1) * size

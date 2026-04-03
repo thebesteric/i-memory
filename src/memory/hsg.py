@@ -23,11 +23,11 @@ from src.core.waypoints import Waypoints, Expansion
 from src.core import user_ops
 from src.memory.decay import Decay
 from src.memory.embed import embed_multi_sector, calc_mean_vec, embed, embed_batch
-from src.memory.memory_models import IMemoryFilters, IMemoryItemDebugInfo, IMemoryItemInfo, IMemoryUserIdentity, IMemoryUser, QARole, \
-    IMemoryFiltersConfig
+from src.memory.memory_models import IMemoryFilters, IMemoryItemDebugInfo, IMemoryItemInfo, IMemoryUserIdentity, \
+    IMemoryUser, QARole, \
+    IMemoryFiltersConfig, IMemorySearchResult
 from src.core.user_summary import update_user_summary
 from src.memory.profile import user_profile_ops
-from src.memory.profile.user_profile_models import UserProfile
 from src.ops.dynamic_memory import calc_cross_sector_resonance_score, apply_retrieval_trace_reinforcement_to_memory, \
     propagate_associative_reinforcement_to_linked_nodes
 from src.tools.chunking import chunk_text
@@ -314,7 +314,7 @@ async def reinforce_memories(effective_k_list):
 
 
 @timing
-async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilters = None) -> dict[str, list[IMemoryItemInfo] | UserProfile]:
+async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilters = None) -> IMemorySearchResult:
     """
     基于混合评分机制（内容相似度、关键词重叠、路标关联、时间衰减等）进行记忆检索
     @param query: 查询文本
@@ -331,7 +331,7 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
     # 用户合法性检查
     user_identity.check_legality()
 
-    user = await user_ops.get_user(user_identity=user_identity)
+    user = await user_ops.get_user(user_identity=user_identity, using_cache=True)
     if not user:
         raise ValueError(f"User not found for identity: {user_identity}")
 
@@ -339,8 +339,10 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
         # 检查 60 秒内的查询缓存，命中则直接返回
         cache_key = f"{query}:{top_k}:{filters.model_dump_json() if filters else '{}'}"
         entry = MEMORIES_CACHE.get(cache_key)
-        if entry:
+        if isinstance(entry, IMemorySearchResult):
             return entry
+        if entry is not None:
+            logger.warning(f"[HSG] Ignore invalid cache payload for key={cache_key}: {type(entry)}")
 
         # 判断查询属于哪个扇区
         query_classify: ClassifyResult = await sector_classifier.classify(content=query)
@@ -532,8 +534,6 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
         except Exception as e:
             logger.warning(f"Failed to schedule reinforce_memories async task: {e}")
 
-        # 存入查询缓存
-        MEMORIES_CACHE.set(cache_key, effective_k_list)
         logger.info(
             f"[HSG] Query processed in {time.time() - start_q:.3f} seconds. Query: '{query}' Expected: {effective_k}, Actual: {len(effective_k_list)} returned.")
 
@@ -543,10 +543,13 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
             user_profile = await user_profile_ops.get_user_profile(user, query_cache=True)
 
         # 返回结果
-        return {"user_profile": user_profile, "memories": effective_k_list}
+        memory_search_result = IMemorySearchResult(user_profile=user_profile, memories=effective_k_list)
+        MEMORIES_CACHE.set(cache_key, memory_search_result)
+        return memory_search_result
 
     finally:
         decay.dec_q()
+
 
 
 async def calc_multi_vec_fusion_score(mid: str, qe: Dict[str, List[float]], weights: Dict[str, float]) -> float:

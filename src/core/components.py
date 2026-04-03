@@ -35,9 +35,11 @@ MODEL_CACHE = MemoryCache()
 # 嵌入模型缓存
 EMBED_MODEL_CACHE = MemoryCache()
 
-# 用户画像模型
+# 用户画像缓存
 USER_PROFILE_CACHE = MemoryCache(default_ttl=12, time_unit=TimeUnit.HOURS)
 
+# 用户身份缓存
+USER_IDENTITY_CACHE = MemoryCache(default_ttl=60, time_unit=TimeUnit.MINUTES)
 
 def get_milvus_manager() -> MilvusManager:
     """

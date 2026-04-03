@@ -4,6 +4,8 @@ from typing import Any, Literal
 from agile.utils.pydantic_extension import BaseModelEnhance
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
+from src.memory.profile.user_profile_models import UserProfile
+
 QARole = Literal["human", "assistant"]
 QueryMode = Literal["vector", "qa", "prefer"]
 
@@ -99,7 +101,6 @@ class IMemoryItemInfo(BaseModelEnhance):
     """
     记忆项模型
     """
-    model_config = ConfigDict(arbitrary_types_allowed=True, extra="allow")
 
     id: Any = Field(..., description="记忆 ID")
     content: str | Any = Field(..., description="记忆内容")
@@ -114,6 +115,15 @@ class IMemoryItemInfo(BaseModelEnhance):
     qa_pair_id: str | None = Field(default=None, exclude=True, description="内部问答对 ID")
     metadata: dict[str, Any] = Field(default_factory=dict, description="元数据")
     debug: IMemoryItemDebugInfo | None = Field(default=None, description="调试信息")
+
+
+class IMemorySearchResult(BaseModelEnhance):
+    """
+    记忆查询返回结果
+    """
+
+    user_profile: UserProfile | None = Field(default=None, description="用户画像信息")
+    memories: list[IMemoryItemInfo] = Field(default_factory=list, description="记忆项列表")
 
 
 class IMemoryUser(BaseModel):

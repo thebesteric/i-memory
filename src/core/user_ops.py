@@ -3,6 +3,7 @@ import uuid
 
 from agile.utils import LogHelper
 
+from src.core.components import USER_IDENTITY_CACHE
 from src.core.db import get_db
 from src.memory.memory_models import IMemoryUserIdentity, IMemoryUser
 
@@ -43,15 +44,23 @@ async def find_user(*, order_by: list[str] = None, status: int | None = None, li
     return [IMemoryUser.from_dict(u) for u in users]
 
 
-async def get_user(user_identity: IMemoryUserIdentity) -> IMemoryUser | None:
+async def get_user(user_identity: IMemoryUserIdentity, using_cache: bool = False) -> IMemoryUser:
     """
     获取用户信息
     :param user_identity: 用户身份
+    :param using_cache: 是否使用缓存
     :return:
     """
     user_key = user_identity.user_key
     tenant_key = user_identity.tenant_key
     project_key = user_identity.project_key
+
+    # 构建缓存 key
+    cache_key = f"{user_key}:{tenant_key or ""}:{project_key or ""}"
+    if using_cache:
+        memory_user = USER_IDENTITY_CACHE.get(cache_key)
+        if memory_user:
+            return memory_user
 
     sql_parts = [
         "SELECT * FROM users WHERE user_key = %s"
@@ -68,7 +77,13 @@ async def get_user(user_identity: IMemoryUserIdentity) -> IMemoryUser | None:
 
     final_sql = " ".join(sql_parts)
     user = db.fetchone(final_sql, tuple(params))
-    return IMemoryUser.from_dict(user) if user else None
+    memory_user = IMemoryUser.from_dict(user) if user else None
+
+    # 加入缓存
+    USER_IDENTITY_CACHE.set(cache_key, memory_user)
+
+    # 返回用户
+    return memory_user
 
 
 async def add_user(user_identity: IMemoryUserIdentity, summary: str = None, reflection_count: int = 0) -> IMemoryUser:

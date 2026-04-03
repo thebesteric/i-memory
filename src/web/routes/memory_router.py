@@ -9,7 +9,7 @@ from fastapi.params import Path, Body
 from src.core import user_ops
 from src.imemory import IMemory
 from src.memory.graph import graph_ops
-from src.memory.memory_models import IMemoryItemInfo, IMemoryUserIdentity
+from src.memory.memory_models import IMemoryUserIdentity, IMemorySearchResult
 from src.memory.profile import user_profile_ops
 from src.memory.profile.user_profile_models import UserProfile
 from src.web.models.web_models import AddMemoryRequest, SearchMemoryRequest, HistoryMemoryRequest, \
@@ -51,7 +51,7 @@ async def add(req: AddMemoryRequest):
     summary="搜索相关记忆内容",
     response_model=gen_response_model(
         "SearchResponse",
-        data_type=dict[str, list[IMemoryItemInfo] | UserProfile | None],
+        data_type=IMemorySearchResult,
         data_desc="匹配的记忆内容列表",
     ),
     description="根据查询关键词和可选过滤条件，检索相关记忆内容。支持分页和多条件过滤。"
@@ -62,7 +62,7 @@ async def search(req: SearchMemoryRequest):
     :param req: 搜索记忆请求模型
     :return: 搜索结果列表
     """
-    results: dict[str, list[IMemoryItemInfo] | UserProfile] = await mem.search(
+    results: IMemorySearchResult = await mem.search(
         query=req.query,
         limit=req.limit,
         filters=req.filters

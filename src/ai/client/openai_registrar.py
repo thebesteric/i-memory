@@ -4,7 +4,7 @@ from typing import Any, List
 from agile.utils import LogHelper
 
 from src.ai.client.base_model_registrar import BaseModelRegistrar
-from src.memory.memory_models import IMemoryItemInfo, IMemoryFilters, IMemoryUserIdentity
+from src.memory.memory_models import IMemoryItemInfo, IMemoryFilters, IMemoryUserIdentity, IMemorySearchResult
 
 
 logger = LogHelper.get_logger()
@@ -17,7 +17,7 @@ class OpenAIRegistrar(BaseModelRegistrar):
         if isinstance(uid, IMemoryUserIdentity):
             return uid
         if isinstance(uid, str) and uid:
-            return IMemoryUserIdentity(user_id=uid)
+            return IMemoryUserIdentity(user_key=uid)
         return IMemoryUserIdentity()
 
     @staticmethod
@@ -42,11 +42,12 @@ class OpenAIRegistrar(BaseModelRegistrar):
                     query = last_msg.get("content")
                     if isinstance(query, str):
                         # 从记忆中检索相关内容
-                        context: List[IMemoryItemInfo] = await self.mem.search(
+                        search_result: IMemorySearchResult = await self.mem.search(
                             query,
                             limit=3,
                             filters=IMemoryFilters(user_identity=uid)
                         )
+                        context: List[IMemoryItemInfo] = search_result.memories
                         if context:
                             # 将上下文内容格式化
                             ctx_text = "\n".join([f"- {m.content}" for m in context])
@@ -94,13 +95,14 @@ class OpenAIRegistrar(BaseModelRegistrar):
                             # 如果 loop 正在运行
                             if loop.is_running():
                                 # 以线程安全方式等待结果，获取上下文
-                                context = asyncio.run_coroutine_threadsafe(
+                                search_result = asyncio.run_coroutine_threadsafe(
                                     self.mem.search(query, limit=3, filters=IMemoryFilters(user_identity=uid)),
                                     loop
                                 ).result()
                             else:
                                 # 直接运行协程，获取上下文
-                                context = asyncio.run(self.mem.search(query, limit=3, filters=IMemoryFilters(user_identity=uid)))
+                                search_result = asyncio.run(self.mem.search(query, limit=3, filters=IMemoryFilters(user_identity=uid)))
+                            context = search_result.memories
                             if context:
                                 # 将上下文内容格式化
                                 ctx_text = "\n".join([f"- {m.content}" for m in context])

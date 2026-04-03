@@ -3,7 +3,7 @@ import unittest
 
 from src.imemory import IMemory
 
-from src.memory.memory_models import IMemoryUserIdentity, IMemoryFilters, IMemoryItemInfo
+from src.memory.memory_models import IMemoryUserIdentity, IMemoryFilters, IMemoryItemInfo, IMemorySearchResult
 
 
 # @unittest.skip("Skipping TestIMemory")
@@ -25,7 +25,7 @@ class TestIMemoryQuery(unittest.TestCase):
     # @unittest.skip
     def test_search_memory(self):
         query = "聊聊北京之行"
-        results: list[IMemoryItemInfo] = asyncio.run(self.mem.search(
+        results: IMemorySearchResult = asyncio.run(self.mem.search(
             query,
             limit=10,
             filters=IMemoryFilters(
@@ -33,7 +33,8 @@ class TestIMemoryQuery(unittest.TestCase):
                 query_mode="prefer",
             )
         ))
-        for result in results:
+        memories: list[IMemoryItemInfo] = results.memories
+        for result in memories:
             print(f"Result: content={result.content}, score={result.score}")
 
     # @unittest.skip
