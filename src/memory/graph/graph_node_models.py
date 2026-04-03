@@ -65,7 +65,7 @@ class FactNode(BaseNode):
     who: str | None = Field(default=None, description="涉及人员/实体（原始文本）")
     why: str | None = Field(default=None, description="重要性所在（原始文本）")
 
-    # 规范化图链接（normalized），与 EdgeType 一一对应
+    # 规范化图链接（normalized），与 EdgeRelation 一一对应
     what_node_ids: list[str] = Field(default_factory=list, description="HAS_WHAT 关联的 Event 节点ID")
     time_node_ids: list[str] = Field(default_factory=list, description="HAS_WHEN 关联的 Time 节点ID")
     location_node_ids: list[str] = Field(default_factory=list, description="HAS_WHERE 关联的 Location 节点ID")
@@ -167,42 +167,40 @@ class MotivationNode(BaseNode):
     description: str | None = Field(default=None, description="描述")
 
 
+class EdgeRelation(LabeledStrEnum):
+    """
+    边关系枚举（Fact 的结构边类型）
+    """
+    RELATED_TO = ("related_to", "通用关系（有明确关联但不属于上述具体类型）")
+    CO_OCCURS_WITH = ("co_occurs_with", "共现关系")
+    CAUSES = ("causes", "因果关系（一个实体导致另一个实体的发生或存在）")
+    LOCATED_IN = ("located_in", "地点包含关系（物理或行政层面中的一个实体位于另一个实体内部）")
+    KNOWS = ("knows", "人物之间的认识关系")
+    WORKED_WITH = ("worked_with", "人物之间的合作/共事关系")
+    PRECEDES = ("precedes", "在时间、位置或顺序上先于、在…… 之前发生 / 出现")
+    SAME_AS = ("same_as", "实体等同关系（用于消歧），两个文本指向同一实体（如\"Elon Musk\"和\"马斯克\"）")
+    PART_OF = ("part_of", "整体-部分关系（如团队→组织，章节→书籍）")
+
+
 class EdgeType(LabeledStrEnum):
     """
-    边类型枚举
+    边类型枚举（图谱实体之间的语义边类型）
     """
-
-    # Fact 与各字段的连接
     HAS_WHAT = ("has_what", "Fact -> Event")
     HAS_WHEN = ("has_when", "Fact -> Time")
     HAS_WHERE = ("has_where", "Fact -> Location")
     HAS_WHO = ("has_who", "Fact -> Person")
     HAS_WHY = ("has_why", "Fact -> Concept/Emotion/Motivation")
-    CONTAINS_ENTITY = ("contains_entity", "Fact -> Entity")
-
-    # 实体之间的关系
-    RELATED_TO = ("related_to", "通用关系")
-    CO_OCCURS_WITH = ("co_occurs_with", "共现关系")
-    PRECEDES = ("precedes", "时间先后")
-    CAUSES = ("causes", "因果关系")
-    LOCATED_IN = ("located_in", "地点包含关系")
-    KNOWS = ("knows", "人物认识关系")
-    WORKED_WITH = ("worked_with", "人物合作关系")
-
-    # 时序关系
-    SAME_AS = ("same_as", "实体等同关系（用于消歧）")
-    PART_OF = ("part_of", "整体-部分关系")
 
 
 class Edge(ExtractionTrace):
     """
     边模型
     """
-
     edge_id: str | None = Field(default=None, description="边ID（可选；未提供时可由业务层生成）")
     fact_id: str | None = Field(default=None, description="来源的 Fact ID")
     source_id: str = Field(..., description="源节点 ID")
     target_id: str = Field(..., description="目标节点 ID")
-    edge_type: EdgeType = Field(..., description="边类型")
+    edge_type: EdgeRelation = Field(..., description="边类型")
     properties: dict[str, Any] = Field(default_factory=dict, description="额外属性，如权重、时间戳等")
     evidence_refs: list[str] = Field(default_factory=list, description="证据引用列表（如原始消息ID）")

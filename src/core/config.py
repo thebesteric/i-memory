@@ -114,7 +114,15 @@ class EnvConfig:
         # 记忆达到丢弃条件的阈值
         self.GRAPH_MEM_DISCARD_THRESHOLD = env_helper.get("IM_GRAPH_MEM_DISCARD_THRESHOLD", 2)
         # 图执行工作线程数
-        self.GRAPH_WORKER_COUNT = env_helper.get("IM_GRAPH_WORKER_COUNT", 3)
+        self.GRAPH_WORKER_COUNT = env_helper.get("IM_GRAPH_WORKER_COUNT", 5)
+        # 图关系推断：是否启用 LLM 二层判定（规则优先）
+        self.GRAPH_RELATION_LLM_ENABLE = env_helper.get("IM_GRAPH_RELATION_LLM_ENABLE", True)
+        # 图关系推断：单个 fact 最多允许 LLM 处理的实体对数量
+        self.GRAPH_RELATION_LLM_MAX_PAIRS = env_helper.get("IM_GRAPH_RELATION_LLM_MAX_PAIRS", 50)
+        # 图关系推断：LLM 判定写入最小置信度
+        self.GRAPH_RELATION_LLM_MIN_CONFIDENCE = env_helper.get("IM_GRAPH_RELATION_LLM_MIN_CONFIDENCE", 0.7)
+        # 图关系推断：单个 fact 内 LLM 并发推断上限
+        self.GRAPH_RELATION_LLM_CONCURRENCY = env_helper.get("IM_GRAPH_RELATION_LLM_CONCURRENCY", 5)
 
         # ================ 用户画像相关配置 ================
         # 是否开启用户画像功能

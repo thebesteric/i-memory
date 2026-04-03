@@ -1,4 +1,5 @@
 import json
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Literal, Any
 
@@ -307,7 +308,20 @@ class Fact(BaseModel):
         self.model_extra["_sectors"] = sectors
 
 
-if __name__ == '__main__':
-    print(EntityType.CAPABILITY.name)
-    print(EntityType.CAPABILITY.value)
-    print(EntityType.CAPABILITY.label)
+InferSource = Literal["RULE", "LLM", "FALLBACK"]
+
+
+@dataclass(frozen=True, slots=True)
+class RelationInferenceResult:
+    # 源标准实体 ID
+    source_canonical_id: str
+    # 目标标准实体 ID
+    target_canonical_id: str
+    # 边关系类型
+    edge_relation: str
+    # 关系证据文本
+    relation_evidence: str
+    # 推断来源
+    infer_source: InferSource
+    # 置信度分数
+    confidence: float | None

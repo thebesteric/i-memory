@@ -1,21 +1,30 @@
+import asyncio
 import datetime
 import json
+import itertools
 import uuid
+from typing import Any
 
-from agile.utils import LogHelper
+from agile.utils import LogHelper, timing
 
 from src.core.components import get_embed_model
+from src.core.config import env
 from src.core.db import get_db
 from src.memory.graph.entity_canonicalize import EntityCanonicalize
+from src.memory.graph.relation_inferencer import RelationInference, RelationInferenceOutput
+from src.memory.graph.graph_node_models import EdgeRelation
 from src.memory.graph.semantic_spliter import Topic
-from src.memory.graph.graph_models import Fact, Entity, EntityType
+from src.memory.graph.graph_models import Fact, Entity, EntityType, InferSource, RelationInferenceResult
 from src.memory.memory_models import IMemoryUser
 
 logger = LogHelper.get_logger()
 
 db = get_db()
 embed_model = get_embed_model()
+# 实体标准化器
 entity_canonicalize = EntityCanonicalize(threshold=0.85)
+# 关系推理器
+relation_inference = RelationInference()
 
 
 async def add_topic(user: IMemoryUser, topic: Topic, conn=None):
@@ -185,14 +194,26 @@ async def link_fact_entities(user: IMemoryUser, fact: Fact, conn=None) -> None:
             # 添加实体
             entity = await add_entity(user=user, entity=entity, conn=conn)
 
+        # 给 entity 增加 canonical_id 值
+        if entity.id and not entity.canonical_id:
+            entity_row = db.fetchone(
+                "SELECT canonical_id FROM graph_entities WHERE id = %s",
+                (entity.id,),
+                conn=conn
+            )
+            if entity_row and entity_row.get("canonical_id"):
+                entity.set_canonical_id(entity_row["canonical_id"])
+
         # 添加与 Fact 的关系映射
         _id = str(uuid.uuid4())
         db.execute(
             """
-            INSERT INTO graph_fact_entities (id, user_id, fact_id, entity_id, relation_to_user, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO graph_fact_entities (id, user_id, fact_id, entity_id, canonical_id, relation_to_user,
+                                             created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (user_id, fact_id, entity_id)
-                DO UPDATE SET relation_to_user = EXCLUDED.relation_to_user,
+                DO UPDATE SET canonical_id     = EXCLUDED.canonical_id,
+                              relation_to_user = EXCLUDED.relation_to_user,
                               updated_at       = EXCLUDED.updated_at
             """,
             (
@@ -200,6 +221,7 @@ async def link_fact_entities(user: IMemoryUser, fact: Fact, conn=None) -> None:
                 user.id,
                 fact.id,
                 entity.id,
+                entity.canonical_id,
                 entity.relation_to_user,
                 now,
                 now
@@ -259,3 +281,363 @@ async def increment_memoires_join_count(m_ids: list[str], discard_threshold: int
     if conn is None:
         db.commit()
     return affected_rows
+
+
+def _normalize_edge_relation(edge_relation_value: str | None) -> str:
+    if not edge_relation_value:
+        return EdgeRelation.CO_OCCURS_WITH.name
+    normalized = str(edge_relation_value).strip().upper()
+    return normalized if normalized in EdgeRelation.__members__ else EdgeRelation.RELATED_TO.name
+
+
+def _extract_entity_meta_by_canonical_id(fact: Fact) -> dict[str, dict[str, Any]]:
+    """
+    抽取事实中的标准化实体的元信息，按照 canonical_id 聚合文本、实体类型和事实级上下文。
+    :param fact: 事实
+    :return:
+    """
+    canonical_meta: dict[str, dict[str, Any]] = {}
+    for entity in fact.entities:
+        if not entity.canonical_id:
+            continue
+        # 如果 key 不存在，则新建并设置默认值
+        meta = canonical_meta.setdefault(
+            entity.canonical_id,
+            {
+                "texts": set(),
+                "entity_type": EntityType.OTHER.name,
+            }
+        )
+        # 追加 entity.text 到文本集合，并记录实体类型（如果尚未设置为其他）
+        if entity.text:
+            meta["texts"].add(entity.text)
+
+        # 顺序敏感，谁先出现，谁更可能决定最终类型；如果已经是其他类型了，就不覆盖了
+        entity_type_name = getattr(entity.entity_type, "name", EntityType.OTHER.name)
+        if meta["entity_type"] == EntityType.OTHER.name:
+            meta["entity_type"] = entity_type_name
+
+    for _, meta in canonical_meta.items():
+        meta["texts"] = sorted(meta["texts"])
+    return canonical_meta
+
+
+def _infer_edge_by_rules(
+        fact: Fact,
+        source_meta: dict,
+        target_meta: dict,
+        enable: bool = True) -> tuple[str, str] | None:
+    """
+    基于规则进行边关系匹配
+    :param fact: 事实
+    :param source_meta: 源实体的元信息
+    :param target_meta: 目标实体的元信息
+    :param enable: 是否使用规则匹配
+    :return:
+    """
+    if not enable:
+        return None
+
+    who = (fact.who or "").lower()
+    what = (fact.what or "").lower()
+    where = (fact.where or "").lower()
+    why = (fact.why or "").lower()
+    merged = f"{who} {what} {where} {why}"
+    source_type = source_meta.get("entity_type", EntityType.OTHER.name)
+    target_type = target_meta.get("entity_type", EntityType.OTHER.name)
+
+    if source_type == EntityType.LOCATION.name and target_type == EntityType.LOCATION.name:
+        if any(k in merged for k in ["位于", "属于", "inside", "within", " in ", " at "]):
+            return EdgeRelation.LOCATED_IN.name, "Rule inferred hierarchical location relation"
+
+    if any(k in merged for k in ["因为", "导致", "因此", "so that", "because", "caused by", "lead to"]):
+        return EdgeRelation.CAUSES.name, "Rule inferred causal relation"
+
+    if any(k in merged for k in ["之后", "随后", "然后", "before", "after", "later", "earlier"]):
+        return EdgeRelation.PRECEDES.name, "Rule inferred temporal order relation"
+
+    if source_type == EntityType.PERSON.name and target_type == EntityType.PERSON.name:
+        if any(k in merged for k in
+               ["同事", "合作", "团队", "项目", "coworker", "colleague", "teammate", "worked with"]):
+            return EdgeRelation.WORKED_WITH.name, "Rule inferred collaboration relation"
+
+    return None
+
+
+async def _infer_edge_by_llm(
+        source_canonical_id: str,
+        target_canonical_id: str,
+        fact: Fact,
+        source_meta: dict,
+        target_meta: dict
+) -> RelationInferenceResult:
+    """
+    利用大模型进行边类型的推断
+    :param fact: 事实
+    :param source_meta: 源实体元数据
+    :param target_meta: 目标实体元数据
+    :return: RelationInferenceResult
+    """
+    try:
+        output: RelationInferenceOutput = await relation_inference.invoke(
+            fact=fact,
+            source_meta=source_meta,
+            target_meta=target_meta
+        )
+        edge_relation = _normalize_edge_relation(output.edge_relation)
+        relation_evidence = output.relation_evidence or "LLM inferred relation"
+        if output.confidence < env.GRAPH_RELATION_LLM_MIN_CONFIDENCE:
+            logger.info(
+                f"[GRAPH] LLM inferred relation confidence {output.confidence} is below threshold "
+                f"{env.GRAPH_RELATION_LLM_MIN_CONFIDENCE}, keep evidence for fallback"
+            )
+        else:
+            logger.info(
+                f"[GRAPH] LLM inferred relation: {edge_relation} with confidence {output.confidence}, evidence: {relation_evidence}"
+            )
+        return RelationInferenceResult(
+            source_canonical_id=source_canonical_id,
+            target_canonical_id=target_canonical_id,
+            edge_relation=edge_relation,
+            relation_evidence=relation_evidence,
+            infer_source="LLM",
+            confidence=output.confidence,
+        )
+    except Exception as e:
+        logger.warning(f"[GRAPH] LLM relation inference failed, fallback to co-occurrence: {e}")
+        return RelationInferenceResult(
+            source_canonical_id=source_canonical_id,
+            target_canonical_id=target_canonical_id,
+            edge_relation=EdgeRelation.CO_OCCURS_WITH.name,
+            relation_evidence="LLM relation inference failed, fallback to co-occurrence",
+            infer_source="FALLBACK",
+            confidence=None,
+        )
+
+
+async def _infer_relation_for_pair(
+        fact: Fact,
+        source_canonical_id: str,
+        target_canonical_id: str,
+        source_meta: dict,
+        target_meta: dict,
+        llm_allowed_for_fact: bool,
+        llm_semaphore: asyncio.Semaphore | None,
+) -> RelationInferenceResult:
+    """
+    对单个 canonical 实体对做关系推断（规则 -> LLM -> fallback）。
+    该阶段不访问数据库，便于并发执行。
+    """
+    llm_fallback_evidence = None
+    llm_fallback_confidence = None
+    llm_result = None
+
+    infer_source: InferSource = "RULE"
+    confidence = None
+    relation = _infer_edge_by_rules(fact, source_meta, target_meta, enable=True)
+
+    if relation is None and llm_allowed_for_fact:
+        if llm_semaphore is None:
+            llm_result = await _infer_edge_by_llm(
+                source_canonical_id=source_canonical_id,
+                target_canonical_id=target_canonical_id,
+                fact=fact,
+                source_meta=source_meta,
+                target_meta=target_meta
+            )
+        else:
+            async with llm_semaphore:
+                llm_result = await _infer_edge_by_llm(
+                    source_canonical_id=source_canonical_id,
+                    target_canonical_id=target_canonical_id,
+                    fact=fact,
+                    source_meta=source_meta,
+                    target_meta=target_meta
+                )
+
+        llm_edge_relation = llm_result.edge_relation
+        llm_relation_evidence = llm_result.relation_evidence
+        llm_confidence = llm_result.confidence
+
+        if llm_confidence is not None and llm_confidence >= env.GRAPH_RELATION_LLM_MIN_CONFIDENCE:
+            infer_source = "LLM"
+            relation = (llm_edge_relation, llm_relation_evidence or "LLM inferred relation")
+            confidence = llm_confidence
+        else:
+            llm_fallback_evidence = llm_relation_evidence if llm_confidence is not None else None
+            llm_fallback_confidence = llm_confidence
+
+    if relation is None:
+        infer_source = "FALLBACK"
+        fallback_evidence = "Entities co-occur in the same fact"
+        if llm_fallback_evidence:
+            fallback_evidence = f"Low-confidence LLM hint: {llm_fallback_evidence}"
+        relation = (EdgeRelation.CO_OCCURS_WITH.name, fallback_evidence)
+        confidence = llm_fallback_confidence
+
+    edge_relation, relation_evidence = relation
+
+    return RelationInferenceResult(
+        source_canonical_id=source_canonical_id,
+        target_canonical_id=target_canonical_id,
+        edge_relation=edge_relation,
+        relation_evidence=relation_evidence,
+        infer_source=infer_source,
+        confidence=confidence,
+    )
+
+
+@timing
+async def infer_canonical_relations_for_fact(user: IMemoryUser, fact: Fact, conn=None) -> int:
+    """
+    基于单条 Fact 的 canonical 实体关系推断。
+
+    流程：
+    1) 先按 canonical_id 聚合实体并两两配对；
+    2) 对每对实体按 rule -> llm -> fallback 决策 edge_relation；
+    3) 以 (user_id, source_canonical_id, target_canonical_id, edge_relation) 去重写入；
+    4) 通过 fact_ids 维护该关系的证据 fact 列表（去重追加）。
+    """
+    # 没有 fact 主键时无法作为关系证据，直接跳过
+    if not fact.id:
+        return 0
+
+    # 将同义提及收敛到 canonical_id 维度，避免同一事实中重复实体造成重复建边
+    canonical_meta = _extract_entity_meta_by_canonical_id(fact)
+    canonical_ids = sorted(canonical_meta.keys())
+
+    # 少于两个 canonical 实体时无法形成边
+    if len(canonical_ids) < 2:
+        return 0
+
+    now = datetime.datetime.now()
+
+    # LLM 触发门控：可配置总开关 + 单 fact 最大实体对数量，避免成本失控
+    enable_llm = bool(env.GRAPH_RELATION_LLM_ENABLE)
+    # LLM 最大允许处理的数量
+    max_pairs_for_llm = int(env.GRAPH_RELATION_LLM_MAX_PAIRS or 0)
+    # 当前事实的实体对数量（n 个实体形成 n*(n-1)/2 个对）
+    pair_count = len(canonical_ids) * (len(canonical_ids) - 1) // 2
+    # 是否开启 LLM 推断
+    llm_allowed_for_fact = enable_llm and (max_pairs_for_llm <= 0 or pair_count <= max_pairs_for_llm)
+
+    pairs = list(itertools.combinations(canonical_ids, 2))
+    llm_concurrency = max(1, int(getattr(env, "GRAPH_RELATION_LLM_CONCURRENCY", 5) or 5))
+    llm_semaphore = asyncio.Semaphore(llm_concurrency) if llm_allowed_for_fact else None
+
+    # 并发执行推断阶段，数据库写入仍在后续串行执行
+    infer_tasks = [
+        _infer_relation_for_pair(
+            fact=fact,
+            source_canonical_id=source_canonical_id,
+            target_canonical_id=target_canonical_id,
+            source_meta=canonical_meta.get(source_canonical_id, {}),
+            target_meta=canonical_meta.get(target_canonical_id, {}),
+            llm_allowed_for_fact=llm_allowed_for_fact,
+            llm_semaphore=llm_semaphore,
+        )
+        for source_canonical_id, target_canonical_id in pairs
+    ]
+    inferred_relations = await asyncio.gather(*infer_tasks)
+
+    affected = 0
+    for inferred in inferred_relations:
+        source_canonical_id = inferred.source_canonical_id
+        target_canonical_id = inferred.target_canonical_id
+        edge_relation = inferred.edge_relation
+        relation_evidence = inferred.relation_evidence
+        infer_source = inferred.infer_source
+        confidence = inferred.confidence
+
+        existing = db.fetchone(
+            """
+            SELECT id, fact_ids
+            FROM graph_entity_relations
+            WHERE user_id = %s
+              AND source_canonical_id = %s
+              AND target_canonical_id = %s
+              AND edge_relation = %s
+            """,
+            (user.id, source_canonical_id, target_canonical_id, edge_relation),
+            conn=conn
+        )
+
+        # 已存在同类型边：仅追加证据 fact_id（去重），并刷新描述/来源/更新时间
+        if existing:
+            fact_ids = existing.get("fact_ids") or []
+            if isinstance(fact_ids, str):
+                try:
+                    fact_ids = json.loads(fact_ids)
+                except Exception:
+                    fact_ids = []
+
+            if fact.id not in fact_ids:
+                fact_ids.append(fact.id)
+                affected += db.execute(
+                    """
+                    UPDATE graph_entity_relations
+                    SET fact_ids          = %s,
+                        relation_evidence = %s,
+                        infer_source      = %s,
+                        confidence        = %s,
+                        updated_at        = %s
+                    WHERE id = %s
+                    """,
+                    (json.dumps(fact_ids), relation_evidence, infer_source, confidence, now, existing["id"]),
+                    conn=conn
+                )
+            continue
+
+        # 不存在则插入新边，首条证据为当前 fact.id
+        affected += db.execute(
+            """
+            INSERT INTO graph_entity_relations (id, user_id, source_canonical_id, target_canonical_id,
+                                                edge_relation, relation_evidence, infer_source, confidence,
+                                                fact_ids, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                str(uuid.uuid4()),
+                user.id,
+                source_canonical_id,
+                target_canonical_id,
+                edge_relation,
+                relation_evidence,
+                infer_source,
+                confidence,
+                json.dumps([fact.id]),
+                now,
+                now,
+            ),
+            conn=conn
+        )
+
+    # 允许独立调用时自动提交；若外层传入事务连接，则由外层统一提交
+    if conn is None:
+        db.commit()
+    return affected
+
+
+def find_canonical_relations(user_id: str, canonical_id: str, limit: int = 100, conn=None) -> list[dict]:
+    """
+    查询某个 canonical entity 参与的关系边（双向）。
+    """
+    query = """
+            SELECT id,
+                   user_id,
+                   source_canonical_id,
+                   target_canonical_id,
+                   edge_relation,
+                   relation_evidence,
+                   infer_source,
+                   confidence,
+                   fact_ids,
+                   created_at,
+                   updated_at
+            FROM graph_entity_relations
+            WHERE user_id = %s
+              AND (source_canonical_id = %s OR target_canonical_id = %s)
+            ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
+            LIMIT %s
+            """
+    return db.fetchall(query, (user_id, canonical_id, canonical_id, limit), conn=conn)

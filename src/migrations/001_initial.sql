@@ -363,6 +363,7 @@ CREATE TABLE IF NOT EXISTS graph_fact_entities
     user_id          TEXT,
     fact_id          TEXT,
     entity_id        TEXT,
+    canonical_id     TEXT,
     relation_to_user TEXT,
     created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -371,7 +372,9 @@ CREATE TABLE IF NOT EXISTS graph_fact_entities
     CONSTRAINT fk_graph_fact_entities_graph_fact_id_facts_id
         FOREIGN KEY (fact_id) REFERENCES graph_facts (id),
     CONSTRAINT fk_graph_fact_entities_entity_id_entities_id
-        FOREIGN KEY (entity_id) REFERENCES graph_entities (id)
+        FOREIGN KEY (entity_id) REFERENCES graph_entities (id),
+    CONSTRAINT fk_graph_fact_entities_canonical_id_graph_canonical_entities_id
+        FOREIGN KEY (canonical_id) REFERENCES graph_canonical_entities (id)
 );
 
 COMMENT ON TABLE graph_fact_entities IS '事实与实体的关联表';
@@ -379,6 +382,7 @@ COMMENT ON COLUMN graph_fact_entities.id IS '主键';
 COMMENT ON COLUMN graph_fact_entities.user_id IS '用户标识';
 COMMENT ON COLUMN graph_fact_entities.fact_id IS '事实标识';
 COMMENT ON COLUMN graph_fact_entities.entity_id IS '实体标识';
+COMMENT ON COLUMN graph_fact_entities.canonical_id IS '规范化实体标识';
 COMMENT ON COLUMN graph_fact_entities.relation_to_user IS '实体与用户的关系描述';
 COMMENT ON COLUMN graph_fact_entities.created_at IS '创建时间戳';
 COMMENT ON COLUMN graph_fact_entities.updated_at IS '最后更新时间戳';
@@ -386,32 +390,36 @@ COMMENT ON COLUMN graph_fact_entities.updated_at IS '最后更新时间戳';
 -- 实体-实体关联表
 CREATE TABLE IF NOT EXISTS graph_entity_relations
 (
-    id            TEXT PRIMARY KEY,
-    user_id       TEXT,
-    source_id     TEXT,
-    target_id     TEXT,
-    relation_type VARCHAR(50),
-    relation_desc TEXT,
-    fact_ids      JSONB     DEFAULT '[]',
-    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    id                  TEXT PRIMARY KEY,
+    user_id             TEXT,
+    source_canonical_id TEXT,
+    target_canonical_id TEXT,
+    edge_relation       VARCHAR(50),
+    relation_evidence   TEXT,
+    infer_source        VARCHAR(50),
+    confidence          DOUBLE PRECISION,
+    fact_ids            JSONB     DEFAULT '[]',
+    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT chk_graph_entity_relations_no_self
-        CHECK (source_id <> target_id),
+        CHECK (source_canonical_id <> target_canonical_id),
     CONSTRAINT uq_graph_entity_relations_user_src_dst_type
-        UNIQUE (user_id, source_id, target_id, relation_type),
-    CONSTRAINT fk_graph_entity_relations_source_id_graph_canonical_entities_id
-        FOREIGN KEY (source_id) REFERENCES graph_entities (id),
-    CONSTRAINT fk_graph_entity_relations_target_id_graph_canonical_entities_id
-        FOREIGN KEY (target_id) REFERENCES graph_entities (id)
+        UNIQUE (user_id, source_canonical_id, target_canonical_id, edge_relation),
+    CONSTRAINT fk_graph_entity_relations_sc_id_graph_canonical_entities_id
+        FOREIGN KEY (source_canonical_id) REFERENCES graph_canonical_entities (id),
+    CONSTRAINT fk_graph_entity_relations_tc_id_graph_canonical_entities_id
+        FOREIGN KEY (target_canonical_id) REFERENCES graph_canonical_entities (id)
 );
 
 COMMENT ON TABLE graph_entity_relations IS '实体与实体之间的关联表';
 COMMENT ON COLUMN graph_entity_relations.id IS '主键';
 COMMENT ON COLUMN graph_entity_relations.user_id IS '用户标识';
-COMMENT ON COLUMN graph_entity_relations.source_id IS '源实体标识';
-COMMENT ON COLUMN graph_entity_relations.target_id IS '目标实体标识';
-COMMENT ON COLUMN graph_entity_relations.relation_type IS '关系类型';
-COMMENT ON COLUMN graph_entity_relations.relation_desc IS '关系描述';
+COMMENT ON COLUMN graph_entity_relations.source_canonical_id IS '源规范化实体标识';
+COMMENT ON COLUMN graph_entity_relations.target_canonical_id IS '目标规范化实体标识';
+COMMENT ON COLUMN graph_entity_relations.edge_relation IS '边关系';
+COMMENT ON COLUMN graph_entity_relations.relation_evidence IS '形成关系的证据';
+COMMENT ON COLUMN graph_entity_relations.infer_source IS '关系推断来源（rule/llm/fallback）';
+COMMENT ON COLUMN graph_entity_relations.confidence IS '关系推断置信度';
 COMMENT ON COLUMN graph_entity_relations.fact_ids IS '与该实体关系相关的事实标识列表';
 COMMENT ON COLUMN graph_entity_relations.created_at IS '创建时间戳';
 COMMENT ON COLUMN graph_entity_relations.updated_at IS '最后更新时间戳';
@@ -443,6 +451,7 @@ CREATE INDEX IF NOT EXISTS idx_graph_facts_vector ON graph_facts USING hnsw (vec
 CREATE INDEX IF NOT EXISTS idx_graph_fact_entities_user_id ON graph_fact_entities (user_id);
 CREATE INDEX IF NOT EXISTS idx_graph_fact_entities_fact_id ON graph_fact_entities (fact_id);
 CREATE INDEX IF NOT EXISTS idx_graph_fact_entities_entity_id ON graph_fact_entities (entity_id);
+CREATE INDEX IF NOT EXISTS idx_graph_fact_entities_canonical_id ON graph_fact_entities (canonical_id);
 CREATE INDEX IF NOT EXISTS idx_graph_entities_user_id ON graph_entities (user_id);
 CREATE INDEX IF NOT EXISTS idx_graph_entities_text ON graph_entities (text);
 CREATE INDEX IF NOT EXISTS idx_graph_entities_entity_type ON graph_entities (entity_type);
@@ -452,4 +461,7 @@ CREATE INDEX IF NOT EXISTS idx_graph_canonical_entities_entity_type ON graph_can
 CREATE INDEX IF NOT EXISTS idx_graph_canonical_entities_entity_label ON graph_canonical_entities (entity_label);
 CREATE INDEX IF NOT EXISTS idx_graph_canonical_entities_vector ON graph_canonical_entities USING hnsw (vector vector_cosine_ops);
 CREATE INDEX IF NOT EXISTS idx_graph_entity_relations_user_id ON graph_entity_relations (user_id);
-CREATE INDEX IF NOT EXISTS idx_graph_entity_relations_relation_type ON graph_entity_relations (relation_type);
+CREATE INDEX IF NOT EXISTS idx_graph_entity_relations_source_canonical_id ON graph_entity_relations (source_canonical_id);
+CREATE INDEX IF NOT EXISTS idx_graph_entity_relations_target_canonical_id ON graph_entity_relations (target_canonical_id);
+CREATE INDEX IF NOT EXISTS idx_graph_entity_relations_edge_relation ON graph_entity_relations (edge_relation);
+CREATE INDEX IF NOT EXISTS idx_graph_entity_relations_infer_source ON graph_entity_relations (infer_source);

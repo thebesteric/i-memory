@@ -94,6 +94,8 @@ async def process_user_queue():
                     fact = await graph_ops.add_fact(user, fact, topic, conn=conn)
                     # 将 Entity 入库，并添加与 Fact 的关系映射，标准化实体对象
                     await graph_ops.link_fact_entities(user, fact, conn=conn)
+                    # 基于 canonical_id 推断实体共现关系边
+                    await graph_ops.infer_canonical_relations_for_fact(user, fact, conn=conn)
 
                 # 提取已经参与生成事实的记忆 ID 列表
                 mem_ids = set()

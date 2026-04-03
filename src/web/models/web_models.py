@@ -32,3 +32,13 @@ class HistoryMemoryRequest(BaseModel):
     user_identity: IMemoryUserIdentity = Field(..., description="用户身份")
     current: Optional[int] = Field(default=1, ge=1, description="当前页码")
     size: Optional[int] = Field(default=10, ge=1, le=100, description="每页记录数")
+
+
+class CanonicalRelationsRequest(BaseModel):
+    """
+    查询 canonical 实体关系请求模型
+    """
+    user_identity: IMemoryUserIdentity = Field(..., description="用户身份")
+    canonical_id: str = Field(..., min_length=1, description="规范化实体 ID")
+    limit: Optional[int] = Field(default=100, ge=1, le=999, description="最多返回关系数量")
+

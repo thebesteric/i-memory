@@ -8,10 +8,12 @@ from fastapi.params import Path, Body
 
 from src.core import user_ops
 from src.imemory import IMemory
+from src.memory.graph import graph_ops
 from src.memory.memory_models import IMemoryItemInfo, IMemoryUserIdentity
 from src.memory.profile import user_profile_ops
 from src.memory.profile.user_profile_models import UserProfile
-from src.web.models.web_models import AddMemoryRequest, SearchMemoryRequest, HistoryMemoryRequest
+from src.web.models.web_models import AddMemoryRequest, SearchMemoryRequest, HistoryMemoryRequest, \
+    CanonicalRelationsRequest
 
 from typing import Any
 
@@ -168,6 +170,29 @@ async def get_user_profile(user_identity: IMemoryUserIdentity = Body(..., descri
     # 查询用户画像
     user_profile: UserProfile = await user_profile_ops.get_user_profile(user, query_cache=True)
     return R.success(data=user_profile)
+
+
+@router.post(
+    "/canonical_relations",
+    summary="查询 canonical 实体关系边",
+    response_model=gen_response_model(
+        "CanonicalRelationsResponse",
+        data_type=dict[str, Any],
+        data_desc="canonical 实体关系边列表",
+    ),
+    description="根据用户身份与规范化实体 ID 查询该实体参与的双向关系边。"
+)
+async def canonical_relations(req: CanonicalRelationsRequest):
+    user = await user_ops.get_user(req.user_identity)
+    if not user:
+        raise ValueError(f"User not found for identity: {req.user_identity}")
+
+    rows = graph_ops.find_canonical_relations(user.id, req.canonical_id, req.limit or 100)
+    return R.success(data={
+        "canonical_id": req.canonical_id,
+        "count": len(rows),
+        "relations": rows,
+    })
 
 
 def _handle_memories(memories: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
