@@ -171,13 +171,13 @@ class PostgresVectorStore(BaseVectorStore):
             await conn.execute(f"DELETE FROM {self.vector_table_name} WHERE id=$1", id)
 
     @timing
-    async def search(self, user: IMemoryUser, vector: List[float], sector: str, k: int) -> List[VectorSearch]:
+    async def search(self, user: IMemoryUser, vector: List[float], sector: str, top_k: int) -> List[VectorSearch]:
         """
         相似度搜索
         :param user: 用户
         :param vector: 向量
         :param sector: 扇区
-        :param k: 返回的相似向量数量
+        :param top_k: 返回的相似向量数量
         :return: 相似向量列表
         """
         pool = await self._get_pool()
@@ -196,7 +196,7 @@ class PostgresVectorStore(BaseVectorStore):
             FROM {self.vector_table_name}
             WHERE 1=1 {filter_sql}
             ORDER BY v <=> $1::vector
-            LIMIT {k}
+            LIMIT {top_k}
         """
 
         async with pool.acquire() as conn:

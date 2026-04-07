@@ -23,11 +23,14 @@ from src.core.waypoints import Waypoints, Expansion
 from src.core import user_ops
 from src.memory.decay import Decay
 from src.memory.embed import embed_multi_sector, calc_mean_vec, embed, embed_batch
+from src.memory import graph_search
 from src.memory.memory_models import IMemoryFilters, IMemoryItemDebugInfo, IMemoryItemInfo, IMemoryUserIdentity, \
     IMemoryUser, QARole, \
     IMemoryFiltersConfig, IMemorySearchResult
 from src.core.user_summary import update_user_summary
 from src.memory.profile import user_profile_ops
+from src.memory.session import session_ops
+from src.memory.session.session_models import Sessions
 from src.ops.dynamic_memory import calc_cross_sector_resonance_score, apply_retrieval_trace_reinforcement_to_memory, \
     propagate_associative_reinforcement_to_linked_nodes
 from src.tools.chunking import chunk_text
@@ -102,9 +105,10 @@ async def add_hsg_memory(user_identity: IMemoryUserIdentity,
     user_identity.check_legality()
 
     # 获取用户，若不存在则创建一条新用户记录
-    user: IMemoryUser = await user_ops.get_user(user_identity=user_identity)
+    user: IMemoryUser | None = await user_ops.get_user(user_identity=user_identity)
     if not user:
         user = await user_ops.add_user(user_identity=user_identity)
+    assert user is not None
 
     # 角色合法性检查
     if qa_role and qa_role not in ("human", "assistant"):
@@ -147,11 +151,13 @@ async def add_hsg_memory(user_identity: IMemoryUserIdentity,
         best_sim_mem = best_sim_mem_similarity[1]
         content = best_sim_mem["content"]
         content = content if len(content) <= 20 else content[:20] + "..."
-        logger.info(f"[HSG] Found similar memory {best_sim_mem['id']} with {best_sim_mem_similarity[0]} for User: {user.id}, Content: {content}")
+        logger.info(
+            f"[HSG] Found similar memory {best_sim_mem['id']} with {best_sim_mem_similarity[0]} for User: {user.id}, Content: {content}")
         # 提升显著性，但不超过 1.0
         boost = min(1.0, (best_sim_mem["salience"] or 0) + 0.15)
         # 更新最后访问时间和显著性
-        db.execute("UPDATE memories SET last_seen_at=%s, salience=%s, updated_at=%s WHERE id=%s", (now, boost, now, best_sim_mem['id']))
+        db.execute("UPDATE memories SET last_seen_at=%s, salience=%s, updated_at=%s WHERE id=%s",
+                   (now, boost, now, best_sim_mem['id']))
         db.commit()
         return {
             "id": best_sim_mem["id"],
@@ -282,7 +288,8 @@ async def reinforce_memories(effective_k_list):
         try:
             reinforcement_sal = await apply_retrieval_trace_reinforcement_to_memory(_item.id, _item.salience)
             now = datetime.datetime.now()
-            db.execute("UPDATE memories SET salience=%s, last_seen_at = %s WHERE id = %s", (reinforcement_sal, now, _item.id))
+            db.execute("UPDATE memories SET salience=%s, last_seen_at = %s WHERE id = %s",
+                       (reinforcement_sal, now, _item.id))
 
             # 有图遍历路径时
             if len(_item.path) > 1:
@@ -301,11 +308,13 @@ async def reinforce_memories(effective_k_list):
                         # 时间间隔越久，衰减因子越小，对应记忆的权重 / 影响力越低
                         decay_fact = math.exp(-0.02 * time_diff)
                         # 上下文增强系数：基于记忆显著性差异和时间衰减的得分调整项，用于精细化修正基础匹配得分，放大优质记忆的优势、降低低质记忆的权重
-                        ctx_boost = HYBRID_PARAMS["gamma"] * (reinforcement_sal - (linked_mem["salience"] or 0)) * decay_fact
+                        ctx_boost = HYBRID_PARAMS["gamma"] * (
+                                reinforcement_sal - (linked_mem["salience"] or 0)) * decay_fact
                         # 更新关联记忆的显著性
                         new_sal = max(0.0, min(1.0, (linked_mem["salience"] or 0) + ctx_boost))
                         # 更新关联记忆的显著性和最后访问时间
-                        db.execute("UPDATE memories SET salience = %s, last_seen_at = %s WHERE id = %s", (new_sal, now, u["node_id"]))
+                        db.execute("UPDATE memories SET salience = %s, last_seen_at = %s WHERE id = %s",
+                                   (new_sal, now, u["node_id"]))
 
             # 记录查询命中事件并触发动态更新
             await decay.on_query_hit(_item.id, _item.primary_sector, lambda t: embed(t, _item.primary_sector))
@@ -362,7 +371,7 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
         # 召回的记忆 ID 集合
         ids = set()
 
-        # =========== 第一路召回：BM25 召回（基于关键词匹配的传统检索方法，补充向量召回可能遗漏的相关记忆）===========
+        # =========== 第一路召回（可选）：BM25 召回（基于关键词匹配的传统检索方法，补充向量召回可能遗漏的相关记忆）===========
         bm25_ids = set()
         # 是否开启了 BM25 检索
         if filters.config.bm25_enable:
@@ -371,17 +380,19 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
                 order_by=["t.created_at DESC"],
                 limit=2000
             )
-            bm25_search_wrapped = timing(bm25_searcher.search)
-            bm25_ids = set(bm25_search_wrapped(query, docs=bm25_memories, top_k=top_k * 3))
+            bm25_search_timing_wrapped = timing(bm25_searcher.search)
+            bm25_ids = set(bm25_search_timing_wrapped(query, docs=bm25_memories, top_k=top_k * 3))
 
         # =========== 第二路召回：向量召回（相似度匹配逻辑）===========
         # 存储各扇区检索结果
         sector_result = {}
+        vector_search_ids = set()
         for sector in sectors:
             # 获取该扇区的查询向量
             query_vector = query_embed_with_sectors[sector]
             # 每个扇区返回 top_k × 3 个候选
             res: List[VectorSearch] = await vector_store.search(user, query_vector, sector, top_k * 3)
+            vector_search_ids.update([r.id for r in res])
             sector_result[sector] = res
 
         # 合并召回 ID，去重
@@ -403,30 +414,71 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
         adapt_exp = math.ceil(0.3 * top_k * (1 - avg_sim))
         # 实际的的查询数量：最终检索规模
         effective_k = top_k + adapt_exp
-        # 是否置信度高
-        high_conf = avg_sim >= 0.55
 
-        # =========== 第三路召回：图扩展召回（按需）===========
-        # 若平均相似度 < 0.55（低置信），触发图遍历扩展
+        # =========== 第三路召回：摘要召回（L2）===========
+        sessions: Sessions = await session_ops.session_search(user, query, top_k=effective_k)
+        session_search_dialogue_ids = set()
+        for session in sessions.sessions:
+            session_search_dialogue_ids.update(session.dialogue_ids)
+        ids.update(session_search_dialogue_ids)
+
+        # =========== 第四路召回：路标扩展召回（按需）===========
         expansion: List[Expansion] = []
-        if not high_conf:
+        waypoint_expanded_ids = set()
+        # 若平均相似度 < 0.55（低置信），触发路标遍历扩展
+        if avg_sim < 0.55:
             # 通过 waypoint 关系扩展
             expansion = await waypoints.expand_via_waypoints(list(ids), effective_k * 2)
             # 加入候选集
             for exp in expansion:
-                ids.add(exp.id)
+                waypoint_expanded_ids.add(exp.id)
+        ids.update(waypoint_expanded_ids)
+
+        # =========== 第五路召回：图扩展召回（可选）===========
+        graph_expanded_ids = set()
+        graph_candidate_scores = {}
+        if filters.config.graph_enable:
+            seed_ids = set(ids)
+            # 通过 topic/fact/entity 关系链进行扩展
+            graph_candidates = graph_search.expand_candidate_ids_via_graph(
+                user_id=user.id,
+                seed_memory_ids=seed_ids,
+                limit=effective_k * 2,
+                min_relation_confidence=0.5,
+            )
+            graph_expanded_ids = {c.id for c in graph_candidates}
+            graph_candidate_scores = {c.id: c.score for c in graph_candidates}
+            ids.update(graph_expanded_ids)
 
         # 获取候选记忆内容
         memories = mem_ops.find_mem_by_ids(list(ids))
 
-        # 提前计算每个候选的关键词重叠分数
-        res_list: List[IMemoryItemInfo] = []
+        # 计算每个候选的关键词重叠分数
         kw_scores = {}
+        # 记录记忆首次召回来源
+        mem_from = {}
+        # 记忆来源
+        from_rules = [
+            (bm25_ids, "bm25"),
+            (vector_search_ids, "vector"),
+            (session_search_dialogue_ids, "session"),
+            (waypoint_expanded_ids, "waypoint"),
+            (graph_expanded_ids, "graph"),
+        ]
         for mem in memories:
+            mem_id = mem["id"]
+            # 计算每个候选的关键词重叠分数
             overlap = compute_keyword_overlap(query_tokens, mem["content"])
-            kw_scores[mem["id"]] = overlap * 0.15
+            # 关键词重叠分数占比 15%
+            kw_scores[mem_id] = overlap * 0.15
+            # 记录记忆首次召回来源
+            mem_from[mem_id] = next(
+                (name for rule_ids, name in from_rules if mem_id in rule_ids),
+                "unknown"
+            )
 
         # 数据准备与过滤
+        res_list: List[IMemoryItemInfo] = []
         for mem in memories:
             # 记忆 ID
             mid = mem["id"]
@@ -483,6 +535,9 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
             rec_sc = decay.calc_recency_score_decay(last_seen_at)
             # 标签匹配得分
             tag_match_score = await compute_tag_match_score(mem, query_tokens)
+            # 图扩展分数：作为额外排序信号，避免高质量图候选被完全淹没
+            graph_score = graph_candidate_scores.get(mid, 0.0)
+            graph_bonus = min(0.12, graph_score * 0.12)
 
             # 组合权重最终得分: 相似度(35%) × 扇区惩罚，关键词重叠(20%)，Waypoint权重(15%)，时效性(10%)，标签匹配(20%)
             final_score = compute_hybrid_score(sim=sim_adjust,
@@ -491,6 +546,16 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
                                                rec_sc=rec_sc,
                                                kw_score=kw_scores.get(mid, 0),
                                                tag_match=tag_match_score)
+            final_score = max(0.0, min(1.0, final_score + graph_bonus))
+
+            metadata = json.loads(mem["meta"]) or {}
+            metadata.update({
+                "type": "memory",
+                "from": mem_from.get(mid, "unknown"),
+                "graph_score": graph_score,
+                "graph_bonus": graph_bonus,
+            })
+
             # 构建结果项
             item = IMemoryItemInfo(
                 id=mid,
@@ -504,7 +569,7 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
                 tags=json.loads(mem["tags"] or "[]"),
                 qa_role=mem.get("qa_role"),
                 qa_pair_id=mem.get("qa_pair_id"),
-                metadata=json.loads(mem["meta"] or {})
+                metadata=metadata
             )
             # 调试信息
             if filters.config.debug:
@@ -542,7 +607,10 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
         if filters.config and filters.config.user_profile_enable:
             user_profile = await user_profile_ops.get_user_profile(user, query_cache=True)
 
-        # 返回结果
+        # 是否启用会话摘要
+        effective_k_list = extract_sessions_if_necessary(sessions, filters, res_list, effective_k_list)
+
+        # 封装为 IMemorySearchResult，并返回结果
         memory_search_result = IMemorySearchResult(user_profile=user_profile, memories=effective_k_list)
         MEMORIES_CACHE.set(cache_key, memory_search_result)
         return memory_search_result
@@ -551,11 +619,89 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
         decay.dec_q()
 
 
+def extract_sessions_if_necessary(sessions: Sessions, filters: IMemoryFilters, memories: list[IMemoryItemInfo],
+                                  effective_k_list: List[IMemoryItemInfo]) -> List[IMemoryItemInfo]:
+    """
+    从 sessions 中提取会话级记忆，并根据配置决定是否将会话记忆加入结果列表，以及是否进行会话去重处理
+    :param sessions:
+    :param filters:
+    :param memories:
+    :param effective_k_list:
+    :return:
+    """
+    if filters.config and filters.config.session_summary_enable:
+        session_memories: list[IMemoryItemInfo] = []
+        for session in sessions.sessions:
+            session_dialogue_ids = session.dialogue_ids or []
+            session_similarity = max(0.0, min(1.0, float(session.similarity or 0.0)))
+            session_dialogue_count = len(session_dialogue_ids)
+            # 计算 session 平均得分
+            session_total_score = 0.0
+            session_total_salience = 0.0
+            session_tags = set()
+            session_mem_hits = 0
+            for m in memories:
+                if m.id in session_dialogue_ids:
+                    session_total_score += m.score
+                    session_total_salience += m.salience
+                    session_tags.update(m.tags)
+                    session_mem_hits += 1
+            # 平均得分 = 会话内命中记忆得分总和 / 会话内记忆命中数
+            mem_avg_score = max(0.0, (session_total_score / session_mem_hits) if session_mem_hits > 0 else 0.0)
+            # 平均显著性 = 会话内命中记忆显著性总和 / 会话内记忆命中数
+            session_avg_salience = max(
+                0.0,
+                (session_total_salience / session_mem_hits) if session_mem_hits > 0 else 0.0
+            )
+            # 覆盖率 = 当前候选中实际命中的原始记忆数 / 该 session 总 dialogue 数
+            coverage_ratio = (session_mem_hits / session_dialogue_count) if session_dialogue_count > 0 else 0.0
+            # session 分数融合：以摘要向量相似度为主，原始 mem 平均分和覆盖率为辅
+            session_score = max(
+                0.0,
+                min(1.0, 0.55 * session_similarity + 0.30 * mem_avg_score + 0.15 * coverage_ratio)
+            )
+
+            # 构建 session 级的记忆
+            session_mem = IMemoryItemInfo(
+                id=f"session:{session.id}",
+                content=session.summary,
+                score=session_score,
+                primary_sector="semantic",
+                path=session_dialogue_ids,
+                salience=session_avg_salience,
+                tags=list(session_tags),
+                metadata={
+                    "type": "session",
+                    "from": "session",
+                    "session_id": session.id,
+                    "session_similarity": session_similarity,
+                    "session_mem_hits": session_mem_hits,
+                    "session_dialogue_count": session_dialogue_count,
+                    "session_coverage_ratio": coverage_ratio,
+                    "session_mem_avg_score": mem_avg_score,
+                }
+            )
+            session_memories.append(session_mem)
+
+            # 会话去重
+            if filters.config.session_dedup_enable:
+                # 判断 dialogue_id 是否在 effective_k_list 中，如果在则移除，确保会话记忆与其包含的对话记忆不重复
+                effective_k_list = [
+                    mem for mem in effective_k_list
+                    if mem.id not in session.dialogue_ids
+                ]
+
+        # 按 score 从高到低排序
+        effective_k_list.extend(session_memories)
+        effective_k_list.sort(key=lambda x: x.score, reverse=True)
+
+    return effective_k_list
+
 
 async def calc_multi_vec_fusion_score(mid: str, qe: Dict[str, List[float]], weights: Dict[str, float]) -> float:
     """
     计算多向量融合相似度评分
-    通过对记忆的各扇区向量与查询向量进行余弦相似度计算，并根据权重进行加权平均，得到最终的融合相似度评分
+    通过对记忆的各扇区向量与查询向量进行余弦相似度计算，并根据权重进行加权平均，得到最终融合相似度评分
     该评分反映了记忆在多个维度（扇区）上与查询的相关性
     :param mid: 记忆 ID
     :param qe: 查询向量字典，键为扇区名称，值为对应的向量列表
@@ -628,7 +774,8 @@ def _promote_qa_assistant_answer(items: List[IMemoryItemInfo], query_sector: str
         )
 
     if not pair_row:
-        logger.info(f"[HSG] No paired assistant answer found for human memory {best_human.id} with qa_pair_id {best_human.qa_pair_id}")
+        logger.info(
+            f"[HSG] No paired assistant answer found for human memory {best_human.id} with qa_pair_id {best_human.qa_pair_id}")
         return items
 
     # 已在候选列表中：直接提升分数
@@ -642,12 +789,13 @@ def _promote_qa_assistant_answer(items: List[IMemoryItemInfo], query_sector: str
             return items
 
     # 不在候选列表中：动态追加
+    pair_id = pair_row.get("id")
     items.append(IMemoryItemInfo(
-        id=pair_row.get("id"),
+        id=pair_id,
         content=pair_row.get("content"),
         score=best_human.score + 0.2,
         primary_sector=pair_row.get("primary_sector") or query_sector,
-        path=[pair_row.get("id")],
+        path=[str(pair_id)] if pair_id else [],
         salience=pair_row.get("salience") or 0.0,
         last_seen_at=pair_row.get("last_seen_at"),
         tags=json.loads(pair_row.get("tags") or "[]"),

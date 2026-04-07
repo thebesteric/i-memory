@@ -66,7 +66,9 @@ class IMemoryFiltersConfig(BaseModel):
     """
     bm25_enable: bool = Field(default=True, description="是否启用 BM25 关键词检索")
     graph_enable: bool = Field(default=True, description="是否启用图检索")
-    user_profile_enable: bool = Field(default=True, description="是否返回用户画像")
+    user_profile_enable: bool = Field(default=False, description="是否返回用户画像")
+    session_summary_enable: bool = Field(default=True, description="是否启用会话摘要")
+    session_dedup_enable: bool = Field(default=False, description="是否启用会话摘要")
     debug: bool = Field(default=False, description="是否启用调试模式")
 
 

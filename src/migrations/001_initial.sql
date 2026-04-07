@@ -68,6 +68,7 @@ CREATE TABLE IF NOT EXISTS sessions
     id           TEXT PRIMARY KEY,
     user_id      TEXT,
     summary      TEXT,
+    vector       VECTOR(1536),
     dialogue_ids JSONB DEFAULT '[]',
     key_facts    JSONB DEFAULT '[]',
     created_at   TIMESTAMP,
@@ -78,6 +79,7 @@ COMMENT ON TABLE sessions IS '会话总结表';
 COMMENT ON COLUMN sessions.id IS '主键';
 COMMENT ON COLUMN sessions.user_id IS '用户标识';
 COMMENT ON COLUMN sessions.summary IS '会话摘要';
+COMMENT ON COLUMN sessions.vector IS '会话摘要的嵌入向量';
 COMMENT ON COLUMN sessions.dialogue_ids IS '相关对话标识列表';
 COMMENT ON COLUMN sessions.key_facts IS '会话中的关键事实列表';
 COMMENT ON COLUMN sessions.created_at IS '创建时间戳';

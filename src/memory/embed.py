@@ -5,6 +5,7 @@ import numpy as np
 
 from src.core.components import get_embed_model
 from src.core.mem_ops import mem_ops
+from src.tools.chunking import Chunk
 
 
 async def embed_batch(txt: str, sectors: List[str]) -> list[list[float]]:
@@ -23,7 +24,7 @@ async def embed(txt: str, sector: Optional[str] = None) -> List[float]:
     return (await embed_batch(txt, [sector] if sector else []))[0]
 
 
-async def embed_multi_sector(uid: str, txt: str, secs: List[str], chunks: Optional[List[dict]] = None) -> List[Dict[str, Any]]:
+async def embed_multi_sector(uid: str, txt: str, secs: List[str], chunks: Optional[List[Chunk]] = None) -> List[Dict[str, Any]]:
     """
     用于对同一文本在多个 sector（语义分区）下分别生成向量嵌入，并记录日志
     @param uid: 任务唯一标识

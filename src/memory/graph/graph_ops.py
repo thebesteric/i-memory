@@ -37,11 +37,12 @@ async def add_topic(user: IMemoryUser, topic: Topic, conn=None):
     :return:
     """
     now = datetime.datetime.now()
-    topic_id = str(uuid.uuid4())
-    topic.set_id(topic_id)
-
     # 对 summary 进行向量化
     vector = await embed_model.embed(topic.summary)
+
+    topic_id = str(uuid.uuid4())
+    topic.set_id(topic_id)
+    topic.set_vector(vector)
 
     db.execute(
         """
