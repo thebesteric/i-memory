@@ -64,6 +64,7 @@ class IMemoryGraphConfig(BaseModel):
     """图检索参数配置。"""
 
     enable: bool = Field(default=True, description="是否启用图检索")
+    type: Literal["recall", "precision", "custom"] = Field(default="precision", description="图检索类型")
     max_hops: int = Field(default=1, ge=1, le=4, description="图检索实体游走最大跳数")
     hop_decay: float = Field(default=0.8, ge=0.1, le=1.0, description="图检索每跳分数衰减系数")
     per_hop_limit: int = Field(default=200, ge=10, le=2000, description="图检索每跳保留候选上限")
@@ -77,6 +78,7 @@ class IMemoryGraphConfig(BaseModel):
         """
         return IMemoryGraphConfig(
             enable=True,
+            type="recall",
             max_hops=2,
             hop_decay=0.9,
             per_hop_limit=400,
@@ -91,6 +93,7 @@ class IMemoryGraphConfig(BaseModel):
         """
         return IMemoryGraphConfig(
             enable=True,
+            type="precision",
             max_hops=1,
             hop_decay=0.7,
             per_hop_limit=120,
@@ -104,10 +107,10 @@ class IMemoryFiltersConfig(BaseModel):
     记忆查询过滤器相关配置
     """
     bm25_enable: bool = Field(default=True, description="是否启用 BM25 关键词检索")
-    graph: IMemoryGraphConfig = Field(default_factory=IMemoryGraphConfig.precision_first, description="图检索配置")
     user_profile_enable: bool = Field(default=False, description="是否返回用户画像")
     session_summary_enable: bool = Field(default=True, description="是否启用会话摘要")
     session_dedup_enable: bool = Field(default=False, description="是否启用会话摘要")
+    graph: IMemoryGraphConfig = Field(default_factory=IMemoryGraphConfig.precision_first, description="图检索配置")
     debug: bool = Field(default=False, description="是否启用调试模式")
 
     @model_validator(mode="before")

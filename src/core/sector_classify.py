@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, ConfigDict
 from src.ai.model.bert.bert_manager import BertManager, BertIncrModel, LabelConfig, LabelBranchConfig
 from src.core.config import env
 
-logger = LogHelper.get_logger()
+logger = LogHelper.get_logger(title="[CLASSIFY]")
 
 
 class SectorCfg(BaseModel):

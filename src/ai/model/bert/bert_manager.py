@@ -13,7 +13,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import Dataset as TorchDataset, DataLoader
 from transformers import AutoModel, AutoTokenizer, PreTrainedModel, PreTrainedTokenizerBase, PreTrainedConfig
 
-logger = LogHelper.get_logger()
+logger = LogHelper.get_logger(title="[BERT]")
 
 DatasetType = Union[DatasetDict, Dataset, IterableDatasetDict, IterableDataset]
 

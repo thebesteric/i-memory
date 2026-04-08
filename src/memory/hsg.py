@@ -26,7 +26,7 @@ from src.memory.embed import embed_multi_sector, calc_mean_vec, embed, embed_bat
 from src.memory import graph_search
 from src.memory.memory_models import IMemoryFilters, IMemoryItemDebugInfo, IMemoryItemInfo, IMemoryUserIdentity, \
     IMemoryUser, QARole, \
-    IMemoryFiltersConfig, IMemorySearchResult
+    IMemoryFiltersConfig, IMemorySearchResult, IMemoryGraphConfig
 from src.core.user_summary import update_user_summary
 from src.memory.profile import user_profile_ops
 from src.memory.session import session_ops
@@ -38,7 +38,7 @@ from src.tools.keyword import compute_keyword_overlap, compute_token_overlap
 from src.tools.text import canonical_token_set
 from src.tools.vectors import vec_to_buf, cos_sim
 
-logger = LogHelper.get_logger()
+logger = LogHelper.get_logger(title="[HSG]")
 waypoints = Waypoints()
 db = get_db()
 decay = Decay(reinforce_on_query=True, regeneration_enabled=True)
@@ -137,7 +137,7 @@ async def add_hsg_memory(user_identity: IMemoryUserIdentity,
     if best_sim_mem_similarity:
         best_sim_content = best_sim_mem_similarity[1]["content"]
         best_sim_content = best_sim_content if len(best_sim_content) <= 20 else best_sim_content[:20] + "..."
-        logger.debug(f"[HSG] Maybe best similar memory: Sim: {best_sim_mem_similarity[0]}, Content: {best_sim_content}")
+        logger.info(f"Maybe best similar memory: Sim: {best_sim_mem_similarity[0]}, Content: {best_sim_content}")
 
     # 当前时间
     now = datetime.datetime.now()
@@ -152,7 +152,8 @@ async def add_hsg_memory(user_identity: IMemoryUserIdentity,
         content = best_sim_mem["content"]
         content = content if len(content) <= 20 else content[:20] + "..."
         logger.info(
-            f"[HSG] Found similar memory {best_sim_mem['id']} with {best_sim_mem_similarity[0]} for User: {user.id}, Content: {content}")
+            f"Found similar memory {best_sim_mem['id']} with {best_sim_mem_similarity[0]} for User: {user.id}, Content: {content}"
+        )
         # 提升显著性，但不超过 1.0
         boost = min(1.0, (best_sim_mem["salience"] or 0) + 0.15)
         # 更新最后访问时间和显著性
@@ -189,7 +190,7 @@ async def add_hsg_memory(user_identity: IMemoryUserIdentity,
         if cnt_res["c"] >= env.SECTOR_SIZE:
             cur_seg += 1
             db.execute("UPDATE segment SET current_segment=%s, updated_at=NOW()", (cur_seg,))
-            logger.info(f"[HSG] Rotated to segment [{cur_seg}]")
+            logger.info(f"Rotated to segment [{cur_seg}]")
 
         # 调用 extract_essence，生成摘要（内容长度 > 1000，模型调用）
         essence = await ExtractEssence(content=content, max_len=env.SUMMARY_MAX_LENGTH).extract()
@@ -260,7 +261,8 @@ async def add_hsg_memory(user_identity: IMemoryUserIdentity,
         await update_user_summary(user)
 
         logger.info(
-            f"[HSG] Added memory {mid} for User: {user.id}, Primary Sector: {cls_ret.primary}, Additional Sectors: {cls_ret.additional}, Salience: {init_sal}")
+            f"Added memory {mid} for User: {user.id}, Primary Sector: {cls_ret.primary}, Additional Sectors: {cls_ret.additional}, Salience: {init_sal}"
+        )
 
         # 返回新记忆的 id、内容、sector、分段数、salience 等信息
         return {
@@ -319,13 +321,13 @@ async def reinforce_memories(effective_k_list):
             # 记录查询命中事件并触发动态更新
             await decay.on_query_hit(_item.id, _item.primary_sector, lambda t: embed(t, _item.primary_sector))
         except Exception as e:
-            logger.warning(f"reinforce_memories failed for memory {_item.id}: {e}")
+            logger.warning(f"Reinforce_memories failed for memory {_item.id}: {e}")
 
 
 @timing
 async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilters = None) -> IMemorySearchResult:
     """
-    基于混合评分机制（内容相似度、关键词重叠、路标关联、时间衰减等）进行记忆检索
+    基于混合评分机制（内容相似度、关键词重叠、路标关联、图检索、时间衰减等）进行记忆检索
     @param query: 查询文本
     @param top_k: 返回的记忆数量
     @param filters: 过滤和调节参数
@@ -335,6 +337,11 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
     decay.inc_q()
     filters = filters or IMemoryFilters(user_identity=IMemoryUserIdentity())
     filters.config = filters.config or IMemoryFiltersConfig()
+    graph_cfg = filters.config.graph
+    if graph_cfg.type == "recall":
+        graph_cfg = IMemoryGraphConfig.recall_first()
+    elif graph_cfg.type == "precision":
+        graph_cfg = IMemoryGraphConfig.precision_first()
 
     user_identity = filters.user_identity
     # 用户合法性检查
@@ -351,7 +358,7 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
         if isinstance(entry, IMemorySearchResult):
             return entry
         if entry is not None:
-            logger.warning(f"[HSG] Ignore invalid cache payload for key={cache_key}: {type(entry)}")
+            logger.warning(f"Ignore invalid cache payload for key={cache_key}: {type(entry)}")
 
         # 判断查询属于哪个扇区
         query_classify: ClassifyResult = await sector_classifier.classify(content=query)
@@ -437,18 +444,18 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
         # =========== 第五路召回：图扩展召回（可选）===========
         graph_expanded_ids = set()
         graph_candidate_scores = {}
-        if filters.config.graph.enable:
+        if graph_cfg.enable:
             seed_ids = set(ids)
             # 通过 topic/fact/entity 关系链进行扩展
             graph_candidates = graph_search.expand_candidate_ids_via_graph(
                 user_id=user.id,
                 seed_memory_ids=seed_ids,
                 limit=effective_k * 2,
-                min_relation_confidence=filters.config.graph.min_relation_confidence,
-                max_hops=filters.config.graph.max_hops,
-                hop_decay=filters.config.graph.hop_decay,
-                per_hop_limit=filters.config.graph.per_hop_limit,
-                min_walk_score=filters.config.graph.min_walk_score,
+                min_relation_confidence=graph_cfg.min_relation_confidence,
+                max_hops=graph_cfg.max_hops,
+                hop_decay=graph_cfg.hop_decay,
+                per_hop_limit=graph_cfg.per_hop_limit,
+                min_walk_score=graph_cfg.min_walk_score,
             )
             graph_expanded_ids = {c.id for c in graph_candidates}
             graph_candidate_scores = {c.id: c.score for c in graph_candidates}
@@ -604,7 +611,8 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
             logger.warning(f"Failed to schedule reinforce_memories async task: {e}")
 
         logger.info(
-            f"[HSG] Query processed in {time.time() - start_q:.3f} seconds. Query: '{query}' Expected: {effective_k}, Actual: {len(effective_k_list)} returned.")
+            f"Query processed in {time.time() - start_q:.3f} seconds. Query: '{query}' Expected: {effective_k}, Actual: {len(effective_k_list)} returned."
+        )
 
         # 查询用户画像
         user_profile = None
@@ -779,7 +787,8 @@ def _promote_qa_assistant_answer(items: List[IMemoryItemInfo], query_sector: str
 
     if not pair_row:
         logger.info(
-            f"[HSG] No paired assistant answer found for human memory {best_human.id} with qa_pair_id {best_human.qa_pair_id}")
+            f"No paired assistant answer found for human memory {best_human.id} with qa_pair_id {best_human.qa_pair_id}"
+        )
         return items
 
     # 已在候选列表中：直接提升分数
@@ -789,7 +798,8 @@ def _promote_qa_assistant_answer(items: List[IMemoryItemInfo], query_sector: str
             item.primary_sector = item.primary_sector or query_sector
             item_content_preview = item.content if len(item.content) <= 20 else item.content[:20] + "..."
             logger.info(
-                f"[HSG] Promoted paired assistant memory[{item.id}] content: {item_content_preview} with score {item.score} based on human memory[{best_human.id}]")
+                f"Promoted paired assistant memory[{item.id}] content: {item_content_preview} with score {item.score} based on human memory[{best_human.id}]"
+            )
             return items
 
     # 不在候选列表中：动态追加

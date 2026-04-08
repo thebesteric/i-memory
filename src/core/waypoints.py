@@ -11,7 +11,7 @@ from src.core.mem_ops import mem_ops
 from src.memory.memory_models import IMemoryUserIdentity, IMemoryUser
 from src.tools.vectors import buf_to_vec, cos_sim
 
-logger = LogHelper.get_logger()
+logger = LogHelper.get_logger(title="[WAYPOINTS]")
 db = get_db()
 
 

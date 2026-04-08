@@ -16,7 +16,7 @@ from src.core.sector_classify import SECTOR_CONFIGS, SectorCfg
 from src.core.vector.base_vector_store import BaseVectorStore
 from src.tools.text import canonical_tokens_from_text
 
-logger = LogHelper.get_logger()
+logger = LogHelper.get_logger(title="[DECAY]")
 
 
 @singleton
@@ -280,7 +280,7 @@ class Decay:
             updated = True
 
         if updated:
-            logger.info("[DECAY] Memory %s reinforced on query hit", mem_id)
+            logger.info("Memory %s reinforced on query hit", mem_id)
 
     @timing
     async def apply_decay(self):
@@ -291,14 +291,14 @@ class Decay:
         """
         # 有活跃查询（“读优先”策略，保障在线响应），则跳过
         if self.active_q > 0:
-            logger.info(f"[DECAY] Skipped - {self.active_q} active queries")
+            logger.info(f"Skipped - {self.active_q} active queries")
             return
 
         # 当前衰减时间小于 cooldown 定义的时间（避免短时间重复跑批），则跳过
         now_ts = int(time.time() * 1000)
         if now_ts - self.last_decay < self.cooldown:
             rem = (self.cooldown - (now_ts - self.last_decay)) / 1000
-            logger.info(f"[DECAY] Skipped - cooldown active ({rem:.0f}s left)")
+            logger.info(f"Skipped - cooldown active ({rem:.0f}s left)")
             return
 
         # 记录本次衰减时间戳
@@ -431,4 +431,4 @@ class Decay:
 
         # 计算耗时
         dur = (time.time() - t0) * 1000
-        logger.info(f"[DECAY] {tot_chg}/{tot_proc} | tiers: {tier_counts} | comp_count: {tot_comp} fp_count: {tot_fp} | {dur:.1f}ms")
+        logger.info(f"{tot_chg}/{tot_proc} | tiers: {tier_counts} | comp_count: {tot_comp} fp_count: {tot_fp} | {dur:.1f}ms")

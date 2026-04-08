@@ -13,7 +13,7 @@ import logging
 
 from src.core.config import env
 
-logger = LogHelper.get_logger()
+logger = LogHelper.get_logger(title="[DB]")
 
 
 def _get_caller_info(skip_modules: Tuple[str, ...] = ("src.core.db",)) -> str:
@@ -32,7 +32,7 @@ def _get_caller_info(skip_modules: Tuple[str, ...] = ("src.core.db",)) -> str:
         module = inspect.getmodule(fi.frame)
         return f"{module.__name__ if module else fi.filename}:{fi.function}:{fi.lineno}"
     except Exception as e:
-        logger.warning(f"[DB] Failed to get caller_info: {e}")
+        logger.warning(f"Failed to get caller_info: {e}")
         return "unknown:unknown:0"
 
 
@@ -64,7 +64,7 @@ class DB:
                 **self.conn_kwargs,
             )
             logger.info(
-                f"[DB] Connection pool created for [{env.POSTGRES_DB_NAME}] "
+                f"Connection pool created for [{env.POSTGRES_DB_NAME}] "
                 f"(min={self._pool_min_conn}, max={self._pool_max_conn})"
             )
             return self._pool
@@ -106,12 +106,12 @@ class DB:
             cur.execute(f"SELECT 1 FROM pg_database WHERE datname = %s", (env.POSTGRES_DB_NAME,))
             exists = cur.fetchone()
             if not exists:
-                logger.info(f"[DB] Creating database {env.POSTGRES_DB_NAME} successfully.")
+                logger.info(f"Creating database {env.POSTGRES_DB_NAME} successfully.")
                 cur.execute(f'CREATE DATABASE "{env.POSTGRES_DB_NAME}"')
             cur.close()
             conn.close()
         except Exception as e:
-            logger.error(f"[DB] Failed to create database {env.POSTGRES_DB_NAME}: {e}")
+            logger.error(f"Failed to create database {env.POSTGRES_DB_NAME}: {e}")
             raise
 
     def _run_migrations(self, conn: psycopg2.extensions.connection):
@@ -130,13 +130,13 @@ class DB:
                 for f in files:
                     c.execute("SELECT 1 FROM _migrations WHERE name = %s", (f,))
                     if not c.fetchone():
-                        logger.info(f"[DB] Applying migration {f}")
+                        logger.info(f"Applying migration {f}")
                         sql = (mig_path / f).read_text(encoding="utf-8")
                         for statement in [s.strip() for s in sql.split(';') if s.strip()]:
                             try:
                                 c.execute(statement)
                             except Exception as e:
-                                logger.error(f"[DB] Migration statement failed: {statement}, Error: {e}")
+                                logger.error(f"Migration statement failed: {statement}, Error: {e}")
                                 conn.rollback()
                                 raise
                         c.execute("INSERT INTO _migrations (name, applied_at) VALUES (%s, %s)", (f, int(time.time())))
@@ -170,12 +170,12 @@ class DB:
                 affected_rows = cur.rowcount
                 # include caller info in the log so it's clear who invoked the DB operation
                 caller = _get_caller_info() if logger.isEnabledFor(logging.INFO) else "unknown:unknown:0"
-                logger.info(f"[DB] (caller: {caller}) Execution successful, affected rows: {affected_rows}")
+                logger.info(f"Caller: ({caller}) Execution successful, affected rows: {affected_rows}")
                 return affected_rows
         except Exception as e:
             conn.rollback()
             caller = _get_caller_info() if logger.isEnabledFor(logging.INFO) else "unknown:unknown:0"
-            raise Exception(f"[DB] (caller: {caller}) Execution failed: {str(e)}") from e
+            raise Exception(f"Caller: ({caller}) Execution failed: {str(e)}") from e
         finally:
             if not external_conn:
                 self.put_conn(conn)
@@ -242,7 +242,7 @@ class DB:
         if self._pool:
             self._pool.closeall()
             self._pool = None
-            logger.info("[DB] Database connection pool closed.")
+            logger.info("Database connection pool closed.")
 
     def __enter__(self):
         """

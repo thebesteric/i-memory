@@ -7,6 +7,8 @@ def test_graph_presets_recall_vs_precision():
 
     assert recall_cfg.enable is True
     assert precision_cfg.enable is True
+    assert recall_cfg.type == "recall"
+    assert precision_cfg.type == "precision"
     assert recall_cfg.max_hops >= precision_cfg.max_hops
     assert recall_cfg.per_hop_limit >= precision_cfg.per_hop_limit
     assert recall_cfg.min_relation_confidence <= precision_cfg.min_relation_confidence
@@ -33,12 +35,14 @@ def test_filters_config_merges_legacy_flat_graph_fields():
 
 def test_filters_config_default_graph_is_precision_first():
     cfg = IMemoryFiltersConfig()
+    precision = IMemoryGraphConfig.precision_first()
 
     assert cfg.graph.enable is True
-    assert cfg.graph.max_hops == IMemoryGraphConfig.precision_first().max_hops
-    assert cfg.graph.hop_decay == IMemoryGraphConfig.precision_first().hop_decay
-    assert cfg.graph.per_hop_limit == IMemoryGraphConfig.precision_first().per_hop_limit
-    assert cfg.graph.min_walk_score == IMemoryGraphConfig.precision_first().min_walk_score
-    assert cfg.graph.min_relation_confidence == IMemoryGraphConfig.precision_first().min_relation_confidence
+    assert cfg.graph.type == "precision"
+    assert cfg.graph.max_hops == precision.max_hops
+    assert cfg.graph.hop_decay == precision.hop_decay
+    assert cfg.graph.per_hop_limit == precision.per_hop_limit
+    assert cfg.graph.min_walk_score == precision.min_walk_score
+    assert cfg.graph.min_relation_confidence == precision.min_relation_confidence
 
 

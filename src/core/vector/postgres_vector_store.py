@@ -11,7 +11,7 @@ from src.core.config import env
 from src.core.vector.base_vector_store import BaseVectorStore, VectorRow, VectorSearch
 from src.memory.memory_models import IMemoryUser
 
-logger = LogHelper.get_logger()
+logger = LogHelper.get_logger(title="[POSTGRES]")
 
 
 @singleton
@@ -42,7 +42,7 @@ class PostgresVectorStore(BaseVectorStore):
                 async with pool.acquire() as conn:
                     # 确认 pgvector 扩展已启用
                     await conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
-                    logger.info("pgvector extension enabled")
+                    logger.info("Plugin pgvector extension enabled")
 
                     # 初始化向量表结构
                     await conn.execute(f"""

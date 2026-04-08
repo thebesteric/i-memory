@@ -7,7 +7,7 @@ import torch
 from agile.utils import LogHelper, singleton
 from sentence_transformers import SentenceTransformer
 
-logger = LogHelper.get_logger()
+logger = LogHelper.get_logger(title="[EMBED]")
 
 
 class EmbedManager:

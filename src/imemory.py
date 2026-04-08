@@ -16,7 +16,7 @@ from src.memory.hsg import query_hsg_memories
 from src.memory.memory_models import IMemoryConfig, IMemoryFilters, IMemoryUserIdentity, QARole, IMemoryUser, IMemorySearchResult
 from src.ops.ingest import ingest_document
 
-logger = LogHelper.get_logger()
+logger = LogHelper.get_logger(title="[IMEMORY]")
 
 
 @singleton
