@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 from src.memory.graph_search import GraphExpansionCandidate
 from src.memory.hsg import query_hsg_memories
-from src.memory.memory_models import IMemoryFilters, IMemoryFiltersConfig, IMemoryUserIdentity
+from src.memory.memory_models import IMemoryFilters, IMemoryFiltersConfig, IMemoryGraphConfig, IMemoryUserIdentity
 from src.memory.session.session_models import Sessions
 
 
@@ -39,11 +39,13 @@ def test_query_hsg_memories_uses_graph_candidate_scores(monkeypatch):
     monkeypatch.setattr(hsg.sector_classifier, "classify", lambda *args, **kwargs: _return(SimpleNamespace(primary="semantic")))
     monkeypatch.setattr(hsg.vector_store, "search", lambda *args, **kwargs: _return([]))
     monkeypatch.setattr(hsg.waypoints, "expand_via_waypoints", lambda *args, **kwargs: _return([]))
-    monkeypatch.setattr(
-        hsg.graph_search,
-        "expand_candidate_ids_via_graph",
-        lambda *args, **kwargs: [GraphExpansionCandidate(id="m3", score=0.9)],
-    )
+    captured_graph_kwargs = {}
+
+    def _fake_expand_candidate_ids_via_graph(*args, **kwargs):
+        captured_graph_kwargs.update(kwargs)
+        return [GraphExpansionCandidate(id="m3", score=0.9)]
+
+    monkeypatch.setattr(hsg.graph_search, "expand_candidate_ids_via_graph", _fake_expand_candidate_ids_via_graph)
     monkeypatch.setattr(
         hsg.mem_ops,
         "find_mem_by_ids",
@@ -76,7 +78,14 @@ def test_query_hsg_memories_uses_graph_candidate_scores(monkeypatch):
         user_identity=IMemoryUserIdentity(tenant_key="t1", project_key="p1", user_key="u1"),
         config=IMemoryFiltersConfig(
             bm25_enable=False,
-            graph_enable=True,
+            graph=IMemoryGraphConfig(
+                enable=True,
+                max_hops=2,
+                hop_decay=0.7,
+                per_hop_limit=123,
+                min_walk_score=0.08,
+                min_relation_confidence=0.66,
+            ),
             user_profile_enable=False,
             session_summary_enable=False,
             session_dedup_enable=False,
@@ -91,6 +100,11 @@ def test_query_hsg_memories_uses_graph_candidate_scores(monkeypatch):
     assert result.memories[0].metadata["from"] == "graph"
     assert result.memories[0].metadata["graph_score"] == 0.9
     assert result.memories[0].metadata["graph_bonus"] > 0.0
+    assert captured_graph_kwargs["max_hops"] == 2
+    assert captured_graph_kwargs["hop_decay"] == 0.7
+    assert captured_graph_kwargs["per_hop_limit"] == 123
+    assert captured_graph_kwargs["min_walk_score"] == 0.08
+    assert captured_graph_kwargs["min_relation_confidence"] == 0.66
 
 
 def _run(coro):

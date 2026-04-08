@@ -14,7 +14,7 @@ from src.memory.graph import graph_builder
 from src.memory.session import session_builder
 from src.memory.profile import user_profile_builder
 
-logger = LogHelper.get_logger()
+logger = LogHelper.get_logger(title="[TASKS]")
 
 
 @dataclass(frozen=True)
@@ -111,9 +111,9 @@ def _build_job_definitions() -> list[JobDefinition]:
 
 def _scheduler_listener(event: JobExecutionEvent):
     if event.exception:
-        logger.error(f"[TASKS] Job failed: id={event.job_id}", exc_info=event.exception)
+        logger.error(f"Job failed: id={event.job_id}", exc_info=event.exception)
     elif event.code == EVENT_JOB_EXECUTED:
-        logger.debug(f"[TASKS] Job executed: id={event.job_id}")
+        logger.debug(f"Job executed: id={event.job_id}")
 
 
 def _register_jobs(scheduler: AsyncIOScheduler):
@@ -137,7 +137,7 @@ def _register_jobs(scheduler: AsyncIOScheduler):
             coalesce=job.coalesce,
             misfire_grace_time=job.misfire_grace_time,
         )
-        logger.info(f"[TASKS] Registered job: id={job.id}, trigger={job.trigger_type}, args={job.trigger_args}")
+        logger.info(f"Registered job: id={job.id}, trigger={job.trigger_type}, args={job.trigger_args}")
 
 
 def start_background_tasks() -> AsyncIOScheduler:
@@ -149,7 +149,7 @@ def start_background_tasks() -> AsyncIOScheduler:
     )
     _register_jobs(scheduler)
     scheduler.start()
-    logger.info(f"[TASKS] Scheduler started, timezone={timezone}")
+    logger.info(f"Scheduler started, timezone={timezone}")
 
     # 是否开启图构建
     graph_build_enable = getattr(env, "GRAPH_BUILD_ENABLE", True)
@@ -158,9 +158,9 @@ def start_background_tasks() -> AsyncIOScheduler:
             graph_worker_count = getattr(env, "GRAPH_WORKER_COUNT", 3)
             for i in range(graph_worker_count):
                 asyncio.create_task(graph_builder.process_user_queue())
-            logger.info(f"[TASKS] Graph Started {graph_worker_count} process_user_queue workers.")
+            logger.info(f"Graph Started {graph_worker_count} process_user_queue workers.")
         except Exception as e:
-            logger.error(f"[TASKS] Graph Failed to start process_user_queue workers: {e}")
+            logger.error(f"Graph Failed to start process_user_queue workers: {e}")
 
     return scheduler
 
@@ -171,4 +171,4 @@ async def stop_background_tasks(scheduler: AsyncIOScheduler | None):
 
     if scheduler.running:
         scheduler.shutdown(wait=False)
-        logger.info("[TASKS] Scheduler stopped")
+        logger.info("Scheduler stopped")

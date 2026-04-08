@@ -2,7 +2,7 @@ import datetime
 from typing import Any, Literal
 
 from agile.utils.pydantic_extension import BaseModelEnhance
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
 from src.memory.profile.user_profile_models import UserProfile
 
@@ -28,7 +28,7 @@ class IMemoryUserIdentity(BaseModel):
             _id=user.id,
             tenant_key=user.tenant_key,
             project_key=user.project_key,
-            user_key=user.user_key,
+            user_key=user.user_key or "anonymous",
         )
 
     @property
@@ -60,16 +60,83 @@ class IMemoryConfig(BaseModel):
         return IMemoryConfig()
 
 
+class IMemoryGraphConfig(BaseModel):
+    """图检索参数配置。"""
+
+    enable: bool = Field(default=True, description="是否启用图检索")
+    max_hops: int = Field(default=1, ge=1, le=4, description="图检索实体游走最大跳数")
+    hop_decay: float = Field(default=0.8, ge=0.1, le=1.0, description="图检索每跳分数衰减系数")
+    per_hop_limit: int = Field(default=200, ge=10, le=2000, description="图检索每跳保留候选上限")
+    min_walk_score: float = Field(default=0.05, ge=0.0, le=1.0, description="图检索游走最小分数阈值")
+    min_relation_confidence: float = Field(default=0.5, ge=0.0, le=1.0, description="图关系最小置信度阈值")
+
+    @staticmethod
+    def recall_first() -> "IMemoryGraphConfig":
+        """
+        召回优先预设：放宽阈值并提高扩展规模
+        """
+        return IMemoryGraphConfig(
+            enable=True,
+            max_hops=2,
+            hop_decay=0.9,
+            per_hop_limit=400,
+            min_walk_score=0.02,
+            min_relation_confidence=0.4,
+        )
+
+    @staticmethod
+    def precision_first() -> "IMemoryGraphConfig":
+        """
+        精度优先预设：收紧阈值并减少扩展规模
+        """
+        return IMemoryGraphConfig(
+            enable=True,
+            max_hops=1,
+            hop_decay=0.7,
+            per_hop_limit=120,
+            min_walk_score=0.1,
+            min_relation_confidence=0.65,
+        )
+
+
 class IMemoryFiltersConfig(BaseModel):
     """
     记忆查询过滤器相关配置
     """
     bm25_enable: bool = Field(default=True, description="是否启用 BM25 关键词检索")
-    graph_enable: bool = Field(default=True, description="是否启用图检索")
+    graph: IMemoryGraphConfig = Field(default_factory=IMemoryGraphConfig.precision_first, description="图检索配置")
     user_profile_enable: bool = Field(default=False, description="是否返回用户画像")
     session_summary_enable: bool = Field(default=True, description="是否启用会话摘要")
     session_dedup_enable: bool = Field(default=False, description="是否启用会话摘要")
     debug: bool = Field(default=False, description="是否启用调试模式")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _merge_legacy_graph_fields(cls, data: Any):
+        if not isinstance(data, dict):
+            return data
+
+        graph_data = dict(data.get("graph") or {})
+
+        if "graph_enable" in data and "enable" not in graph_data:
+            graph_data["enable"] = data["graph_enable"]
+
+        legacy_to_new = {
+            "graph_max_hops": "max_hops",
+            "graph_hop_decay": "hop_decay",
+            "graph_per_hop_limit": "per_hop_limit",
+            "graph_min_walk_score": "min_walk_score",
+            "graph_min_relation_confidence": "min_relation_confidence",
+        }
+        for legacy_key, graph_key in legacy_to_new.items():
+            if legacy_key in data and graph_key not in graph_data:
+                graph_data[graph_key] = data[legacy_key]
+
+        if graph_data:
+            data = dict(data)
+            data["graph"] = graph_data
+
+        return data
 
 
 class IMemoryFilters(BaseModel):

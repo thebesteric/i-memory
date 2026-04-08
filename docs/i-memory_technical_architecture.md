@@ -359,10 +359,21 @@ sequenceDiagram
 
 ## 10.2 过滤器模型
 
-位于 `src/memory/models/memory_models.py`：
-位于 `src/memory/models/memory_models.py`：
+位于 `src/memory/memory_models.py`：
 
-- `IMemoryFilters`：`user_identity/sectors/min_salience/query_mode/debug`
+- `IMemoryFilters`：`user_identity/sectors/min_salience/query_mode/config`
+- `IMemoryFiltersConfig.graph`：图检索专属配置，类型为 `IMemoryGraphConfig`
+  - `enable`
+  - `max_hops`
+  - `hop_decay`
+  - `per_hop_limit`
+  - `min_walk_score`
+  - `min_relation_confidence`
+
+图检索预设：
+
+- `IMemoryGraphConfig.recall_first()`：召回优先
+- `IMemoryGraphConfig.precision_first()`：精度优先
 
 ## 10.3 返回模型
 
@@ -451,7 +462,17 @@ sequenceDiagram
   "limit": 5,
   "query_mode": "prefer",
   "filters": {
-    "user_identity": {"user_key": "test_user", "tenant_key": "test_tenant", "project_key": "test_project"}
+    "user_identity": {"user_key": "test_user", "tenant_key": "test_tenant", "project_key": "test_project"},
+    "config": {
+      "graph": {
+        "enable": true,
+        "max_hops": 2,
+        "hop_decay": 0.8,
+        "per_hop_limit": 200,
+        "min_walk_score": 0.05,
+        "min_relation_confidence": 0.5
+      }
+    }
   }
 }
 ```
@@ -461,6 +482,7 @@ sequenceDiagram
 - 方案 B 下，建议调用方只传 `qa_role`，由系统自动配对
 - 若你希望完全复用历史行为，可显式设置 `query_mode = "vector"`
 - 对非对话型内容可不传 QA 字段，系统仍按通用记忆处理
+- 图检索可按需使用 `IMemoryGraphConfig.recall_first()` / `precision_first()` 作为 presets
 
 ---
 

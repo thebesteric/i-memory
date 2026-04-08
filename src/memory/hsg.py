@@ -437,14 +437,18 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
         # =========== 第五路召回：图扩展召回（可选）===========
         graph_expanded_ids = set()
         graph_candidate_scores = {}
-        if filters.config.graph_enable:
+        if filters.config.graph.enable:
             seed_ids = set(ids)
             # 通过 topic/fact/entity 关系链进行扩展
             graph_candidates = graph_search.expand_candidate_ids_via_graph(
                 user_id=user.id,
                 seed_memory_ids=seed_ids,
                 limit=effective_k * 2,
-                min_relation_confidence=0.5,
+                min_relation_confidence=filters.config.graph.min_relation_confidence,
+                max_hops=filters.config.graph.max_hops,
+                hop_decay=filters.config.graph.hop_decay,
+                per_hop_limit=filters.config.graph.per_hop_limit,
+                min_walk_score=filters.config.graph.min_walk_score,
             )
             graph_expanded_ids = {c.id for c in graph_candidates}
             graph_candidate_scores = {c.id: c.score for c in graph_candidates}

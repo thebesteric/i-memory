@@ -35,14 +35,14 @@ testing = ["bitsandbytes", "datasets", "diffusers", "evaluate", "parameterized",
 
 [[package]]
 name = "agile"
-version = "0.1.10"
+version = "0.1.11"
 description = "An easy-to-use general-purpose Python utility toolkits"
 optional = false
 python-versions = "<4.0.0,>=3.12"
 groups = ["main"]
 files = [
-    {file = "agile-0.1.10-py3-none-any.whl", hash = "sha256:904332fa84e37ff01a807f908560eab3b1641cf8c4b7b175e63a312e72884542"},
-    {file = "agile-0.1.10.tar.gz", hash = "sha256:6900ece4df23fa9046d8357200f1857dc76a405c1531a1f89b79e9940f1a440c"},
+    {file = "agile-0.1.11-py3-none-any.whl", hash = "sha256:609903e4a20e222e98402c8afa26b4205b6983f09d50e0009c80a582d3f81269"},
+    {file = "agile-0.1.11.tar.gz", hash = "sha256:035dd1e173e90434a59e955e0e14d570c4a9b4217fad4e2765b41afd1c68a9d8"},
 ]
 
 [package.dependencies]
@@ -50,7 +50,7 @@ build = ">=1.4.2,<2.0.0"
 cachetools = ">=7.0.5,<8.0.0"
 colorlog = ">=6.10.1,<7.0.0"
 jieba = ">=0.42.1,<0.43.0"
-langchain = ">=1.2.14,<2.0.0"
+langchain = ">=1.2.15,<2.0.0"
 numpy = ">=2.4.4,<3.0.0"
 pydantic = ">=2.12.5,<3.0.0"
 pymilvus = ">=2.6.11,<3.0.0"
@@ -1782,19 +1782,19 @@ files = [
 
 [[package]]
 name = "langchain"
-version = "1.2.14"
+version = "1.2.15"
 description = "Building applications with LLMs through composability"
 optional = false
 python-versions = "<4.0.0,>=3.10.0"
 groups = ["main"]
 files = [
-    {file = "langchain-1.2.14-py3-none-any.whl", hash = "sha256:96da6d7338d5a6fc41eb4ec0db83f7ef5d03bb5efd17bb269f34ba4378ebdb4d"},
-    {file = "langchain-1.2.14.tar.gz", hash = "sha256:fc5511e8f8af7efee9e5a144da4392d700d627b301d240470db97272940ad317"},
+    {file = "langchain-1.2.15-py3-none-any.whl", hash = "sha256:e349db349cb3e9550c4044077cf90a1717691756cc236438404b23500e615874"},
+    {file = "langchain-1.2.15.tar.gz", hash = "sha256:1717b6719daefae90b2728314a5e2a117ff916291e2862595b6c3d6fba33d652"},
 ]
 
 [package.dependencies]
 langchain-core = ">=1.2.10,<2.0.0"
-langgraph = ">=1.1.1,<1.2.0"
+langgraph = ">=1.1.5,<1.2.0"
 pydantic = ">=2.7.4,<3.0.0"
 
 [package.extras]
@@ -1875,20 +1875,20 @@ tiktoken = ">=0.7.0,<1.0.0"
 
 [[package]]
 name = "langgraph"
-version = "1.1.1"
+version = "1.1.6"
 description = "Building stateful, multi-actor applications with LLMs"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "langgraph-1.1.1-py3-none-any.whl", hash = "sha256:d0cc8d347131cbfc010e65aad9b0f1afbd0e151f470c288bec1f3df8336c50c6"},
-    {file = "langgraph-1.1.1.tar.gz", hash = "sha256:cd6282efc657c955b41bff6bd9693de58137ad18f7e7f16b4d17c7d2118d53e1"},
+    {file = "langgraph-1.1.6-py3-none-any.whl", hash = "sha256:fdbf5f54fa5a5a4c4b09b7b5e537f1b2fa283d2f0f610d3457ddeecb479458b9"},
+    {file = "langgraph-1.1.6.tar.gz", hash = "sha256:1783f764b08a607e9f288dbcf6da61caeb0dd40b337e5c9fb8b412341fbc0b60"},
 ]
 
 [package.dependencies]
 langchain-core = ">=0.1"
 langgraph-checkpoint = ">=2.1.0,<5.0.0"
-langgraph-prebuilt = ">=1.0.8,<1.1.0"
+langgraph-prebuilt = ">=1.0.9,<1.1.0"
 langgraph-sdk = ">=0.3.0,<0.4.0"
 pydantic = ">=2.7.4"
 xxhash = ">=3.5.0"
@@ -1911,14 +1911,14 @@ ormsgpack = ">=1.12.0"
 
 [[package]]
 name = "langgraph-prebuilt"
-version = "1.0.8"
+version = "1.0.9"
 description = "Library with high-level APIs for creating and executing LangGraph agents and tools."
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "langgraph_prebuilt-1.0.8-py3-none-any.whl", hash = "sha256:d16a731e591ba4470f3e313a319c7eee7dbc40895bcf15c821f985a3522a7ce0"},
-    {file = "langgraph_prebuilt-1.0.8.tar.gz", hash = "sha256:0cd3cf5473ced8a6cd687cc5294e08d3de57529d8dd14fdc6ae4899549efcf69"},
+    {file = "langgraph_prebuilt-1.0.9-py3-none-any.whl", hash = "sha256:776c8e3154a5aef5ad0e5bf3f263f2dcaab3983786cc20014b7f955d99d2d1b2"},
+    {file = "langgraph_prebuilt-1.0.9.tar.gz", hash = "sha256:93de7512e9caade4b77ead92428f6215c521fdb71b8ffda8cd55f0ad814e64de"},
 ]
 
 [package.dependencies]
@@ -5352,4 +5352,4 @@ cffi = ["cffi (>=1.17,<2.0) ; platform_python_implementation != \"PyPy\" and pyt
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<3.15"
-content-hash = "0393cc3d228c830c2cd368d7af2aa9cd35a127e4ed2361466b091b14a4e7a392"
+content-hash = "f872eab0de7dcd287e00bed054d17d1dfad1a578f99fb41bcfa5c4311885e652"

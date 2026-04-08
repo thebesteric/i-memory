@@ -117,7 +117,17 @@ query → embed → vector search → scoring → decay → resonance → reinfo
   "limit": 5,
   "query_mode": "prefer",
   "filters": {
-    "user_identity": {"user_key": "test_user", "tenant_key": "test_tenant", "project_key": "test_project"}
+    "user_identity": {"user_key": "test_user", "tenant_key": "test_tenant", "project_key": "test_project"},
+    "config": {
+      "graph": {
+        "enable": true,
+        "max_hops": 2,
+        "hop_decay": 0.8,
+        "per_hop_limit": 200,
+        "min_walk_score": 0.05,
+        "min_relation_confidence": 0.5
+      }
+    }
   }
 }
 ```
