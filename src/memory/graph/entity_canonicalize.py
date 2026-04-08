@@ -24,7 +24,7 @@ class EntityCanonicalize:
         # 嵌入模型
         self.embed_model: BaseEmbedModel = get_embed_model()
         # 加载标准化实体
-        self.canonical_entity_cache: dict[str, dict[str, CanonicalEntity]] = self.load_canonical_entities()
+        self.canonical_entity_cache: dict[str, dict[str, CanonicalEntity]] = {}
         # 相似度阈值，超过该值则认为是同一实体
         self.threshold = threshold
         # canonical_text -> embedding
@@ -61,7 +61,8 @@ class EntityCanonicalize:
 
         return canonical_entity_cache
 
-    def _canonicalize_entity(self, user: IMemoryUser, entity: Entity, vector: list[float], conn=None) -> CanonicalEntity:
+    def _canonicalize_entity(self, user: IMemoryUser, entity: Entity, vector: list[float],
+                             conn=None) -> CanonicalEntity:
         """
         标准化实体对象
         :param user: 用户
@@ -76,7 +77,8 @@ class EntityCanonicalize:
         # 写入数据库
         self.db.execute(
             """
-            INSERT INTO graph_canonical_entities (id, user_id, name, entity_type, entity_label, vector, occurrence_count, first_seen_at, last_seen_at,
+            INSERT INTO graph_canonical_entities (id, user_id, name, entity_type, entity_label, vector,
+                                                  occurrence_count, first_seen_at, last_seen_at,
                                                   created_at, updated_at)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (user_id, name, entity_type) DO NOTHING
@@ -117,6 +119,9 @@ class EntityCanonicalize:
         :param conn: 数据库连接对象
         :return:
         """
+        if not self.canonical_entity_cache:
+            self.canonical_entity_cache = self.load_canonical_entities()
+
         # 查询缓存
         if entity.canonical_id:
             return self.canonical_entity_cache.get(user.id, {}).get(entity.canonical_id)
@@ -139,7 +144,8 @@ class EntityCanonicalize:
 
         # 相似度最高的实体的阈值 >= 阈值
         if best_similarity and best_similarity[1] >= self.threshold:
-            logger.info(f"[GRAPH] Entity '{entity.text}' matched with canonical entity '{best_similarity[0].name}', similarity: {best_similarity[1]} ")
+            logger.info(
+                f"[GRAPH] Entity '{entity.text}' matched with canonical entity '{best_similarity[0].name}', similarity: {best_similarity[1]} ")
             return best_similarity[0]
 
         # 将实体标准化操作
