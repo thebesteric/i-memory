@@ -5,6 +5,22 @@ from pydantic import BaseModel, Field
 from src.memory.memory_models import IMemoryFilters, IMemoryUserIdentity, QARole
 
 
+class AuthRegisterRequest(BaseModel):
+    """
+    用户注册请求模型
+    """
+    tenant_key: str = Field(default=..., description="租户标识")
+    project_key: str = Field(default=..., description="项目标识")
+    user_key: str = Field(default=..., description="用户标识")
+
+    def to_identity_model(self) -> IMemoryUserIdentity:
+        return IMemoryUserIdentity(
+            tenant_key=self.tenant_key,
+            project_key=self.project_key,
+            user_key=self.user_key,
+        )
+
+
 class AddMemoryRequest(BaseModel):
     """
     添加记忆请求模型

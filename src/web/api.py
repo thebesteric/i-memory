@@ -3,7 +3,9 @@ import inspect
 import sys
 import time
 from contextlib import asynccontextmanager
+from typing import cast
 
+from agile.commons.biz_error import BizError
 from agile.utils import LogHelper
 from agile.web import R
 from fastapi import FastAPI, Request
@@ -21,7 +23,7 @@ sys.path.append(project_root)
 from src.core.config import env
 from src.core.components import get_vector_store
 from src.memory.tasks import start_background_tasks, stop_background_tasks
-from src.web.routes import health_router, memory_router, graph_router
+from src.web.routes import health_router, memory_router, graph_router, auth_router
 
 logger = LogHelper.get_logger()
 
@@ -85,26 +87,40 @@ def create_app() -> FastAPI:
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
         path = str(request.url)
+        path_dict = {"path": path}
         # 处理 HTTP 异常
         if isinstance(exc, HTTPException):
             logger.error(f"HTTP 异常信息捕获: Path={request.url}, Status={exc.status_code}, Detail={exc.detail}")
             return JSONResponse(
                 status_code=exc.status_code,
-                content=R.error().set_code(exc.status_code).set_message(str(exc.detail)).set_data({"path": path}).model_dump()
+                content=R.error().set_code(exc.status_code).set_message(str(exc.detail)).set_data(
+                    path_dict).model_dump()
             )
         # 处理请求验证异常
         elif isinstance(exc, RequestValidationError):
             logger.error(f"请求验证异常信息捕获: Path={request.url}, Exception={str(exc)}")
             return JSONResponse(
                 status_code=422,
-                content=R.error().set_code(422).set_message(f"请求参数验证失败: {str(exc)}").set_data({"path": path}).model_dump()
+                content=R.error().set_code(422).set_message(f"请求参数验证失败: {str(exc)}").set_data(
+                    path_dict).model_dump()
+            )
+        elif isinstance(exc, BizError):
+            logger.error(f"业务异常信息捕获: Path={request.url}, Exception={str(exc)}")
+            data = exc.data
+            data.update(path_dict)
+            data.update({"module": exc.module})
+            code = int(exc.code) if isinstance(exc.code, (int, str)) else 422
+            return JSONResponse(
+                status_code=422,
+                content=R.error().set_code(code).set_message(f"业务处理异常: {str(exc)}").set_data(data).model_dump()
             )
         # 处理其他异常
         else:
             logger.error(f"服务器内部异常信息捕获: Path={request.url}, Exception={str(exc)}", exc_info=True)
             return JSONResponse(
                 status_code=500,
-                content=R.error().set_code(500).set_message(f"服务器内部错误: {str(exc)}").set_data({"path": path}).model_dump()
+                content=R.error().set_code(500).set_message(f"服务器内部错误: {str(exc)}").set_data(
+                    path_dict).model_dump()
             )
 
     # 注册路由
@@ -113,6 +129,7 @@ def create_app() -> FastAPI:
         health_router.router,
         memory_router.router,
         graph_router.router,
+        auth_router.router,
     ]
     for router in routers:
         app.include_router(router, prefix=api_prefix)

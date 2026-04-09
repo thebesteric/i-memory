@@ -21,6 +21,7 @@ from src.core.sector_classify import SECTOR_CONFIGS, ClassifyResult, SectorClass
 from src.core.vector.base_vector_store import VectorSearch, BaseVectorStore
 from src.core.waypoints import Waypoints, Expansion
 from src.core import user_ops
+from src.exceptions.exceptions import UserNotFoundError
 from src.memory.decay import Decay
 from src.memory.embed import embed_multi_sector, calc_mean_vec, embed, embed_batch
 from src.memory import graph_search
@@ -107,8 +108,7 @@ async def add_hsg_memory(user_identity: IMemoryUserIdentity,
     # 获取用户，若不存在则创建一条新用户记录
     user: IMemoryUser | None = await user_ops.get_user(user_identity=user_identity)
     if not user:
-        user = await user_ops.add_user(user_identity=user_identity)
-    assert user is not None
+        raise UserNotFoundError(user_identity)
 
     # 角色合法性检查
     if qa_role and qa_role not in ("human", "assistant"):
@@ -349,7 +349,7 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
 
     user = await user_ops.get_user(user_identity=user_identity, using_cache=True)
     if not user:
-        raise ValueError(f"User not found for identity: {user_identity}")
+        raise UserNotFoundError(user_identity)
 
     try:
         # 检查 60 秒内的查询缓存，命中则直接返回

@@ -7,6 +7,7 @@ from fastapi import APIRouter
 from fastapi.params import Path, Body
 
 from src.core import user_ops
+from src.exceptions.exceptions import UserNotFoundError
 from src.imemory import IMemory
 from src.memory.graph import graph_ops
 from src.memory.memory_models import IMemoryUserIdentity, IMemorySearchResult
@@ -166,7 +167,7 @@ async def clear_memory(user_identity: IMemoryUserIdentity = Body(..., descriptio
 async def get_user_profile(user_identity: IMemoryUserIdentity = Body(..., description="用户身份")):
     user = await user_ops.get_user(user_identity)
     if not user:
-        raise ValueError(f"User not found for identity: {user_identity}")
+        raise UserNotFoundError(user_identity)
     # 查询用户画像
     user_profile: UserProfile = await user_profile_ops.get_user_profile(user, query_cache=True)
     return R.success(data=user_profile)
@@ -185,7 +186,7 @@ async def get_user_profile(user_identity: IMemoryUserIdentity = Body(..., descri
 async def canonical_relations(req: CanonicalRelationsRequest):
     user = await user_ops.get_user(req.user_identity)
     if not user:
-        raise ValueError(f"User not found for identity: {req.user_identity}")
+        raise UserNotFoundError(req.user_identity)
 
     rows = graph_ops.find_canonical_relations(user.id, req.canonical_id, req.limit or 100)
     return R.success(data={

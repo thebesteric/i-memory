@@ -6,6 +6,7 @@ from agile.web.common_result import gen_response_model, R
 from fastapi import APIRouter
 
 from src.core import user_ops
+from src.exceptions.exceptions import UserNotFoundError
 from src.memory.graph import graph_ops
 from src.web.models.web_models import GraphFactsRequest, GraphFactEntitiesRequest, GraphEntityRelationsRequest, \
     GraphEntityTopicsRequest, GraphTopicMemoriesRequest, GraphExploreRequest, GraphFactsFilters
@@ -25,7 +26,7 @@ router = APIRouter(prefix="/graph", tags=["graph"])
 async def facts(req: GraphFactsRequest):
     user = await user_ops.get_user(req.user_identity, using_cache=True)
     if not user:
-        raise ValueError(f"User not found for identity: {req.user_identity}")
+        raise UserNotFoundError(req.user_identity)
 
     total, records = graph_ops.find_user_facts_page(
         user.id,
@@ -54,7 +55,7 @@ async def facts(req: GraphFactsRequest):
 async def fact_entities(req: GraphFactEntitiesRequest):
     user = await user_ops.get_user(req.user_identity, using_cache=True)
     if not user:
-        raise ValueError(f"User not found for identity: {req.user_identity}")
+        raise UserNotFoundError(req.user_identity)
 
     total, records = graph_ops.find_fact_canonical_entities_page(user.id, req.fact_id, req.current or 1, req.size or 20)
     return R.success(
@@ -79,7 +80,7 @@ async def fact_entities(req: GraphFactEntitiesRequest):
 async def entity_relations(req: GraphEntityRelationsRequest):
     user = await user_ops.get_user(req.user_identity, using_cache=True)
     if not user:
-        raise ValueError(f"User not found for identity: {req.user_identity}")
+        raise UserNotFoundError(req.user_identity)
 
     total, records = graph_ops.find_entity_relations_page(
         user.id,
@@ -116,7 +117,7 @@ async def entity_relations(req: GraphEntityRelationsRequest):
 async def entity_topics(req: GraphEntityTopicsRequest):
     user = await user_ops.get_user(req.user_identity, using_cache=True)
     if not user:
-        raise ValueError(f"User not found for identity: {req.user_identity}")
+        raise UserNotFoundError(req.user_identity)
 
     total, records = graph_ops.find_entity_topics_page(user.id, req.canonical_id, req.current or 1, req.size or 20)
     for row in records:
@@ -154,7 +155,7 @@ async def entity_topics(req: GraphEntityTopicsRequest):
 async def topic_memories(req: GraphTopicMemoriesRequest):
     user = await user_ops.get_user(req.user_identity, using_cache=True)
     if not user:
-        raise ValueError(f"User not found for identity: {req.user_identity}")
+        raise UserNotFoundError(req.user_identity)
 
     total, records = graph_ops.find_topic_memories_page(user.id, req.topic_id, req.current or 1, req.size or 20)
     records = _normalize_memories(records)
@@ -180,7 +181,7 @@ async def topic_memories(req: GraphTopicMemoriesRequest):
 async def explore(req: GraphExploreRequest):
     user = await user_ops.get_user(req.user_identity, using_cache=True)
     if not user:
-        raise ValueError(f"User not found for identity: {req.user_identity}")
+        raise UserNotFoundError(req.user_identity)
 
     current = req.current or 1
     size = req.size or 20

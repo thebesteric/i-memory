@@ -12,6 +12,7 @@ from src.core.components import get_milvus_manager
 from src.core.config import env
 from src.core.db import get_db
 from src.core.mem_ops import mem_ops
+from src.exceptions.exceptions import UserNotFoundError
 from src.memory.hsg import query_hsg_memories
 from src.memory.memory_models import IMemoryConfig, IMemoryFilters, IMemoryUserIdentity, QARole, IMemoryUser, IMemorySearchResult
 from src.ops.ingest import ingest_document
@@ -158,5 +159,5 @@ class IMemory:
     async def _get_user_by_identity(user_identity: IMemoryUserIdentity) -> IMemoryUser:
         user = await user_ops.get_user(user_identity)
         if not user:
-            raise ValueError(f"User not found for identity: {user_identity}")
+            raise UserNotFoundError(user_identity)
         return user

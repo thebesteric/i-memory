@@ -10,6 +10,7 @@ from src.core import user_ops
 from src.core.db import get_db
 from src.core.mem_ops import mem_ops
 from src.core.waypoints import Waypoints
+from src.exceptions.exceptions import UserNotFoundError
 from src.memory.hsg import add_hsg_memory
 from src.memory.memory_models import IMemoryConfig, IMemoryUserIdentity, QARole
 from src.ops.extract import extract_text
@@ -143,7 +144,7 @@ async def mk_root(user_identity: IMemoryUserIdentity,
     user_identity.check_legality()
     user = await user_ops.get_user(user_identity)
     if not user:
-        raise ValueError(f"User not found for identity: {user_identity}")
+        raise UserNotFoundError(user_identity)
 
     metadata = ex_dict["metadata"]
     # 生成摘要作为根记忆的内容
