@@ -113,34 +113,6 @@ class IMemoryFiltersConfig(BaseModel):
     graph: IMemoryGraphConfig = Field(default_factory=IMemoryGraphConfig.precision_first, description="图检索配置")
     debug: bool = Field(default=False, description="是否启用调试模式")
 
-    @model_validator(mode="before")
-    @classmethod
-    def _merge_legacy_graph_fields(cls, data: Any):
-        if not isinstance(data, dict):
-            return data
-
-        graph_data = dict(data.get("graph") or {})
-
-        if "graph_enable" in data and "enable" not in graph_data:
-            graph_data["enable"] = data["graph_enable"]
-
-        legacy_to_new = {
-            "graph_max_hops": "max_hops",
-            "graph_hop_decay": "hop_decay",
-            "graph_per_hop_limit": "per_hop_limit",
-            "graph_min_walk_score": "min_walk_score",
-            "graph_min_relation_confidence": "min_relation_confidence",
-        }
-        for legacy_key, graph_key in legacy_to_new.items():
-            if legacy_key in data and graph_key not in graph_data:
-                graph_data[graph_key] = data[legacy_key]
-
-        if graph_data:
-            data = dict(data)
-            data["graph"] = graph_data
-
-        return data
-
 
 class IMemoryFilters(BaseModel):
     """
