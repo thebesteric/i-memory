@@ -124,7 +124,9 @@ class EntityCanonicalize:
 
         # 查询缓存
         if entity.canonical_id:
-            return self.canonical_entity_cache.get(user.id, {}).get(entity.canonical_id)
+            canonical_entity = self.canonical_entity_cache.get(user.id, {}).get(entity.canonical_id)
+            if canonical_entity:
+                return canonical_entity
 
         # 将 entity 的 text 和 entity_type 进行 embedding，然后去 canonical_entities 中计算相似度，找到最符合的，找到就返回
         # 实体向量化
