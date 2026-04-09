@@ -1,0 +1,89 @@
+services:
+  # ETCD (元数据存储) - 固定兼容版本
+  etcd:
+    container_name: milvus-etcd
+    image: quay.io/coreos/etcd:v3.5.5  # Milvus 2.6.x 推荐版本
+    environment:
+      - ETCD_AUTO_COMPACTION_MODE=revision
+      - ETCD_AUTO_COMPACTION_RETENTION=1000
+      - ETCD_QUOTA_BACKEND_BYTES=4294967296
+      - ETCD_SNAPSHOT_COUNT=50000
+    volumes:
+      - /work/weijun/Docker/etcd:/etcd
+    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # MinIO (对象存储) - 固定兼容版本
+  minio:
+    container_name: milvus-minio
+    image: minio/minio:RELEASE.2023-03-20T20-16-18Z  # 2.6.x 兼容版本
+    environment:
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+    ports:
+      - "9001:9001"
+      - "9000:9000"
+    volumes:
+      - /work/weijun/Docker/minio:/minio_data
+    command: minio server /minio_data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # Milvus 2.6.11 核心服务
+  milvus-standalone:
+    container_name: milvus-standalone
+    image: milvusdb/milvus:v2.6.11  # 你指定的版本
+    command: ["milvus", "run", "standalone"]
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+      AUTHZ_ENABLE: "true"
+      MILVUS_AUTH_ENABLE: "true"
+      ROOT_USER: "root"
+      ROOT_PASSWORD: "Milvus@123456"
+    volumes:
+      - /work/weijun/Docker/milvus:/var/lib/milvus
+    ports:
+      - "19530:19530"
+      - "9091:9091"
+    depends_on:
+      - "etcd"
+      - "minio"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # Attu 图形化界面 (与 Milvus 2.6.11 适配)
+  attu:
+    container_name: milvus-attu
+    image: zilliz/attu:v2.6.5  # 适配 Milvus 2.6.11 的版本
+    environment:
+      MILVUS_URL: milvus-standalone:19530
+    ports:
+      - "3000:3000"
+    depends_on:
+      - "milvus-standalone"
+    restart: no
+
+networks:
+  default:
+    name: milvus-network
+
+# 创建相关文件夹
+# mkdir -p /work/weijun/Docker/{etcd,minio,milvus}
+
+# 启动服务
+# cd /work/weijun/Docker/milvus
+# docker compose -f docker-compose-milvus.yml up -d
+
+# 检查容器状态（全部显示 Up 即为正常）
+# docker compose ps
