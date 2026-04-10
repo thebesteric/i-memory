@@ -1,8 +1,9 @@
+from contextlib import contextmanager
 from typing import Optional, Any, Dict, List
 
 from agile.utils import singleton, timing
 
-from src.core.db import DB, get_db
+from src.core.db import DB, get_db, transaction
 from src.memory.memory_models import IMemoryUser
 
 db = get_db()
@@ -16,8 +17,10 @@ class MemOps:
 
     def ins_mem(self, **k) -> int:
         sql = """
-              INSERT INTO memories(id, user_id, segment, content, primary_sector, sectors, tags, meta, created_at, updated_at,
-                                   last_seen_at, salience, decay_lambda, version, mean_dim, mean_vec, compressed_vec, feedback_score,
+              INSERT INTO memories(id, user_id, segment, content, primary_sector, sectors, tags, meta, created_at,
+                                   updated_at,
+                                   last_seen_at, salience, decay_lambda, version, mean_dim, mean_vec, compressed_vec,
+                                   feedback_score,
                                    qa_role, qa_pair_id)
               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
               ON CONFLICT (id) DO UPDATE SET user_id=EXCLUDED.user_id,
@@ -42,7 +45,8 @@ class MemOps:
               """
         vals = (
             k.get("id"), k.get("user_id"), k.get("segment", 0), k.get("content"),
-            k.get("primary_sector"), k.get("sectors"), k.get("tags"), k.get("meta"), k.get("created_at"), k.get("updated_at"),
+            k.get("primary_sector"), k.get("sectors"), k.get("tags"), k.get("meta"), k.get("created_at"),
+            k.get("updated_at"),
             k.get("last_seen_at"), k.get("salience", 1.0), k.get("decay_lambda", 0.02), k.get("version", 1),
             k.get("mean_dim"), k.get("mean_vec"), k.get("compressed_vec"), k.get("feedback_score", 0),
             k.get("qa_role"), k.get("qa_pair_id")
@@ -57,13 +61,20 @@ class MemOps:
     def all_mem(self, limit=10, offset=0) -> List[Dict[str, Any]]:
         return self.db.fetchall("SELECT * FROM memories ORDER BY created_at DESC LIMIT %s OFFSET %s", (limit, offset))
 
-    def ins_log(self, id: str, model: str, status: str, ts: int, err: Optional[str] = None) -> int:
-        affected_rows = self.db.execute("INSERT INTO embed_logs(id, model, status, ts, err) VALUES (%s, %s, %s, %s, %s)", (id, model, status, ts, err))
+    def ins_log(self, _id: str, user_id: str, mem_id: str, model: str, status: str, ts: int,
+                err: Optional[str] = None) -> int:
+        affected_rows = self.db.execute(
+            "INSERT INTO embed_logs(id, user_id, memory_id, model, status, ts, err) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            (_id, user_id, mem_id, model, status, ts, err)
+        )
         self.db.commit()
         return affected_rows
 
-    def upd_log(self, id: str, status: str, err: Optional[str] = None) -> int:
-        affected_rows = self.db.execute("UPDATE embed_logs SET status = %s, err = %s WHERE id = %s", (status, err, id))
+    def upd_log(self, _id: str, status: str, err: Optional[str] = None) -> int:
+        affected_rows = self.db.execute(
+            "UPDATE embed_logs SET status = %s, err = %s WHERE id = %s",
+            (status, err, _id)
+        )
         self.db.commit()
         return affected_rows
 
@@ -102,7 +113,8 @@ class MemOps:
         final_sql = " ".join(sql_parts)
         return self.db.fetchall(final_sql, tuple(params))
 
-    def find_mem_by_conditions(self, *, conditions: list[str], order_by: List[str] = None, params: list[Any] = None, limit: int = None, offset: int = 0) -> List[Dict[str, Any]]:
+    def find_mem_by_conditions(self, *, conditions: list[str], order_by: List[str] = None, params: list[Any] = None,
+                               limit: int = None, offset: int = 0) -> List[Dict[str, Any]]:
         if not conditions:
             return []
 
@@ -143,26 +155,33 @@ class MemOps:
     def get_waypoints_by_src(self, src_id: str) -> List[Dict[str, Any]]:
         return self.db.fetchall("SELECT * FROM waypoints WHERE src_id = %s", (src_id,))
 
-    def del_mem(self, mid: str) -> int:
-        self.db.execute("DELETE FROM vectors WHERE id = %s", (mid,))
-        self.db.execute("DELETE FROM waypoints WHERE src_id = %s OR dst_id = %s", (mid, mid))
-        self.db.execute("DELETE FROM embed_logs WHERE id = %s", (mid,))
-        affected_rows = self.db.execute("DELETE FROM memories WHERE id = %s", (mid,))
+    def del_mem(self, mem_id: str) -> int:
+        self.db.execute("DELETE FROM vectors WHERE id = %s", (mem_id,))
+        self.db.execute("DELETE FROM waypoints WHERE src_id = %s OR dst_id = %s", (mem_id, mem_id))
+        self.db.execute("DELETE FROM embed_logs WHERE memory_id = %s", (mem_id,))
+        affected_rows = self.db.execute("DELETE FROM memories WHERE id = %s", (mem_id,))
         self.db.commit()
         return affected_rows
 
     def del_mem_by_user(self, user: IMemoryUser) -> int:
-        sql = "SELECT id FROM memories WHERE user_id = %s"
-        memory_ids = self.db.fetchall(sql, (user.id,))
-        if not memory_ids:
-            return 0
-        ids = tuple(row["id"] for row in memory_ids)
-        self.db.execute("DELETE FROM vectors WHERE id IN %s", (ids,))
-        self.db.execute("DELETE FROM waypoints WHERE src_id IN %s OR dst_id IN %s", (ids, ids))
-        self.db.execute("DELETE FROM embed_logs WHERE id IN %s", (ids,))
-        affected_rows = self.db.execute("DELETE FROM memories WHERE id IN %s", (ids,))
-        self.db.commit()
-        return affected_rows
+        user_id = user.id
+        with contextmanager(transaction)() as conn:
+            self.db.execute("DELETE FROM graph_entity_relations WHERE user_id = %s", (user_id,), conn=conn)
+            self.db.execute("DELETE FROM graph_fact_entities WHERE user_id = %s", (user_id,), conn=conn)
+            self.db.execute("DELETE FROM graph_entities WHERE user_id = %s", (user_id,), conn=conn)
+            self.db.execute("DELETE FROM graph_canonical_entities WHERE user_id = %s", (user_id,), conn=conn)
+            self.db.execute("DELETE FROM graph_facts WHERE user_id = %s", (user_id,), conn=conn)
+            self.db.execute("DELETE FROM graph_topics WHERE user_id = %s", (user_id,), conn=conn)
+
+            self.db.execute("DELETE FROM sessions WHERE user_id = %s", (user_id,), conn=conn)
+            self.db.execute("DELETE FROM user_profiles WHERE user_id = %s", (user_id,), conn=conn)
+
+            self.db.execute("DELETE FROM vectors WHERE user_id = %s", (user_id,), conn=conn)
+            self.db.execute("DELETE FROM waypoints WHERE user_id = %s", (user_id,), conn=conn)
+            self.db.execute("DELETE FROM embed_logs WHERE user_id = %s", (user_id,), conn=conn)
+
+            affected_rows = self.db.execute("DELETE FROM memories WHERE user_id = %s", (user_id,), conn=conn)
+            return affected_rows
 
 
 mem_ops = MemOps()

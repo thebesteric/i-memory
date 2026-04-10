@@ -1,4 +1,5 @@
 import time
+import uuid
 from typing import List, Dict, Optional, Any
 
 import numpy as np
@@ -18,23 +19,35 @@ async def embed_batch(txt: str, sectors: List[str]) -> list[list[float]]:
 async def embed(txt: str, sector: Optional[str] = None) -> List[float]:
     """
     根据配置的嵌入提供者生成文本 txt 的向量
-    @param txt: 待嵌入的文本
-    @return: 生成的向量列表
+    :param txt: 待嵌入的文本
+    :return: 生成的向量列表
     """
     return (await embed_batch(txt, [sector] if sector else []))[0]
 
 
-async def embed_multi_sector(uid: str, txt: str, secs: List[str], chunks: Optional[List[Chunk]] = None) -> List[Dict[str, Any]]:
+async def embed_multi_sector(user_id: str, mem_id: str, txt: str, secs: List[str], chunks: Optional[List[Chunk]] = None) -> List[Dict[str, Any]]:
     """
     用于对同一文本在多个 sector（语义分区）下分别生成向量嵌入，并记录日志
-    @param uid: 任务唯一标识
-    @param txt: 待嵌入的文本
-    @param secs: 需要生成嵌入的 sector 列表
-    @param chunks: 可选的文本块列表
-    @return: 包含每个 sector 的名称、生成的向量和向量维度的列表
+    :param user_id: 用户 ID
+    :param mem_id: 记忆 ID
+    :param txt: 待嵌入的文本
+    :param secs: 需要生成嵌入的 sector 列表
+    :param chunks: 可选的文本块列表
+    :return: 包含每个 sector 的名称、生成的向量和向量维度的列表
     """
+
+    _id = str(uuid.uuid4())
+
     # 日志记录（开始）
-    mem_ops.ins_log(id=uid, model="multi-sector", status="pending", ts=int(time.time() * 1000), err=None)
+    mem_ops.ins_log(
+        _id=_id,
+        user_id=user_id,
+        mem_id=mem_id,
+        model="multi-sector",
+        status="pending",
+        ts=int(time.time() * 1000),
+        err=None
+    )
 
     res = []
     try:
@@ -46,20 +59,20 @@ async def embed_multi_sector(uid: str, txt: str, secs: List[str], chunks: Option
             res.append({"sector": s, "vector": v, "dim": len(v)})
 
         # 日志记录（完成）
-        mem_ops.upd_log(id=uid, status="completed", err=None)
+        mem_ops.upd_log(_id=_id, status="completed", err=None)
         return res
     except Exception as e:
         # 日志记录（失败）
-        mem_ops.upd_log(id=uid, status="failed", err=str(e))
+        mem_ops.upd_log(_id=_id, status="failed", err=str(e))
         raise e
 
 
 def calc_mean_vec(emb_res: List[Dict[str, Any]], all_sectors: List[str]) -> List[float]:
     """
     计算多个 sector 嵌入向量（emb_res）的均值向量（mean vector），作为整体语义特征
-    @param emb_res: 包含各 sector 向量的列表
-    @param all_sectors: 所有 sector 的名称列表
-    @return: 计算得到的均值向量列表
+    :param emb_res: 包含各 sector 向量的列表
+    :param all_sectors: 所有 sector 的名称列表
+    :return: 计算得到的均值向量列表
     """
     if not emb_res: return []
     # 取第一个向量的维度作为均值向量的维度

@@ -228,7 +228,13 @@ async def add_hsg_memory(user_identity: IMemoryUserIdentity,
         )
 
         # 调用 embed_multi_sector，对内容进行多 sector 嵌入，生成向量
-        emb_res: List[Dict[str, Any]] = await embed_multi_sector(mid, content, all_secs, chunks if use_chunks else None)
+        emb_res: List[Dict[str, Any]] = await embed_multi_sector(
+            user_id=user.id,
+            mem_id=mid,
+            txt=content,
+            secs=all_secs,
+            chunks=chunks if use_chunks else None
+        )
         tasks = []
         for r in emb_res:
             # 存储每个 sector 的向量到向量库

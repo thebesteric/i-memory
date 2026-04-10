@@ -20,7 +20,6 @@ CREATE TABLE IF NOT EXISTS memories
     profile_joined SMALLINT         DEFAULT 0,
     session_joined SMALLINT         DEFAULT 0,
     fact_joined    SMALLINT         DEFAULT 0,
-    joined_count   SMALLINT         DEFAULT 0,
     segment        INTEGER          DEFAULT 0,
     created_at     TIMESTAMP,
     updated_at     TIMESTAMP,
@@ -49,8 +48,7 @@ COMMENT ON COLUMN memories.compressed_vec IS '压缩嵌入向量字节';
 COMMENT ON COLUMN memories.meta IS '元数据载荷（序列化）';
 COMMENT ON COLUMN memories.profile_joined IS '是否已参与用户画像处理，0 = 否，1 = 是';
 COMMENT ON COLUMN memories.session_joined IS '是否已参与会话总结处理，0 = 否，1 = 是';
-COMMENT ON COLUMN memories.fact_joined IS '是否已参与事实处理，0 = 否，1 = 是，-1 = 丢弃';
-COMMENT ON COLUMN memories.joined_count IS '参与事实处理的次数';
+COMMENT ON COLUMN memories.fact_joined IS '是否已参与事实处理，0 = 否，1 = 是';
 COMMENT ON COLUMN memories.segment IS '分段编号';
 COMMENT ON COLUMN memories.created_at IS '创建时间戳';
 COMMENT ON COLUMN memories.updated_at IS '最后更新时间戳';
@@ -177,17 +175,21 @@ COMMENT ON COLUMN stats.metrics IS '指标载荷（序列化）';
 
 CREATE TABLE IF NOT EXISTS embed_logs
 (
-    id     TEXT,
-    model  TEXT,
-    status TEXT,
-    ts     BIGINT,
-    err    TEXT,
-    CONSTRAINT fk_embed_logs_id_memories
-        FOREIGN KEY (id) REFERENCES memories (id)
+    id        TEXT PRIMARY KEY,
+    user_id   TEXT,
+    memory_id TEXT,
+    model     TEXT,
+    status    TEXT,
+    ts        BIGINT,
+    err       TEXT,
+    CONSTRAINT fk_embed_logs_memory_id_memories_id
+        FOREIGN KEY (memory_id) REFERENCES memories (id)
 );
 
 COMMENT ON TABLE embed_logs IS '嵌入生成日志';
-COMMENT ON COLUMN embed_logs.id IS '记忆标识';
+COMMENT ON COLUMN embed_logs.id IS '主键';
+COMMENT ON COLUMN embed_logs.user_id IS '用户标识';
+COMMENT ON COLUMN embed_logs.memory_id IS '记忆标识';
 COMMENT ON COLUMN embed_logs.model IS '嵌入模型名称';
 COMMENT ON COLUMN embed_logs.status IS '嵌入任务状态';
 COMMENT ON COLUMN embed_logs.ts IS 'Unix 时间戳（毫秒）';
@@ -445,6 +447,7 @@ CREATE INDEX IF NOT EXISTS idx_vectors_v ON vectors USING hnsw (v vector_cosine_
 CREATE INDEX IF NOT EXISTS idx_waypoints_src ON waypoints (src_id);
 CREATE INDEX IF NOT EXISTS idx_waypoints_dst ON waypoints (dst_id);
 CREATE INDEX IF NOT EXISTS idx_stats_ts ON stats (ts);
+CREATE INDEX IF NOT EXISTS idx_embed_logs_user ON embed_logs (user_id);
 CREATE INDEX IF NOT EXISTS idx_graph_topics_vector ON graph_topics USING hnsw (vector vector_cosine_ops);
 CREATE INDEX IF NOT EXISTS idx_graph_facts_created_at ON graph_facts (created_at);
 CREATE INDEX IF NOT EXISTS idx_graph_facts_fact_kind ON graph_facts (fact_kind);

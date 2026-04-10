@@ -13,7 +13,7 @@ from src.memory.graph.fact_extractor import FactExtractor
 from src.memory.graph.semantic_spliter import SemanticSpliter, Dialogue, SemanticsOutput
 from src.memory.memory_models import IMemoryUser
 
-logger = LogHelper.get_logger()
+logger = LogHelper.get_logger(title="[GRAPH]")
 
 # 存放待图化的用户队列（异步队列）
 user_queue = asyncio.Queue()
@@ -37,7 +37,12 @@ async def graph_build():
     """
 
     def enqueue_if_reach_threshold(user: IMemoryUser, un_fact_join_count: int):
-        """达到阈值则入队，防止重复入队"""
+        """
+        达到阈值则入队（（记忆大于 GRAPH_MEM_COUNT_AT_LEAST 条）
+        :param user:
+        :param un_fact_join_count:
+        :return:
+        """
         if un_fact_join_count >= env.GRAPH_MEM_COUNT_AT_LEAST and user.id not in enqueued_user_ids:
             user_queue.put_nowait(user)
             enqueued_user_ids.add(user.id)
@@ -51,8 +56,13 @@ async def graph_build_daily_force():
     """
 
     def enqueue_if_cold_user(user: IMemoryUser, un_fact_join_count: int):
-        """未达阈值但有记忆的冷用户入队，防止重复入队"""
-        if 0 < un_fact_join_count < env.GRAPH_MEM_COUNT_AT_LEAST and user.id not in enqueued_user_ids:
+        """
+        未达阈值但有记忆的冷用户入队（记忆大于 10 条，小于 GRAPH_MEM_COUNT_AT_LEAST 条）
+        :param user:
+        :param un_fact_join_count:
+        :return:
+        """
+        if 10 < un_fact_join_count < env.GRAPH_MEM_COUNT_AT_LEAST and user.id not in enqueued_user_ids:
             user_queue.put_nowait(user)
             enqueued_user_ids.add(user.id)
 
@@ -66,7 +76,7 @@ async def process_user_queue():
         # 异步阻塞式获取队列元素
         user: IMemoryUser = await user_queue.get()
         try:
-            logger.info(f"[GRAPH] Processing user: {user.id}")
+            logger.info(f"Processing user: {user.id}")
             # 获取未参与事实处理的记忆（按创建时间正序）
             un_fact_join_memories = mem_ops.find_mem_by_conditions(
                 conditions=["fact_joined = 0", "user_id = %s"],
@@ -74,7 +84,7 @@ async def process_user_queue():
                 params=[user.id],
                 limit=env.GRAPH_MEM_COUNT_AT_MOST or 100
             )
-            un_fact_join_memories_ids = [mem["id"] for mem in un_fact_join_memories]
+            un_fact_join_memories_ids: list[str] = [mem["id"] for mem in un_fact_join_memories]
 
             # 将记忆进行语义切分，得到主题对象列表
             dialogues = [Dialogue.mem_to_dialogue(mem) for mem in un_fact_join_memories]
@@ -103,15 +113,14 @@ async def process_user_queue():
                     mem_ids.update(topic.dialogue_ids or [])
 
                 # 将记忆更新为已参与事实处理
-                await graph_ops.mark_memoires_to_fact_joined(list(mem_ids), conn=conn)
+                await graph_ops.mark_memoires_to_fact_joined(list(un_fact_join_memories_ids), conn=conn)
 
-                # 将所有召回的记忆 joined_count + 1，超过一定次数的记忆将被丢弃
-                await graph_ops.increment_memoires_join_count(un_fact_join_memories_ids, env.GRAPH_MEM_DISCARD_THRESHOLD, conn=conn)
-
-                logger.info(f"[GRAPH] Finished processing user: {user.id}, processed memories: {len(un_fact_join_memories_ids)}, generated facts: {len(facts)}")
+                logger.info(
+                    f"Finished processing user: {user.id}, processed memories: {len(un_fact_join_memories_ids)}, fact joined memories: {len(mem_ids)}, generated facts: {len(facts)}"
+                )
 
         except Exception as e:
-            logger.error(f"[GRAPH] Error processing user: {user.id}, error: {e}")
+            logger.error(f"Error processing user: {user.id}, error: {e}")
             raise e
         finally:
             # 处理完成后移除用户 ID，允许后续重新入队

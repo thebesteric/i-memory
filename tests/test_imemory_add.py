@@ -1,6 +1,7 @@
 import asyncio
 import unittest
 
+from src.core import user_ops
 from src.imemory import IMemory
 from src.memory.memory_models import IMemoryConfig, IMemoryUserIdentity
 
@@ -18,6 +19,10 @@ class TestIMemoryAdd(unittest.TestCase):
         cls.mem = IMemory(user_identity=cls.user_identity)
         cls.meta = {"source": "unit_test"}
         cls.tags = ["test", "memory"]
+
+        # 新增用户
+        if not asyncio.run(user_ops.get_user(cls.user_identity)):
+            asyncio.run(user_ops.add_user(cls.user_identity))
 
     @classmethod
     def tearDownClass(cls):
@@ -81,7 +86,7 @@ class TestIMemoryAdd(unittest.TestCase):
         for r in all_results:
             print(r)
 
-    # @unittest.skip
+    @unittest.skip
     def test_add_long_memory(self):
         content = """
 带着项目推进的期许，奔赴北京与项目组汇合，一场深耕细节、凝聚共识的线下对接，就此展开。不同于线上的远程沟通，面对面的交流更能碰撞出思维的火花，也更能精准捕捉每一个需求的核心，高效破解前期推进中的疑点与难点。

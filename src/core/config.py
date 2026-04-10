@@ -96,7 +96,7 @@ class EnvConfig:
         # 衰减比例（用于自动衰减）
         self.DECAY_RATIO = env_helper.get("IM_DECAY_RATIO", 0.03)
         # 自动衰减循环间隔（秒）
-        self.DECAY_INTERVAL_SECONDS = env_helper.get("IM_DECAY_INTERVAL_SECONDS", 300)
+        self.DECAY_INTERVAL_SECONDS = env_helper.get("IM_DECAY_INTERVAL_SECONDS", 60 * 60)
 
         # ================ 记忆分类相关配置 ================
         # 是否使用 BERT 分类器进行记忆分类
@@ -108,7 +108,7 @@ class EnvConfig:
         # 图构建循环间隔（秒）
         self.GRAPH_BUILD_INTERVAL_SECONDS = env_helper.get("IM_GRAPH_BUILD_INTERVAL_SECONDS", 60 * 30)
         # 图执行至少记忆数量
-        self.GRAPH_MEM_COUNT_AT_LEAST = env_helper.get("IM_GRAPH_MEM_COUNT_AT_LEAST", 50)
+        self.GRAPH_MEM_COUNT_AT_LEAST = env_helper.get("IM_GRAPH_MEM_COUNT_AT_LEAST", 30)
         # 图执行至多记忆数量
         self.GRAPH_MEM_COUNT_AT_MOST = env_helper.get("IM_GRAPH_MEM_COUNT_AT_MOST", 100)
         # 记忆达到丢弃条件的阈值

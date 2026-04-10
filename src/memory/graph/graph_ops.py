@@ -256,35 +256,6 @@ async def mark_memoires_to_fact_joined(m_ids: list[str], conn=None) -> int:
     return affected_rows
 
 
-async def increment_memoires_join_count(m_ids: list[str], discard_threshold: int = 2, conn=None) -> int:
-    """
-    将记忆的参与处理次数自增
-    如果 joined_count >= discard_threshold，且未参与过事实处理，则标记为 -1，标识丢弃，后续不参加任何事实处理逻辑
-    :param m_ids:
-    :param discard_threshold:
-    :param conn:
-    :return:
-    """
-    if not m_ids:
-        return 0
-    format_strings = ','.join(['%s'] * len(m_ids))
-    query = f"""
-        UPDATE memories 
-        SET 
-            joined_count = joined_count + 1,
-            fact_joined = CASE WHEN joined_count + 1 >= %s AND fact_joined = 0 THEN -1 ELSE fact_joined END
-        WHERE id IN ({format_strings})
-    """
-    affected_rows = db.execute(
-        query,
-        (discard_threshold,) + tuple(m_ids),
-        conn=conn
-    )
-    if conn is None:
-        db.commit()
-    return affected_rows
-
-
 def _normalize_edge_relation(edge_relation_value: str | None) -> str:
     if not edge_relation_value:
         return EdgeRelation.CO_OCCURS_WITH.name
