@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Any, Callable, Literal
 
-from agile.utils import LogHelper
+from agile.utils import LogHelper, TimeUnit
 from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_EXECUTED, JobExecutionEvent
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
@@ -53,7 +53,7 @@ def _build_job_definitions() -> list[JobDefinition]:
             name="Periodic memory decay",
             func=decay.apply_decay,
             trigger_type="interval",
-            trigger_args={"seconds": max(1, env.DECAY_INTERVAL_SECONDS or 60 * 60)},
+            trigger_args={"seconds": max(1, env.DECAY_INTERVAL_SECONDS or TimeUnit.HOURS.to_seconds(1))},
             max_instances=1,
             coalesce=True,
             misfire_grace_time=30,
@@ -64,7 +64,7 @@ def _build_job_definitions() -> list[JobDefinition]:
             name="Memory graph build",
             func=graph_builder.graph_build,
             trigger_type="interval",
-            trigger_args={"seconds": max(1, env.GRAPH_BUILD_INTERVAL_SECONDS or 60 * 60 * 2)},
+            trigger_args={"seconds": max(1, env.GRAPH_BUILD_INTERVAL_SECONDS or TimeUnit.HOURS.to_seconds(2))},
             max_instances=1,
             coalesce=True,
             misfire_grace_time=30,
