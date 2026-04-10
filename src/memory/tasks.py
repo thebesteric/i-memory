@@ -58,13 +58,13 @@ def _build_job_definitions() -> list[JobDefinition]:
             coalesce=True,
             misfire_grace_time=30,
         ),
-        # 图构建任务（每 30 分钟执行一次）
+        # 图构建任务（每 120 分钟执行一次）
         JobDefinition(
             id="graph_build",
             name="Memory graph build",
             func=graph_builder.graph_build,
             trigger_type="interval",
-            trigger_args={"seconds": max(1, env.GRAPH_BUILD_INTERVAL_SECONDS or 60 * 30)},
+            trigger_args={"seconds": max(1, env.GRAPH_BUILD_INTERVAL_SECONDS or 60 * 60 * 2)},
             max_instances=1,
             coalesce=True,
             misfire_grace_time=30,
