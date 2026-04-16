@@ -1,5 +1,5 @@
 from contextlib import contextmanager
-from typing import Optional, Any, Dict, List
+from typing import Optional, Any, Dict, List, Literal
 
 from agile.utils import singleton, timing
 
@@ -134,8 +134,13 @@ class MemOps:
         final_sql = " ".join(sql_parts)
         return self.db.fetchall(final_sql, tuple(params or []))
 
-    def all_mem_by_user(self, user: IMemoryUser, limit=10, offset=0) -> List[Dict[str, Any]]:
-        sql = "SELECT * FROM memories WHERE user_id = %s ORDER BY created_at DESC LIMIT %s OFFSET %s"
+    def all_mem_by_user(self,
+                        user: IMemoryUser,
+                        limit=10,
+                        offset=0,
+                        sort_order: Literal["asc", "desc"] = "desc") -> List[Dict[str, Any]]:
+
+        sql = f"SELECT * FROM memories WHERE user_id = %s ORDER BY created_at {sort_order} LIMIT %s OFFSET %s"
         return self.db.fetchall(sql, (user.id, limit, offset))
 
     def count_mem_by_user(self, user: IMemoryUser, conditions: list[str] = None) -> int:

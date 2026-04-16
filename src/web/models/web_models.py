@@ -48,6 +48,7 @@ class HistoryMemoryRequest(BaseModel):
     user_identity: IMemoryUserIdentity = Field(..., description="用户身份")
     current: Optional[int] = Field(default=1, ge=1, description="当前页码")
     size: Optional[int] = Field(default=10, ge=1, le=100, description="每页记录数")
+    sort_order: Optional[Literal["asc", "desc"]] = Field(default="desc", description="排序顺序：asc-正序，desc-倒序")
 
 
 class CanonicalRelationsRequest(BaseModel):

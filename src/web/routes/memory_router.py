@@ -87,7 +87,12 @@ async def history(req: HistoryMemoryRequest):
     :param req: 历史记忆请求模型
     :return: 历史记忆列表
     """
-    results: PagingResponse = await mem.history(user_identity=req.user_identity, current=req.current, size=req.size)
+    results: PagingResponse = await mem.history(
+        user_identity=req.user_identity,
+        current=req.current,
+        size=req.size,
+        sort_order=req.sort_order
+    )
     results.records = _handle_memories(results.records if results.records else [])
     return R.success(data=results)
 

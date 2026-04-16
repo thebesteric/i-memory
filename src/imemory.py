@@ -1,5 +1,5 @@
 import asyncio
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Literal
 
 from agile.db.vector.milvus.milvus_manager import MilvusManager
 from agile.utils import LogHelper, singleton
@@ -133,26 +133,30 @@ class IMemory:
                       *,
                       user_identity: IMemoryUserIdentity = None,
                       current: int | None = None,
-                      size: int | None = None) -> PagingResponse:
+                      size: int | None = None,
+                      sort_order: Literal["asc", "desc"] | None) -> PagingResponse:
         """
         获取用户记忆历史
         :param user_identity: 用户身份
         :param current: 当前页码
         :param size: 每页大小
+        :param sort_order: 排序方式
         :return: 记忆历史列表
         """
+        sort_order = sort_order if sort_order else "desc"
         current = current or 1
         size = size or 10
 
         user = await self._get_user_by_identity(user_identity or self.default_user_identity)
         total = self.mem_ops.count_mem_by_user(user)
         offset = (current - 1) * size
-        rows = self.mem_ops.all_mem_by_user(user, size, offset)
+        rows = self.mem_ops.all_mem_by_user(user, size, offset, sort_order)
         return PagingResponse(
             records=[dict(r) for r in rows],
             total=total,
             current=current,
-            size=size
+            size=size,
+            extension={"sort_order": sort_order}
         )
 
     @staticmethod
