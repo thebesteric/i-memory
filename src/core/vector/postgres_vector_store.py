@@ -93,6 +93,32 @@ class PostgresVectorStore(BaseVectorStore):
             f"cost {(time.perf_counter() - warmup_start) * 1000:.2f}ms"
         )
 
+    @staticmethod
+    def _target_vector_dim() -> int:
+        return max(1, int(getattr(env, "VECTOR_DIM", 1536) or 1536))
+
+    @classmethod
+    def _coerce_vector_for_storage(cls, vector: List[float]) -> List[float]:
+        """Pad/truncate vectors so they always fit the fixed pgvector column."""
+        target_dim = cls._target_vector_dim()
+        vec = list(vector) if vector is not None else []
+        if len(vec) > target_dim:
+            return vec[:target_dim]
+        if len(vec) < target_dim:
+            return vec + [0.0] * (target_dim - len(vec))
+        return vec
+
+    @staticmethod
+    def _coerce_vector_for_read(vector: List[float], dim: int) -> List[float]:
+        vec = list(vector) if vector is not None else []
+        try:
+            dim_int = int(dim)
+        except (TypeError, ValueError):
+            dim_int = 0
+        if dim_int > 0:
+            return vec[:dim_int]
+        return vec
+
     async def store_vector(self, _id: str, sector: str, vector: List[float], dim: int, user: IMemoryUser = None):
         """
         存储向量到 PostgreSQL 数据库
@@ -104,7 +130,10 @@ class PostgresVectorStore(BaseVectorStore):
         :return:
         """
         pool = await self._get_pool()
-        vec_str = str(vector)
+        src_vec = list(vector) if vector is not None else []
+        logical_dim = max(0, min(len(src_vec), int(dim) if dim is not None else len(src_vec)))
+        stored_vec = self._coerce_vector_for_storage(src_vec)
+        vec_str = str(stored_vec)
 
         user_id = user.id if user else None
 
@@ -117,14 +146,14 @@ class PostgresVectorStore(BaseVectorStore):
         """
         async with pool.acquire() as conn:
             try:
-                await conn.execute(sql, _id, sector, user_id, vec_str, dim)
+                await conn.execute(sql, _id, sector, user_id, vec_str, logical_dim)
             except InvalidColumnReferenceError as ex:
                 # This typically means there's no unique constraint on `id` for ON CONFLICT to reference.
                 # Create a unique index on id and retry once. If there are duplicate ids in the table, creating
                 # the unique index will fail, and we should let that error surface.
                 logger.warning("ON CONFLICT failed because no unique constraint on id; creating unique index and retrying")
                 await conn.execute(f"CREATE UNIQUE INDEX IF NOT EXISTS {self.vector_table_name}_id_idx ON {self.vector_table_name} (id)")
-                await conn.execute(sql, _id, sector, user_id, vec_str, dim)
+                await conn.execute(sql, _id, sector, user_id, vec_str, logical_dim)
 
     async def get_vectors_by_id(self, id: str) -> List[VectorRow]:
         """
@@ -140,7 +169,7 @@ class PostgresVectorStore(BaseVectorStore):
         res = []
         for r in rows:
             vec = json.loads(r["v_txt"])
-            res.append(VectorRow(r["id"], r["sector"], vec, r["dim"]))
+            res.append(VectorRow(r["id"], r["sector"], self._coerce_vector_for_read(vec, r["dim"]), r["dim"]))
         return res
 
     async def get_vector(self, id: str, sector: str) -> Optional[VectorRow]:
@@ -158,7 +187,7 @@ class PostgresVectorStore(BaseVectorStore):
         if not r:
             return None
         vec = json.loads(r["v_txt"])
-        return VectorRow(r["id"], r["sector"], vec, r["dim"])
+        return VectorRow(r["id"], r["sector"], self._coerce_vector_for_read(vec, r["dim"]), r["dim"])
 
     async def delete_vectors(self, id: str):
         """
