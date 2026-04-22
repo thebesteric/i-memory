@@ -23,7 +23,7 @@ sys.path.append(project_root)
 from src.core.config import env
 from src.core.components import get_vector_store
 from src.memory.tasks import start_background_tasks, stop_background_tasks
-from src.web.routes import health_router, memory_router, graph_router, auth_router
+from src.web.routes import health_router, memory_router, graph_router, auth_router, backend_router
 
 logger = LogHelper.get_logger()
 
@@ -130,6 +130,7 @@ def create_app() -> FastAPI:
         memory_router.router,
         graph_router.router,
         auth_router.router,
+        backend_router.router,
     ]
     for router in routers:
         app.include_router(router, prefix=api_prefix)

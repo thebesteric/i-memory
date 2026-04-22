@@ -19,6 +19,8 @@ logger = LogHelper.get_logger(title="[GRAPH]")
 user_queue = asyncio.Queue()
 # 记录已入队用户ID，防止重复入队
 enqueued_user_ids = set()
+# 记忆最小容忍度数量
+GRAPH_MEM_COUNT_AT_LEAST_TOLERANCE = 10
 
 
 async def get_un_fact_join_mem_count(callback: Callable[[IMemoryUser, int], None]):
@@ -62,7 +64,7 @@ async def graph_build_daily_force():
         :param un_fact_join_count:
         :return:
         """
-        if 10 < un_fact_join_count < env.GRAPH_MEM_COUNT_AT_LEAST and user.id not in enqueued_user_ids:
+        if GRAPH_MEM_COUNT_AT_LEAST_TOLERANCE < un_fact_join_count < env.GRAPH_MEM_COUNT_AT_LEAST and user.id not in enqueued_user_ids:
             user_queue.put_nowait(user)
             enqueued_user_ids.add(user.id)
 
@@ -85,6 +87,13 @@ async def process_user_queue():
                 limit=env.GRAPH_MEM_COUNT_AT_MOST or 100
             )
             un_fact_join_memories_ids: list[str] = [mem["id"] for mem in un_fact_join_memories]
+
+            # 记忆小于 10 条的用户不处理，避免过度处理冷用户
+            if not un_fact_join_memories_ids or len(un_fact_join_memories_ids) < GRAPH_MEM_COUNT_AT_LEAST_TOLERANCE:
+                logger.warning(
+                    f"User {user.id} has {len(un_fact_join_memories_ids)} un-fact-joined memories, which is less than {GRAPH_MEM_COUNT_AT_LEAST_TOLERANCE}. Skipping processing."
+                )
+                continue
 
             # 将记忆进行语义切分，得到主题对象列表
             dialogues = [Dialogue.mem_to_dialogue(mem) for mem in un_fact_join_memories]
