@@ -44,7 +44,7 @@ async def build_graph(user_identity: IMemoryUserIdentity = Body(..., description
 
 
 @router.post(
-    "/build_user_profile",
+    "/build-user-profile",
     status_code=status.HTTP_201_CREATED,
     summary="构建用户画像",
 )
