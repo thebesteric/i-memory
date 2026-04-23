@@ -144,18 +144,18 @@ class IMemory:
         :return: 记忆历史列表
         """
         sort_order = sort_order if sort_order else "desc"
-        current = current or 1
-        size = size or 10
+        safe_current = current or 1
+        safe_size = size or 10
 
         user = await self._get_user_by_identity(user_identity or self.default_user_identity)
         total = self.mem_ops.count_mem_by_user(user)
-        offset = (current - 1) * size
+        offset = (safe_current - 1) * size
         rows = self.mem_ops.all_mem_by_user(user, size, offset, sort_order)
         return PagingResponse(
             records=[dict(r) for r in rows],
             total=total,
-            current=current,
-            size=size,
+            current=safe_current,
+            size=safe_size,
             extension={"sort_order": sort_order}
         )
 
