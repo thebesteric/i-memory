@@ -47,7 +47,7 @@ class Demographic(BaseModel):
     gender: Literal["male", "female", "unknown"] | None = Field(default="unknown", description="性别")
     occupation: str | None = Field(default=None, description="职业")
     education: str | None = Field(default=None, description="教育水平")
-    location: Location = Field(default_factory=Location, description="位置信息")
+    location: Location | None = Field(default_factory=Location, description="位置信息")
     personality: list[Personality] = Field(default_factory=list, description="性格特征")
     extra: dict[str, Any] = Field(default_factory=dict, description="其他人口统计信息，可自由补充")
 

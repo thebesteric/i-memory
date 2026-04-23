@@ -12,9 +12,10 @@ logger = LogHelper.get_logger()
 db = get_db()
 
 
-async def find_user(*, order_by: list[str] = None, status: int | None = None, limit=10, offset=0) -> list[IMemoryUser]:
+async def find_user(*, ids: list[str] | None = None, order_by: list[str] = None, status: int | None = None, limit=9999, offset=0) -> list[IMemoryUser]:
     """
     查询所有用户
+    :param ids: 用户 ID 列表
     :param order_by: 排序调节
     :param status: 用户状态，0 = 禁用，1 = 启用，None = 全部
     :param limit: 数量限制
@@ -26,9 +27,22 @@ async def find_user(*, order_by: list[str] = None, status: int | None = None, li
     ]
 
     params = []
+    where_conditions = []
+
+    # 状态 status 筛选
     if status is not None:
-        sql_parts.append("WHERE status = %s")
+        where_conditions.append("t.status = %s")
         params.append(status)
+
+    # 用户 ID 筛选
+    if ids and len(ids) > 0:
+        id_placeholders = ", ".join(["%s"] * len(ids))
+        where_conditions.append(f"t.id IN ({id_placeholders})")
+        params.extend(ids)
+
+    # 拼接 WHERE 条件
+    if where_conditions:
+        sql_parts.append("WHERE " + " AND ".join(where_conditions))
 
     # 拼接排序
     if order_by:

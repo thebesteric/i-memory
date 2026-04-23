@@ -47,8 +47,8 @@ async def _process_user_profile(user: IMemoryUser, yesterday_end: datetime.datet
         async with semaphore:
             user_profile_extractor = UserProfileExtractor()
             memories = await asyncio.to_thread(mem_ops.find_mem_by_conditions,
-                conditions=["user_id = %s", "profile_joined = 0", "created_at < %s"], params=[user.id, yesterday_end],
-                order_by=["created_at ASC"], )
+                                               conditions=["user_id = %s", "profile_joined = 0", "created_at < %s"], params=[user.id, yesterday_end],
+                                               order_by=["created_at ASC"], )
 
             memories_at_least = max(env.USER_PROFILE_AT_LEAST or 10, 10)
             if not memories:
@@ -66,9 +66,12 @@ async def _process_user_profile(user: IMemoryUser, yesterday_end: datetime.datet
             return True
 
 
-async def describe_user_profile():
+async def describe_user_profile(user_ids: list[str] | None = None):
     """
     用户画像（由定时任务调用）
+
+    :param user_ids: 用户 ID 列表，通常由用户主动调用时传入，定时任务调用时为 None
+    :return:
     """
     concurrency = max(1, env.USER_PROFILE_THREADS or 5)
     now = datetime.datetime.now()
@@ -76,8 +79,13 @@ async def describe_user_profile():
     yesterday = now - datetime.timedelta(days=1)
     yesterday_end = yesterday.replace(hour=23, minute=59, second=59, microsecond=0)
 
-    # 查询所有用户
-    users: list[IMemoryUser] = await user_ops.find_user(status=1)
+    if user_ids:
+        # 查指定用户
+        users: list[IMemoryUser] = await user_ops.find_user(ids=user_ids, status=1, limit=9999)
+    else:
+        # 查询所有用户
+        users: list[IMemoryUser] = await user_ops.find_user(status=1, limit=9999)
+
     if not users:
         logger.info("[USER_PROFILE] No active user found.")
         return
