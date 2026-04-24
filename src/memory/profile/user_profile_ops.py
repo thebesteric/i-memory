@@ -7,7 +7,7 @@ from agile.utils import LogHelper
 from src.core.components import USER_PROFILE_CACHE
 from src.core.db import get_db
 from src.memory.memory_models import IMemoryUser
-from src.memory.profile.user_profile_models import UserProfile
+from src.memory.profile.user_profile_models import UserProfile, Habit, Tag
 
 logger = LogHelper.get_logger()
 db = get_db()
@@ -60,6 +60,13 @@ async def upsert_user_profile(cur_user: IMemoryUser, cur_user_profile: UserProfi
             # 转成标准时间字符串
             return obj.isoformat()
         raise TypeError(f"无法序列化: {type(obj)}")
+
+    # 用户习惯淘汰逻辑
+    high_confidence_habits = [h for h in cur_user_profile.preferences.habits if h.confidence >= 0.5]
+    cur_user_profile.preferences.habits = high_confidence_habits
+    # 用户标签淘汰逻辑
+    high_weight_tags = [t for t in cur_user_profile.tags if t.weight >= 0.5]
+    cur_user_profile.tags = high_weight_tags
 
     demographic = json.dumps(cur_user_profile.demographic.model_dump(mode="json"), default=json_serial, ensure_ascii=False)
     preferences = json.dumps(cur_user_profile.preferences.model_dump(mode="json"), default=json_serial, ensure_ascii=False)
