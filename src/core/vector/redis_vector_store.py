@@ -13,14 +13,15 @@ logger = LogHelper.get_logger()
 @singleton
 class RedisVectorStore(BaseVectorStore):
 
-    def __init__(self, url: str, prefix: str = "im:vec:"):
+    def __init__(self, url: str, password: str = None, prefix: str = "im:vec:"):
         self.url = url
+        self.password = password
         self.prefix = prefix
         self.client = None
 
     async def _get_client(self):
         if not self.client:
-            self.client = redis.from_url(self.url)
+            self.client = redis.from_url(self.url, password=self.password)
         return self.client
 
     def _key(self, id: str) -> str:

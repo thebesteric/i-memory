@@ -36,6 +36,7 @@ class EnvConfig:
 
         # Redis 配置
         self.REDIS_URL = env_helper.get("REDIS_URL", "redis://localhost:6379/0")
+        self.REDIS_URL = env_helper.get("REDIS_PASSWORD", "")
 
         # OpenAI 配置
         self.OPENAI_API_KEY = env_helper.get("OPENAI_API_KEY")
