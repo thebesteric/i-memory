@@ -7,7 +7,7 @@ CONTAINER_NAME=${CONTAINER_NAME:-redis-wwj}
 PORT_MAP=${PORT_MAP:-16379:6379}
 REDIS_DATA_DIR=${REDIS_DATA_DIR:-$PWD/redis_data}
 REDIS_PASSWORD=${REDIS_PASSWORD:-apppassword}
-REDIS_CONF=${REDIS_CONF:-$PWD/redis.conf}  # 新增配置文件参数，默认当前目录
+REDIS_CONF=${REDIS_CONF:-$PWD/redis.conf}
 
 print_usage() {
   echo "Usage: $0 [-i image_name] [-c container_name] [-m port_map] [-d data_dir] [-f redis_conf] [-a redis_password]";
