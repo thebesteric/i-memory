@@ -90,11 +90,23 @@ async def add_fact(user: IMemoryUser, fact: Fact, topic: Topic, conn=None) -> Fa
 
     vector = await get_embed_model().embed(" | ".join(parts))
 
+    # 提取关联 memory 的 batch_id
+    batch_id = None
+    if topic and topic.dialogue_ids:
+        format_strings = ','.join(['%s'] * len(topic.dialogue_ids))
+        row = db.fetchone(
+            f"SELECT batch_id FROM memories WHERE id IN ({format_strings}) AND batch_id IS NOT NULL LIMIT 1",
+            tuple(topic.dialogue_ids),
+            conn=conn
+        )
+        if row:
+            batch_id = row["batch_id"]
+
     db.execute(
         """
         INSERT INTO graph_facts (id, user_id, topic_id, what, when_, where_, who, why, confidence, vector, fact_kind,
-                                 occurred_start, occurred_end, created_at, updated_at, processed_at)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                 occurred_start, occurred_end, created_at, updated_at, processed_at, batch_id)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """,
         (
             fact_id,
@@ -112,7 +124,8 @@ async def add_fact(user: IMemoryUser, fact: Fact, topic: Topic, conn=None) -> Fa
             fact.occurred_end,
             now,
             now,
-            None
+            None,
+            batch_id
         ),
         conn=conn
     )

@@ -46,9 +46,21 @@ async def _process_user_profile(user: IMemoryUser, yesterday_end: datetime.datet
     async with user_lock:
         async with semaphore:
             user_profile_extractor = UserProfileExtractor()
-            memories = await asyncio.to_thread(mem_ops.find_mem_by_conditions,
-                                               conditions=["user_id = %s", "profile_joined = 0", "created_at < %s"], params=[user.id, yesterday_end],
-                                               order_by=["created_at ASC"], )
+            # 检查当前画像是否活跃：活跃则增量更新 (profile_joined=0)，失效则全量重建
+            current_profile = await user_profile_ops.get_user_profile(user)
+            if current_profile is not None:
+                # 增量更新：只取未参与画像的记忆
+                memories = await asyncio.to_thread(mem_ops.find_mem_by_conditions,
+                                                   conditions=["user_id = %s", "profile_joined = 0", "created_at < %s"],
+                                                   params=[user.id, yesterday_end],
+                                                   order_by=["created_at ASC"])
+            else:
+                # 全量重建：画像已失效，取所有现有记忆
+                logger.info(f"[USER_PROFILE] Profile inactive, full rebuild for User ID: {user.id}")
+                memories = await asyncio.to_thread(mem_ops.find_mem_by_conditions,
+                                                   conditions=["user_id = %s", "created_at < %s"],
+                                                   params=[user.id, yesterday_end],
+                                                   order_by=["created_at ASC"])
 
             memories_at_least = max(env.USER_PROFILE_AT_LEAST or 10, 10)
             if not memories:

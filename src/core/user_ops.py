@@ -70,7 +70,7 @@ async def get_user(user_identity: IMemoryUserIdentity, using_cache: bool = False
     project_key = user_identity.project_key
 
     # 构建缓存 key
-    cache_key = f"{user_key}:{tenant_key or ""}:{project_key or ""}"
+    cache_key = f"{user_key}:{tenant_key or ''}:{project_key or ''}"
     if using_cache:
         memory_user = USER_IDENTITY_CACHE.get(cache_key)
         if memory_user:

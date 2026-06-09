@@ -33,8 +33,8 @@ async def build_graph(user_identity: IMemoryUserIdentity = Body(..., description
         if not un_fact_join_memories or len(un_fact_join_memories) < least_tolerance:
             return R.error(
                 code=400,
-                data={"memories": un_fact_join_memories, "threshold": least_tolerance},
-                message=f"User {user.id} has {len(un_fact_join_memories)} un-fact-joined memories, which is less than {least_tolerance}. Skipping processing."
+                data={"count": len(un_fact_join_memories or []), "threshold": least_tolerance},
+                message=f"User {user.id} has {len(un_fact_join_memories or [])} un-fact-joined memories, which is less than {least_tolerance}. Skipping processing."
             )
         # 加入构建队列
         graph_builder.user_queue.put_nowait(user)

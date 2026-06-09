@@ -92,7 +92,8 @@ async def add_hsg_memory(user_identity: IMemoryUserIdentity,
                          content: str,
                          tags: List[str] = None,
                          metadata: Any = None,
-                         qa_role: QARole | None = None) -> Dict[str, Any]:
+                         qa_role: QARole | None = None,
+                         batch_id: str | None = None) -> Dict[str, Any]:
     """
     添加一条 Hierarchical Semantic Graph 记忆（数据库 + 向量存储、按扇区（sectors）分层组织记忆）
     :param content: 记忆内容
@@ -100,6 +101,7 @@ async def add_hsg_memory(user_identity: IMemoryUserIdentity,
     :param metadata: 元数据
     :param user_identity: 用户身份
     :param qa_role: QA 角色（human/assistant）
+    :param batch_id: 批次 ID
     :return:
     """
     # 用户合法性检查
@@ -116,6 +118,10 @@ async def add_hsg_memory(user_identity: IMemoryUserIdentity,
 
     # 需传 qa_role，问答配对（尝试复用最近一条未配对 human 的 qa_pair_id）
     qa_pair_id = _resolve_auto_qa_linking(user, qa_role)
+
+    # 若未显式传入 batch_id，则自动继承 qa_pair_id，使每轮问答天然可批量删除
+    if not batch_id and qa_pair_id:
+        batch_id = qa_pair_id
 
     # 生成内容的嵌入向量
     vec = await embed_model.embed(content)
@@ -224,7 +230,8 @@ async def add_hsg_memory(user_identity: IMemoryUserIdentity,
             compressed_vec=None,
             feedback_score=0,
             qa_role=qa_role,
-            qa_pair_id=qa_pair_id
+            qa_pair_id=qa_pair_id,
+            batch_id=batch_id
         )
 
         # 调用 embed_multi_sector，对内容进行多 sector 嵌入，生成向量

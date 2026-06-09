@@ -20,7 +20,7 @@ user_queue = asyncio.Queue()
 # 记录已入队用户ID，防止重复入队
 enqueued_user_ids = set()
 # 记忆最小容忍度数量
-GRAPH_MEM_COUNT_AT_LEAST_TOLERANCE = 10
+GRAPH_MEM_COUNT_AT_LEAST_TOLERANCE = 3
 
 
 async def get_un_fact_join_mem_count(callback: Callable[[IMemoryUser, int], None]):

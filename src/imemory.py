@@ -29,13 +29,15 @@ class IMemory:
         self._openai = OpenAIRegistrar(self)
         self.db = get_db()
         self.milvus_manager: MilvusManager | None = None
-        # 预先准备资源，例如数据库连接、向量数据库集合等
-        asyncio.run(self._prepare_resource())
+        self._ready = False
 
     async def _prepare_resource(self):
         """
         预先准备资源，例如数据库连接、向量数据库集合等
         """
+        if self._ready:
+            return
+        
         # 初始化数据库与连接池
         self.db.connect()
 
@@ -50,6 +52,8 @@ class IMemory:
                 # TODO: 从数据库读取向量数据并插入到 Milvus 中
                 pass
 
+        self._ready = True
+
     @property
     def openai(self):
         return self._openai
@@ -60,7 +64,8 @@ class IMemory:
                   cfg: IMemoryConfig = None,
                   tags: List[str] = None,
                   meta: Dict[str, Any] = None,
-                  qa_role: QARole | None = None) -> Dict[str, Any]:
+                  qa_role: QARole | None = None,
+                  batch_id: str | None = None) -> Dict[str, Any]:
         """
         添加记忆内容
         :param content: 记忆内容文本
@@ -69,6 +74,7 @@ class IMemory:
         :param tags: 标签列表
         :param meta: 其他元数据
         :param qa_role: QA 角色（human/assistant）
+        :param batch_id: 批次 ID
         :return: 添加结果
         """
         user_identity = user_identity or self.default_user_identity
@@ -79,7 +85,8 @@ class IMemory:
                                     cfg=cfg,
                                     meta=meta,
                                     tags=tags,
-                                    qa_role=qa_role)
+                                    qa_role=qa_role,
+                                    batch_id=batch_id)
         if "root_memory_id" in res:
             res["id"] = res["root_memory_id"]
         return res
@@ -118,7 +125,27 @@ class IMemory:
         :param memory_id: 记忆标识
         :return: 删除结果
         """
-        return self.mem_ops.del_mem(memory_id)
+        return await self.delete_mems([memory_id])
+
+    async def delete_mems(self, memory_ids: List[str]) -> int:
+        """
+        批量级联删除指定 ID 的记忆内容其及衍生数据
+        :param memory_ids: 记忆 ID 列表
+        :return: 删除的行数
+        """
+        if not memory_ids:
+            return 0
+        return self.mem_ops.del_mems(memory_ids)
+
+    async def delete_by_batch(self, user_identity: IMemoryUserIdentity, batch_id: str) -> int:
+        """
+        按批次级联删除用户记忆内容及衍生表数据
+        :param user_identity: 用户身份
+        :param batch_id: 批次 ID
+        :return: 删除的行数
+        """
+        user = await self._get_user_by_identity(user_identity)
+        return self.mem_ops.del_mem_by_batch(user.id, batch_id)
 
     async def clear(self, user_identity: IMemoryUserIdentity = None) -> int:
         """

@@ -44,10 +44,21 @@ async def insert_sessions(user: IMemoryUser, sessions: Sessions, conn=None) -> S
         session.set_user_id(user.id)
         session.set_vector(vector)
 
+        # 提取关联 memory 的 batch_id
+        batch_id = None
+        if session.dialogue_ids:
+            format_strings = ','.join(['%s'] * len(session.dialogue_ids))
+            row = db.fetchone(
+                f"SELECT batch_id FROM memories WHERE id IN ({format_strings}) AND batch_id IS NOT NULL LIMIT 1",
+                tuple(session.dialogue_ids)
+            )
+            if row:
+                batch_id = row["batch_id"]
+
         db.execute(
             """
-            INSERT INTO sessions (id, user_id, summary, vector, dialogue_ids, key_facts, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO sessions (id, user_id, summary, vector, dialogue_ids, key_facts, created_at, updated_at, batch_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 _id,
@@ -57,7 +68,8 @@ async def insert_sessions(user: IMemoryUser, sessions: Sessions, conn=None) -> S
                 json.dumps(session.dialogue_ids or [], ensure_ascii=False),
                 json.dumps(session.key_facts or [], ensure_ascii=False),
                 now,
-                now
+                now,
+                batch_id
             ),
             conn=conn
         )

@@ -30,6 +30,7 @@ class AddMemoryRequest(BaseModel):
     tags: Optional[List[str]] = Field(default_factory=list, description="标签列表")
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="其他元数据")
     qa_role: Optional[QARole] = Field(default=None, description="QA 角色，仅允许 human/assistant")
+    batch_id: Optional[str] = Field(default=None, description="批次ID，用于一键级联删除与回退")
 
 
 class SearchMemoryRequest(BaseModel):
@@ -118,3 +119,19 @@ class GraphExploreRequest(BaseModel):
     )
     max_nodes: Optional[int] = Field(default=None, ge=1, le=5000, description="返回节点数上限")
     max_edges: Optional[int] = Field(default=None, ge=1, le=10000, description="返回边数上限")
+
+
+class DeleteMemoryByBatchRequest(BaseModel):
+    """
+    按批次删除记忆请求模型
+    """
+    user_identity: IMemoryUserIdentity = Field(..., description="用户身份")
+    batch_id: str = Field(..., min_length=1, description="批次 ID")
+
+
+class DeleteMemoryByIdsRequest(BaseModel):
+    """
+    按 ID 列表精确删除记忆请求模型
+    """
+    user_identity: Optional[IMemoryUserIdentity] = Field(default=None, description="用户身份（可选，用于校验权限）")
+    memory_ids: List[str] = Field(..., min_length=1, description="记忆 ID 列表")

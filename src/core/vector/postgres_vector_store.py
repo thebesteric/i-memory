@@ -22,6 +22,7 @@ class PostgresVectorStore(BaseVectorStore):
         self.pool = None
         self.initialized = False
         self._pool_init_lock = asyncio.Lock()
+        self._loop = None
 
     async def _get_pool(self):
         """
@@ -29,14 +30,28 @@ class PostgresVectorStore(BaseVectorStore):
         该方法会确保 pgvector 扩展已启用，并初始化表结构和索引
         :return:
         """
-        if self.pool and self.initialized:
+        current_loop = asyncio.get_running_loop()
+        
+        # 检查池是否存在且未关闭，且 loop 一致
+        if self.pool and not self.pool.is_closing() and self.initialized and self._loop == current_loop:
             return self.pool
 
         async with self._pool_init_lock:
-            if self.pool and self.initialized:
+            # 再次检查，防止并发初始化
+            if self.pool and not self.pool.is_closing() and self.initialized and self._loop == current_loop:
                 return self.pool
 
+            # 如果旧池存在但 loop 不一致或已关闭，先清理
+            if self.pool:
+                try:
+                    await self.pool.close()
+                except Exception:
+                    pass
+                self.pool = None
+                self.initialized = False
+
             init_start = time.perf_counter()
+            self._loop = current_loop
             pool = await asyncpg.create_pool(self.dsn)
             try:
                 async with pool.acquire() as conn:
@@ -198,6 +213,16 @@ class PostgresVectorStore(BaseVectorStore):
         pool = await self._get_pool()
         async with pool.acquire() as conn:
             await conn.execute(f"DELETE FROM {self.vector_table_name} WHERE id=$1", id)
+
+    async def close(self):
+        """关闭连接池"""
+        async with self._pool_init_lock:
+            if self.pool:
+                await self.pool.close()
+                self.pool = None
+                self.initialized = False
+                self._loop = None
+                logger.info(f"PostgresVectorStore pool closed for {self.vector_table_name}")
 
     @timing
     async def search(self, user: IMemoryUser, vector: List[float], sector: str, top_k: int) -> List[VectorSearch]:

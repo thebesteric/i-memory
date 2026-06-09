@@ -3,8 +3,14 @@ import os
 
 import pyrootutils
 from agile.utils import EnvHelper, singleton, TimeUnit
+from dotenv import load_dotenv
 
 from src.core.constants import ModelProvider, VectorStoreProvider, EmbedModelProvider
+
+# 直接加载 .env 文件
+env_path = os.path.join(pyrootutils.find_root(), '.env')
+if os.path.exists(env_path):
+    load_dotenv(env_path)
 
 env_helper: EnvHelper | None = None
 
@@ -14,9 +20,15 @@ class EnvConfig:
     def __init__(self, env_file_path: str = f"{pyrootutils.find_root()}/.env"):
         # 加载环境变量文件
         global env_helper
+        # 使用绝对路径确保能找到 .env 文件
+        if not os.path.isabs(env_file_path):
+            env_file_path = os.path.abspath(env_file_path)
+        # 如果文件不存在，使用 None 避免警告
+        if not os.path.exists(env_file_path):
+            env_file_path = None
         env_helper = EnvHelper(
             env_file_path=env_file_path,
-            override=False,
+            override=True,  # 使用已加载的环境变量
             env_mode=os.getenv("ENV_MODE")
         )
 

@@ -1,0 +1,15 @@
+{
+    "database-client.autoSync": true,
+    "database-client.databaseInfos": [
+        {
+            "name": "i-memory (本地)",
+            "host": "127.0.0.1",
+            "port": 12345,
+            "user": "appuser",
+            "password": "apppassword",
+            "database": "i-memory",
+            "dialect": "PostgreSQL"
+        }
+    ],
+    "dbcode.discovery.enabled": false
+}

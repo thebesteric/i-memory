@@ -14,7 +14,7 @@ from src.memory.memory_models import IMemoryUserIdentity, IMemorySearchResult
 from src.memory.profile import user_profile_ops
 from src.memory.profile.user_profile_models import UserProfile
 from src.web.models.web_models import AddMemoryRequest, SearchMemoryRequest, HistoryMemoryRequest, \
-    CanonicalRelationsRequest
+    CanonicalRelationsRequest, DeleteMemoryByBatchRequest, DeleteMemoryByIdsRequest
 
 from typing import Any
 
@@ -43,7 +43,8 @@ async def add(req: AddMemoryRequest):
                            user_identity=req.user_identity,
                            meta=req.metadata or {},
                            tags=req.tags or [],
-                           qa_role=req.qa_role)
+                           qa_role=req.qa_role,
+                           batch_id=req.batch_id)
     return R.success(data=result)
 
 
@@ -128,15 +129,23 @@ async def get(memory_id: str = Path(..., description="记忆 ID")):
     ),
     description="批量删除指定ID的记忆内容。"
 )
-async def delete_memory(memory_ids: list[str] = Body(..., description="记忆 ID 列表")):
+async def delete_memory(req: DeleteMemoryByIdsRequest):
     """
     删除指定 ID 的记忆内容
-    :param memory_ids: 记忆 ID 列表
+    :param req: 删除记忆请求模型
     :return: 删除结果
     """
-    affected_rows = 0
-    for mid in memory_ids:
-        affected_rows += await mem.delete(mid)
+    # 如果传了 user_identity，校验这批 memory_ids 是否都属于该用户
+    if req.user_identity:
+        user = await user_ops.get_user(req.user_identity)
+        if not user:
+            raise UserNotFoundError(req.user_identity)
+        # 校验所有 memory 都属于该用户
+        mids = mem.mem_ops.find_mem_by_ids(req.memory_ids)
+        for m in mids:
+            if m.get("user_id") != user.id:
+                raise UserNotFoundError(req.user_identity)
+    affected_rows = await mem.delete_mems(req.memory_ids)
     return R.success(data={"affected_rows": affected_rows})
 
 
@@ -199,6 +208,21 @@ async def canonical_relations(req: CanonicalRelationsRequest):
         "count": len(rows),
         "relations": rows,
     })
+
+
+@router.post(
+    "/delete_by_batch",
+    summary="按批次级联删除记忆",
+    response_model=gen_response_model(
+        "DeleteByBatchResponse",
+        data_type=dict[str, int],
+        data_desc="删除影响的行数",
+    ),
+    description="按批次 ID 一键级联删除该批次的所有记忆、关联的图事实和会话总结。"
+)
+async def delete_by_batch(req: DeleteMemoryByBatchRequest):
+    affected_rows = await mem.delete_by_batch(req.user_identity, req.batch_id)
+    return R.success(data={"affected_rows": affected_rows})
 
 
 def _handle_memories(memories: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
