@@ -1,5 +1,5 @@
 accelerate==1.13.0
-agile==0.1.11
+agile==0.1.12
 aiohappyeyeballs==2.6.1
 aiohttp==3.13.3
 aiosignal==1.4.0

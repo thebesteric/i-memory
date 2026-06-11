@@ -5,6 +5,12 @@ import time
 from contextlib import asynccontextmanager
 from typing import cast
 
+import warnings
+# 屏蔽正则转义语法警告
+warnings.filterwarnings("ignore", category=SyntaxWarning)
+# 屏蔽 pkg_resources 弃用警告
+warnings.filterwarnings("ignore", category=UserWarning, module="jieba")
+
 from agile.commons.biz_error import BizError
 from agile.utils import LogHelper
 from agile.web import R
