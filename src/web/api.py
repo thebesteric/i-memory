@@ -3,7 +3,6 @@ import inspect
 import sys
 import time
 from contextlib import asynccontextmanager
-from typing import cast
 
 import warnings
 # 屏蔽正则转义语法警告
@@ -28,6 +27,7 @@ sys.path.append(project_root)
 
 from src.core.config import env
 from src.core.components import get_vector_store
+from src.memory.entity.db_schema import init_db_schema
 from src.memory.tasks import start_background_tasks, stop_background_tasks
 from src.web.routes import health_router, memory_router, graph_router, auth_router, backend_router
 
@@ -48,6 +48,11 @@ def create_app() -> FastAPI:
             f"🚀 Starting iMemory API server on {env.WEB_HOST}:{env.WEB_PORT} with debug: {debug}, "
             f"using environment mode: {env_mode if env_mode else 'local'}"
         )
+
+        # 初始化数据库
+        await init_db_schema()
+        logger.info("Database schema initialization completed")
+
         vector_store = get_vector_store()
         warmup = getattr(vector_store, "warmup", None)
         if callable(warmup):

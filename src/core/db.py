@@ -1,6 +1,3 @@
-import os
-import time
-from pathlib import Path
 from sqlite3 import OperationalError
 from typing import Optional, Tuple, Dict, List, Any
 
@@ -54,8 +51,6 @@ class DB:
             return self._pool
         if not self.db_url.startswith("postgresql://"):
             raise ValueError("Unsupported database URL schema: postgresql://. Only PostgreSQL is supported currently.")
-        # Ensure database exists before creating the pool
-        self._ensure_database_exists()
         try:
             self._pool = ThreadedConnectionPool(
                 self._pool_min_conn,
@@ -69,7 +64,10 @@ class DB:
             )
             return self._pool
         except psycopg2.OperationalError as e:
-            raise OperationalError(f"Connect to PostgreSQL failed: {str(e)}") from e
+            raise OperationalError(
+                f"Connect to PostgreSQL failed: {str(e)}. "
+                f"Please ensure init_db_schema has initialized database/schema."
+            ) from e
 
     def get_conn(self) -> psycopg2.extensions.connection:
         pool = self.get_pool()
@@ -83,75 +81,11 @@ class DB:
 
     def connect(self):
         """
-        连接数据库
+        连接数据库并预热连接池
         :return:
         """
         conn = self.get_conn()
-        try:
-            # 初始化数据库结构
-            self.init_schema(conn)
-        finally:
-            self.put_conn(conn)
-
-    def _ensure_database_exists(self):
-        """
-        确保数据库存在，如果不存在则创建
-        :return:
-        """
-        base_url = f"postgresql://{env.POSTGRES_DB_USER}:{env.POSTGRES_DB_PASSWORD}@{env.POSTGRES_DB_HOST}:{env.POSTGRES_DB_PORT}/postgres"
-        try:
-            conn = psycopg2.connect(base_url, **self.conn_kwargs)
-            conn.autocommit = True
-            cur = conn.cursor()
-            cur.execute(f"SELECT 1 FROM pg_database WHERE datname = %s", (env.POSTGRES_DB_NAME,))
-            exists = cur.fetchone()
-            if not exists:
-                logger.info(f"Creating database {env.POSTGRES_DB_NAME} successfully.")
-                cur.execute(f'CREATE DATABASE "{env.POSTGRES_DB_NAME}"')
-            cur.close()
-            conn.close()
-        except Exception as e:
-            logger.error(f"Failed to create database {env.POSTGRES_DB_NAME}: {e}")
-            raise
-
-    def _run_migrations(self, conn: psycopg2.extensions.connection):
-        """
-        初始化数据库结构
-        :return:
-        """
-        try:
-            with conn.cursor() as c:
-                c.execute("CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY, applied_at BIGINT)")
-                files = []
-                mig_path = Path(__file__).parent.parent / "migrations"
-                if mig_path.exists():
-                    files = [f for f in os.listdir(mig_path) if f.endswith(".sql")]
-                files.sort()
-                for f in files:
-                    c.execute("SELECT 1 FROM _migrations WHERE name = %s", (f,))
-                    if not c.fetchone():
-                        logger.info(f"Applying migration {f}")
-                        sql = (mig_path / f).read_text(encoding="utf-8")
-                        for statement in [s.strip() for s in sql.split(';') if s.strip()]:
-                            try:
-                                c.execute(statement)
-                            except Exception as e:
-                                logger.error(f"Migration statement failed: {statement}, Error: {e}")
-                                conn.rollback()
-                                raise
-                        c.execute("INSERT INTO _migrations (name, applied_at) VALUES (%s, %s)", (f, int(time.time())))
-            # 迁移完成后强制提交（确保会话状态同步）
-            self.commit(conn)
-        except Exception as e:
-            conn.rollback()
-            raise e
-
-    def init_schema(self, conn: psycopg2.extensions.connection):
-        """
-        初始化数据库结构
-        :return:
-        """
-        self._run_migrations(conn)
+        self.put_conn(conn)
 
     def execute(self, sql: str, params: Tuple = None, conn=None) -> int:
         """

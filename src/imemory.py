@@ -13,6 +13,7 @@ from src.core.config import env
 from src.core.db import get_db
 from src.core.mem_ops import mem_ops
 from src.exceptions.exceptions import UserNotFoundError
+from src.memory.entity.db_schema import init_db_schema
 from src.memory.hsg import query_hsg_memories
 from src.memory.memory_models import IMemoryConfig, IMemoryFilters, IMemoryUserIdentity, QARole, IMemoryUser, IMemorySearchResult
 from src.ops.ingest import ingest_document
@@ -36,6 +37,9 @@ class IMemory:
         """
         预先准备资源，例如数据库连接、向量数据库集合等
         """
+        # 基于 ORM 模型初始化数据库结构
+        await init_db_schema()
+
         # 初始化数据库与连接池
         self.db.connect()
 
