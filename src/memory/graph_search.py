@@ -1,14 +1,16 @@
-import json
 from dataclasses import dataclass
 from typing import Any, Iterable
 
 from agile.utils import LogHelper
+from sqlalchemy import or_, select
 
-from src.core.db import get_db
+from src.core.db import get_session_factory
+from src.memory.entity.db_schema import GraphEntityRelations, GraphFactEntities, GraphFacts, GraphTopics, Memories
 from src.memory.graph.graph_node_models import EdgeRelation
+from src.utils.json_utils import coerce_json_field
 
 logger = LogHelper.get_logger(title="[GRAPH_SEARCH]")
-db = get_db()
+session_factory = get_session_factory()
 
 
 def _to_str_set(values: Iterable[str | None]) -> set[str]:
@@ -52,31 +54,9 @@ class GraphExpansionCandidate:
     score: float
 
 
-def _collect_topic_dialogue_ids(user_id: str, topic_ids: list[str], limit: int) -> set[str]:
-    if not topic_ids:
-        return set()
-    rows = db.fetchall(
-        """
-        SELECT dialogue_ids
-        FROM graph_topics
-        WHERE user_id = %s
-          AND id = ANY (%s)
-        ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST, id ASC
-        LIMIT %s
-        """,
-        (user_id, topic_ids, _safe_limit(limit)),
-    )
-    dialogue_ids: set[str] = set()
-    for row in rows:
-        payload = row.get("dialogue_ids")
-        if isinstance(payload, str):
-            try:
-                payload = json.loads(payload)
-            except Exception:
-                payload = []
-        if isinstance(payload, list):
-            dialogue_ids.update(_to_str_set(payload))
-    return dialogue_ids
+def _normalize_json_list(payload: Any) -> list[Any]:
+    parsed = coerce_json_field(payload, [])
+    return parsed if isinstance(parsed, list) else []
 
 
 EDGE_RELATION_WEIGHTS: dict[str, float] = {
@@ -92,196 +72,219 @@ EDGE_RELATION_WEIGHTS: dict[str, float] = {
 }
 
 
-def _edge_relation_weights_sql() -> str:
-    rows = ",".join(f"('{relation}', {weight})" for relation, weight in EDGE_RELATION_WEIGHTS.items())
-    return f"""
-        SELECT *
-        FROM (VALUES
-            {rows}
-        ) AS rw(edge_relation, relation_weight)
-    """
+def _find_seed_topic_ids(user_id: str, seed_ids: set[str], limit: int) -> list[str]:
+    if not seed_ids:
+        return []
+    dialogue_matchers = [GraphTopics.dialogue_ids.op("?")(seed_id) for seed_id in sorted(seed_ids)]
+    if not dialogue_matchers:
+        return []
+    with session_factory() as session:
+        rows = session.execute(
+            select(GraphTopics.id)
+            .where(GraphTopics.user_id == user_id, or_(*dialogue_matchers))
+            .order_by(
+                GraphTopics.updated_at.desc().nullslast(),
+                GraphTopics.created_at.desc().nullslast(),
+                GraphTopics.id.asc(),
+            )
+            .limit(limit)
+        ).all()
+    return [str(row[0]) for row in rows if row and row[0]]
 
 
-def _build_graph_expansion_sql(*,
-                               seed_memory_params: tuple[str, list[str]],
-                               seed_topic_params: tuple[str, int],
-                               seed_fact_params: tuple[str, int],
-                               seed_canonical_params: tuple[str, ...],
-                               walk_params: tuple[float, float, str, int, float, float, int],
-                               related_fact_params: tuple[str, ...],
-                               related_topic_params: tuple[str, ...],
-                               related_memory_refs_params: tuple[str, str, int]) -> tuple[str, tuple[Any, ...]]:
-    """
-    构建“种子记忆 → 主题 → 事实 → canonical 实体 → 多跳实体游走 → 反向召回记忆”的图扩展 SQL。
+def _find_seed_fact_ids(user_id: str, topic_ids: list[str], limit: int) -> list[str]:
+    if not topic_ids:
+        return []
+    with session_factory() as session:
+        rows = session.execute(
+            select(GraphFacts.id)
+            .where(GraphFacts.user_id == user_id, GraphFacts.topic_id.in_(topic_ids))
+            .order_by(
+                GraphFacts.confidence.desc().nullslast(),
+                GraphFacts.updated_at.desc().nullslast(),
+                GraphFacts.created_at.desc().nullslast(),
+                GraphFacts.id.asc(),
+            )
+            .limit(limit)
+        ).all()
+    return [str(row[0]) for row in rows if row and row[0]]
 
-    流程说明：
-    - `seed_memory`：把输入的记忆 ID 作为种子集合，只保留当前用户的数据
-    - `seed_topic`：找出包含种子记忆的主题（`graph_topics.dialogue_ids` 命中）
-    - `seed_fact`：在这些主题下聚合出相关事实（Fact）
-    - `seed_canonical`：从事实映射到 canonical 实体，作为递归游走的起点
-    - `relation_weights`：为不同 `edge_relation` 提供预定义权重
-    - `walk`：按 `max_hops` 递归扩展实体关系，并结合 `hop_decay` / `min_relation_confidence` / `min_walk_score` / `per_hop_limit` 做剪枝
-    - `related_canonical`：对同一 canonical 的多条路径做分数聚合
-    - `related_fact` / `related_topic` / `related_memory_refs`：把相关 canonical 反向映射回事实、主题和记忆 ID
-    - 最终 SELECT：排除种子记忆本身，按 `graph_score` 降序返回候选记忆
 
-    额外约束：
-    - 通过 `path` 数组避免回环
-    - 通过 `max_hops` 控制最大游走深度
-    - 通过 `per_hop_limit` 控制每一跳的扩展规模
-    - 通过 `hop_decay` 控制越深层路径的分数衰减
-    """
-    sql = f"""
-        WITH RECURSIVE seed_memory AS (
-            SELECT id
-            FROM memories
-            WHERE user_id = %s
-              AND id = ANY (%s)
-        ),
-        seed_topic AS (
-            SELECT gt.id
-            FROM graph_topics gt
-            WHERE gt.user_id = %s
-              AND EXISTS (
-                  SELECT 1
-                  FROM seed_memory sm
-                  WHERE gt.dialogue_ids ? sm.id
-              )
-            ORDER BY gt.updated_at DESC NULLS LAST, gt.created_at DESC NULLS LAST, gt.id ASC
-            LIMIT %s
-        ),
-        seed_fact AS (
-            SELECT gf.id
-            FROM graph_facts gf
-            JOIN seed_topic st ON st.id = gf.topic_id
-            WHERE gf.user_id = %s
-            ORDER BY gf.confidence DESC NULLS LAST, gf.updated_at DESC NULLS LAST, gf.created_at DESC NULLS LAST, gf.id ASC
-            LIMIT %s
-        ),
-        seed_canonical AS (
-            SELECT DISTINCT gfe.canonical_id
-            FROM graph_fact_entities gfe
-            JOIN seed_fact sf ON sf.id = gfe.fact_id
-            WHERE gfe.user_id = %s
-              AND gfe.canonical_id IS NOT NULL
-        ),
-        relation_weights AS (
-            {_edge_relation_weights_sql()}
-        ),
-        walk AS (
-            SELECT
-                0 AS hop, -- 初始跳数 0（种子）
-                sc.canonical_id, -- 种子实体
-                ARRAY[sc.canonical_id]::text[] AS path, -- 记录游走路径，防环
-                1.0::float8 AS cum_score -- 初始分数
-            FROM seed_canonical sc
-            WHERE sc.canonical_id IS NOT NULL
+def _find_seed_canonical_ids(user_id: str, fact_ids: list[str]) -> list[str]:
+    if not fact_ids:
+        return []
+    with session_factory() as session:
+        rows = session.execute(
+            select(GraphFactEntities.canonical_id)
+            .where(
+                GraphFactEntities.user_id == user_id,
+                GraphFactEntities.fact_id.in_(fact_ids),
+                GraphFactEntities.canonical_id.is_not(None),
+            )
+            .distinct()
+        ).all()
+    return [str(row[0]) for row in rows if row and row[0]]
 
-            UNION ALL
-            -- 递归扩展下一跳
-            SELECT
-                w.hop + 1 AS hop, -- 当前跳数
-                next_node.next_canonical_id AS canonical_id, -- 下一跳 canonical
-                w.path || next_node.next_canonical_id AS path, -- 追加路径
-                (
-                    w.cum_score * %s
-                    + COALESCE(gre.confidence, 0.0) * rw.relation_weight * POWER(%s, w.hop + 1)
-                ) AS cum_score -- 分数 = 衰减系数 * 上一跳分数 + 新关系得分
-            FROM graph_entity_relations gre
-            JOIN walk w
-              ON gre.source_canonical_id = w.canonical_id
-              OR gre.target_canonical_id = w.canonical_id
-            JOIN LATERAL (
-                SELECT
-                    CASE
-                        WHEN gre.source_canonical_id = w.canonical_id THEN gre.target_canonical_id
-                        ELSE gre.source_canonical_id
-                    END AS next_canonical_id
-            ) AS next_node ON TRUE
-            JOIN relation_weights rw
-              ON rw.edge_relation = gre.edge_relation
-            WHERE gre.user_id = %s
-              AND w.hop < %s
-              AND (gre.confidence IS NULL OR gre.confidence >= %s)
-              AND gre.source_canonical_id <> gre.target_canonical_id
-              AND next_node.next_canonical_id IS NOT NULL
-              AND NOT (next_node.next_canonical_id = ANY (w.path))
-        ),
-        walk_ranked AS (
-            -- 按跳数截断候选
-            SELECT canonical_id, cum_score
-            FROM (
-                SELECT
-                    w.hop,
-                    w.canonical_id,
-                    w.cum_score,
-                    ROW_NUMBER() OVER (
-                        PARTITION BY w.hop
-                        ORDER BY w.cum_score DESC NULLS LAST, w.canonical_id ASC
-                    ) AS rn -- 跳内排序
-                FROM walk w
-                WHERE w.hop > 0
-                  AND w.canonical_id IS NOT NULL
-                  AND w.cum_score >= %s
-            ) ranked
-            WHERE rn <= %s
-        ),
-        related_canonical AS (
-            -- 按 canonical 聚合多路径分数
-            SELECT canonical_id, MAX(cum_score) AS graph_score
-            FROM walk_ranked
-            WHERE canonical_id IS NOT NULL
-            GROUP BY canonical_id
-        ),
-        related_fact AS (
-            -- canonical 反查 fact
-            SELECT gfe.fact_id, MAX(rc.graph_score) AS graph_score
-            FROM graph_fact_entities gfe
-            JOIN related_canonical rc ON rc.canonical_id = gfe.canonical_id
-            WHERE gfe.user_id = %s
-            GROUP BY gfe.fact_id
-        ),
-        related_topic AS (
-            -- fact 反查 topic
-            SELECT gf.topic_id, MAX(rf.graph_score) AS graph_score
-            FROM graph_facts gf
-            JOIN related_fact rf ON rf.fact_id = gf.id
-            WHERE gf.user_id = %s
-              AND gf.topic_id IS NOT NULL
-            GROUP BY gf.topic_id
-        ),
-        related_memory_refs AS (
-            -- topic 反查记忆
-            SELECT DISTINCT m.id AS memory_id, MAX(rt.graph_score) AS graph_score
-            FROM graph_topics gt
-            JOIN related_topic rt ON rt.topic_id = gt.id
-            JOIN LATERAL jsonb_array_elements_text(COALESCE(gt.dialogue_ids, '[]'::jsonb)) d(memory_id) ON TRUE
-            JOIN memories m ON m.id = d.memory_id
-            WHERE gt.user_id = %s
-              AND m.user_id = %s
-            GROUP BY m.id
-        )
-        SELECT rmr.memory_id AS id, COALESCE(rmr.graph_score, 0.0) AS graph_score
-        FROM related_memory_refs rmr
-        WHERE NOT EXISTS (
-            SELECT 1
-            FROM seed_memory sm
-            WHERE sm.id = rmr.memory_id
-        )
-        ORDER BY graph_score DESC NULLS LAST, id ASC
-        LIMIT %s
-    """
-    params: tuple[Any, ...] = (
-        *seed_memory_params,
-        *seed_topic_params,
-        *seed_fact_params,
-        *seed_canonical_params,
-        *walk_params,
-        *related_fact_params,
-        *related_topic_params,
-        *related_memory_refs_params,
-    )
-    return sql, params
+
+def _fetch_relation_edges(user_id: str, canonical_ids: set[str], min_confidence: float) -> list[dict[str, Any]]:
+    if not canonical_ids:
+        return []
+    with session_factory() as session:
+        rows = session.execute(
+            select(
+                GraphEntityRelations.source_canonical_id,
+                GraphEntityRelations.target_canonical_id,
+                GraphEntityRelations.edge_relation,
+                GraphEntityRelations.confidence,
+            )
+            .where(
+                GraphEntityRelations.user_id == user_id,
+                or_(
+                    GraphEntityRelations.source_canonical_id.in_(canonical_ids),
+                    GraphEntityRelations.target_canonical_id.in_(canonical_ids),
+                ),
+                or_(
+                    GraphEntityRelations.confidence.is_(None),
+                    GraphEntityRelations.confidence >= min_confidence,
+                ),
+                GraphEntityRelations.source_canonical_id != GraphEntityRelations.target_canonical_id,
+            )
+        ).mappings().all()
+    return [{str(k): v for k, v in row.items()} for row in rows]
+
+
+def _walk_related_canonical_scores(
+        user_id: str,
+        seed_canonical_ids: list[str],
+        *,
+        max_hops: int,
+        hop_decay: float,
+        min_relation_confidence: float,
+        per_hop_limit: int,
+        min_walk_score: float,
+) -> dict[str, float]:
+    if not seed_canonical_ids:
+        return {}
+
+    # 状态包含：当前实体、已走路径（用于去环）、累计分数
+    active_states: list[tuple[str, tuple[str, ...], float]] = [
+        (canonical_id, (canonical_id,), 1.0)
+        for canonical_id in seed_canonical_ids
+        if canonical_id
+    ]
+    aggregated_scores: dict[str, float] = {}
+
+    # 按 hop 逐层扩散，避免一次性全图扫描
+    for hop in range(1, max_hops + 1):
+        current_nodes = {canonical_id for canonical_id, _, _ in active_states}
+        edges = _fetch_relation_edges(user_id, current_nodes, min_relation_confidence)
+        if not edges:
+            break
+
+        next_states: list[tuple[str, tuple[str, ...], float]] = []
+        for canonical_id, path, cum_score in active_states:
+            for edge in edges:
+                src = str(edge.get("source_canonical_id") or "")
+                dst = str(edge.get("target_canonical_id") or "")
+                if canonical_id not in {src, dst}:
+                    continue
+                next_id = dst if canonical_id == src else src
+                # 跳过空节点与环路
+                if not next_id or next_id in path:
+                    continue
+
+                edge_relation = str(edge.get("edge_relation") or EdgeRelation.RELATED_TO.value)
+                relation_weight = EDGE_RELATION_WEIGHTS.get(edge_relation, EDGE_RELATION_WEIGHTS[EdgeRelation.RELATED_TO.value])
+                confidence = float(edge.get("confidence") or 0.0)
+                # 评分：保留历史分 + 本跳关系分（关系类型权重 + 置信度 + hop 衰减）
+                score = cum_score * hop_decay + confidence * relation_weight * (hop_decay ** hop)
+                if score < min_walk_score:
+                    continue
+                next_states.append((next_id, path + (next_id,), score))
+
+        if not next_states:
+            break
+
+        # 每跳仅保留高分候选，控制分支爆炸
+        next_states.sort(key=lambda item: (-item[2], item[0]))
+        active_states = next_states[:per_hop_limit]
+        for next_id, _, score in active_states:
+            aggregated_scores[next_id] = max(aggregated_scores.get(next_id, 0.0), score)
+
+    return aggregated_scores
+
+
+def _fetch_related_fact_scores(user_id: str, canonical_scores: dict[str, float]) -> dict[str, float]:
+    if not canonical_scores:
+        return {}
+    with session_factory() as session:
+        rows = session.execute(
+            select(GraphFactEntities.fact_id, GraphFactEntities.canonical_id)
+            .where(
+                GraphFactEntities.user_id == user_id,
+                GraphFactEntities.canonical_id.in_(list(canonical_scores.keys())),
+            )
+        ).all()
+    fact_scores: dict[str, float] = {}
+    for fact_id, canonical_id in rows:
+        if not fact_id or not canonical_id:
+            continue
+        fact_key = str(fact_id)
+        canonical_key = str(canonical_id)
+        fact_scores[fact_key] = max(fact_scores.get(fact_key, 0.0), canonical_scores.get(canonical_key, 0.0))
+    return fact_scores
+
+
+def _fetch_related_topic_scores(user_id: str, fact_scores: dict[str, float]) -> dict[str, float]:
+    if not fact_scores:
+        return {}
+    with session_factory() as session:
+        rows = session.execute(
+            select(GraphFacts.id, GraphFacts.topic_id)
+            .where(
+                GraphFacts.user_id == user_id,
+                GraphFacts.id.in_(list(fact_scores.keys())),
+                GraphFacts.topic_id.is_not(None),
+            )
+        ).all()
+    topic_scores: dict[str, float] = {}
+    for fact_id, topic_id in rows:
+        if not fact_id or not topic_id:
+            continue
+        topic_key = str(topic_id)
+        topic_scores[topic_key] = max(topic_scores.get(topic_key, 0.0), fact_scores.get(str(fact_id), 0.0))
+    return topic_scores
+
+
+def _collect_related_memory_scores(user_id: str, topic_scores: dict[str, float]) -> dict[str, float]:
+    if not topic_scores:
+        return {}
+    with session_factory() as session:
+        topic_rows = session.execute(
+            select(GraphTopics.id, GraphTopics.dialogue_ids)
+            .where(GraphTopics.user_id == user_id, GraphTopics.id.in_(list(topic_scores.keys())))
+        ).all()
+        memory_scores: dict[str, float] = {}
+        for topic_id, dialogue_ids in topic_rows:
+            topic_key = str(topic_id)
+            for memory_id in _normalize_json_list(dialogue_ids):
+                mem_key = str(memory_id)
+                if not mem_key:
+                    continue
+                memory_scores[mem_key] = max(memory_scores.get(mem_key, 0.0), topic_scores.get(topic_key, 0.0))
+
+        if not memory_scores:
+            return {}
+
+        existing_memory_ids = {
+            str(row[0])
+            for row in session.execute(
+                select(Memories.id)
+                .where(Memories.user_id == user_id, Memories.id.in_(list(memory_scores.keys())))
+            ).all()
+            if row and row[0]
+        }
+    return {memory_id: memory_scores[memory_id] for memory_id in existing_memory_ids}
 
 
 def expand_candidate_ids_via_graph(
@@ -330,33 +333,29 @@ def expand_candidate_ids_via_graph(
         f"per_hop_limit={safe_per_hop_limit}, min_walk_score={safe_min_walk_score}"
     )
 
-    sql, params = _build_graph_expansion_sql(
-        seed_memory_params=(user_id, sorted(seed_ids)),
-        seed_topic_params=(user_id, max_limit),
-        seed_fact_params=(user_id, max_limit * 2),
-        seed_canonical_params=(user_id,),
-        walk_params=(
-            safe_hop_decay,
-            safe_hop_decay,
-            user_id,
-            safe_max_hops,
-            min_confidence,
-            safe_min_walk_score,
-            safe_per_hop_limit,
-        ),
-        related_fact_params=(user_id,),
-        related_topic_params=(user_id,),
-        related_memory_refs_params=(user_id, user_id, max_limit * 3),
+    # 第一段：memory -> topic -> fact -> canonical entity，定位扩展起点
+    seed_topic_ids = _find_seed_topic_ids(user_id, seed_ids, max_limit)
+    seed_fact_ids = _find_seed_fact_ids(user_id, seed_topic_ids, max_limit * 2)
+    seed_canonical_ids = _find_seed_canonical_ids(user_id, seed_fact_ids)
+    # 第二段：在实体关系图上做受限游走，得到相关实体分数
+    canonical_scores = _walk_related_canonical_scores(
+        user_id,
+        seed_canonical_ids,
+        max_hops=safe_max_hops,
+        hop_decay=safe_hop_decay,
+        min_relation_confidence=min_confidence,
+        per_hop_limit=safe_per_hop_limit,
+        min_walk_score=safe_min_walk_score,
     )
-    rows = db.fetchall(sql, params)
+    # 第三段：canonical entity -> fact -> topic -> memory，回投到可召回记忆
+    fact_scores = _fetch_related_fact_scores(user_id, canonical_scores)
+    topic_scores = _fetch_related_topic_scores(user_id, fact_scores)
+    memory_scores = _collect_related_memory_scores(user_id, topic_scores)
 
     candidates = [
-        GraphExpansionCandidate(
-            id=str(row.get("id")),
-            score=max(0.0, min(1.0, float(row.get("graph_score") or 0.0))),
-        )
-        for row in rows
-        if row.get("id") and str(row.get("id")) not in seed_ids
+        GraphExpansionCandidate(id=memory_id, score=max(0.0, min(1.0, float(score or 0.0))))
+        for memory_id, score in sorted(memory_scores.items(), key=lambda item: (-item[1], item[0]))
+        if memory_id not in seed_ids
     ]
 
     if candidates:

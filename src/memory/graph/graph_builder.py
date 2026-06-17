@@ -1,12 +1,11 @@
 import asyncio
 from typing import Callable
-from contextlib import contextmanager
 
 from agile.utils import LogHelper
 
 from src.core import user_ops
 from src.core.config import env
-from src.core.db import transaction
+from src.core.db import get_session_factory
 from src.core.mem_ops import mem_ops
 from src.memory.graph import graph_ops
 from src.memory.graph.fact_extractor import FactExtractor
@@ -14,6 +13,7 @@ from src.memory.graph.semantic_spliter import SemanticSpliter, Dialogue, Semanti
 from src.memory.memory_models import IMemoryUser
 
 logger = LogHelper.get_logger(title="[GRAPH]")
+session_factory = get_session_factory()
 
 # 存放待图化的用户队列（异步队列）
 user_queue = asyncio.Queue()
@@ -105,28 +105,29 @@ async def process_user_queue():
             facts = await asyncio.gather(*fact_tasks)
 
             # 事务包裹所有写操作，数据库串行
-            with contextmanager(transaction)() as conn:
-                for topic, fact in zip(topics, facts):
-                    # 将 Topic 入库
-                    topic = await graph_ops.add_topic(user, topic, conn=conn)
-                    # 将 Fact 入库
-                    fact = await graph_ops.add_fact(user, fact, topic, conn=conn)
-                    # 将 Entity 入库，并添加与 Fact 的关系映射，标准化实体对象
-                    await graph_ops.link_fact_entities(user, fact, conn=conn)
-                    # 基于 canonical_id 推断实体共现关系边
-                    await graph_ops.infer_canonical_relations_for_fact(user, fact, conn=conn)
+            with session_factory() as db_session:
+                with db_session.begin():
+                    for topic, fact in zip(topics, facts):
+                        # 将 Topic 入库
+                        topic = await graph_ops.add_topic(user, topic, conn=db_session)
+                        # 将 Fact 入库
+                        fact = await graph_ops.add_fact(user, fact, topic, conn=db_session)
+                        # 将 Entity 入库，并添加与 Fact 的关系映射，标准化实体对象
+                        await graph_ops.link_fact_entities(user, fact, conn=db_session)
+                        # 基于 canonical_id 推断实体共现关系边
+                        await graph_ops.infer_canonical_relations_for_fact(user, fact, conn=db_session)
 
-                # 提取已经参与生成事实的记忆 ID 列表
-                mem_ids = set()
-                for topic in topics:
-                    mem_ids.update(topic.dialogue_ids or [])
+                    # 提取已经参与生成事实的记忆 ID 列表
+                    mem_ids = set()
+                    for topic in topics:
+                        mem_ids.update(topic.dialogue_ids or [])
 
-                # 将记忆更新为已参与事实处理
-                await graph_ops.mark_memoires_to_fact_joined(list(un_fact_join_memories_ids), conn=conn)
+                    # 将记忆更新为已参与事实处理
+                    await graph_ops.mark_memoires_to_fact_joined(list(un_fact_join_memories_ids), conn=db_session)
 
-                logger.info(
-                    f"Finished processing user: {user.id}, processed memories: {len(un_fact_join_memories_ids)}, fact joined memories: {len(mem_ids)}, generated facts: {len(facts)}"
-                )
+                    logger.info(
+                        f"Finished processing user: {user.id}, processed memories: {len(un_fact_join_memories_ids)}, fact joined memories: {len(mem_ids)}, generated facts: {len(facts)}"
+                    )
 
         except Exception as e:
             logger.error(f"Error processing user: {user.id}, error: {e}")

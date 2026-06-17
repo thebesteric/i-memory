@@ -5,6 +5,7 @@ import uuid
 from typing import List, Union, Any
 
 import numpy as np
+from src.utils.json_utils import coerce_json_field
 
 
 def now():
@@ -29,8 +30,8 @@ def cos_sim(a: Union[List[float], np.ndarray], b: Union[List[float], np.ndarray]
 def j(x: Any) -> str:
     return json.dumps(x)
 
-def p(x: str) -> Any:
-    return json.loads(x)
+def p(x: Any) -> Any:
+    return coerce_json_field(x, None)
 
 def vec_to_buf(v: List[float]) -> bytes:
     """

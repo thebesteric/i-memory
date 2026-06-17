@@ -1,31 +1,56 @@
 import asyncio
 import datetime
-import json
 import itertools
 import uuid
 from typing import Any
 
 from agile.utils import LogHelper, timing
+from sqlalchemy import func, or_, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from src.core.components import get_embed_model
 from src.core.config import env
-from src.core.db import get_db
+from src.core.db import get_session_factory
+from src.memory.entity.db_schema import (
+    GraphCanonicalEntities,
+    GraphEntities,
+    GraphEntityRelations,
+    GraphFactEntities,
+    GraphFacts,
+    GraphTopics,
+    Memories,
+)
 from src.memory.graph.entity_canonicalize import EntityCanonicalize
 from src.memory.graph.relation_inferencer import RelationInference, RelationInferenceOutput
 from src.memory.graph.graph_node_models import EdgeRelation
 from src.memory.graph.semantic_spliter import Topic
 from src.memory.graph.graph_models import Fact, Entity, EntityType, InferSource, RelationInferenceResult
 from src.memory.memory_models import IMemoryUser
+from src.utils.json_utils import coerce_json_field
 from src.web.models.web_models import GraphEntityRelationFilters, GraphFactsFilters
 
 logger = LogHelper.get_logger()
 
-db = get_db()
 embed_model = get_embed_model()
+session_factory = get_session_factory()
 # 实体标准化器
 entity_canonicalize = EntityCanonicalize(threshold=0.85)
 # 关系推理器
 relation_inference = RelationInference()
+
+
+def _model_to_dict(model) -> dict[str, Any]:
+    return {column.name: getattr(model, column.name) for column in model.__table__.columns}
+
+
+def _mapping_to_dict(row) -> dict[str, Any]:
+    return {str(k): v for k, v in row.items()}
+
+
+def _get_session(conn=None):
+    external_session = conn is not None
+    session = conn if conn is not None else session_factory()
+    return session, external_session
 
 
 async def add_topic(user: IMemoryUser, topic: Topic, conn=None):
@@ -44,26 +69,27 @@ async def add_topic(user: IMemoryUser, topic: Topic, conn=None):
     topic.set_id(topic_id)
     topic.set_vector(vector)
 
-    db.execute(
-        """
-        INSERT INTO graph_topics(id, user_id, name, summary, vector, keywords, dialogue_ids, created_at, updated_at)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """,
-        (
-            topic_id,
-            user.id,
-            topic.name,
-            topic.summary,
-            vector,
-            json.dumps(topic.keywords or []),
-            json.dumps(topic.dialogue_ids or []),
-            now,
-            now
-        ),
-        conn=conn
-    )
-    if conn is None:
-        db.commit()
+    external_session = conn is not None
+    session = conn if conn is not None else session_factory()
+    try:
+        session.add(
+            GraphTopics(  # type: ignore[arg-type]
+                id=topic_id,
+                user_id=user.id,
+                name=topic.name,
+                summary=topic.summary,
+                vector=vector,
+                keywords=topic.keywords or [],
+                dialogue_ids=topic.dialogue_ids or [],
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        if not external_session:
+            session.commit()
+    finally:
+        if not external_session:
+            session.close()
     return topic
 
 
@@ -90,34 +116,35 @@ async def add_fact(user: IMemoryUser, fact: Fact, topic: Topic, conn=None) -> Fa
 
     vector = await get_embed_model().embed(" | ".join(parts))
 
-    db.execute(
-        """
-        INSERT INTO graph_facts (id, user_id, topic_id, what, when_, where_, who, why, confidence, vector, fact_kind,
-                                 occurred_start, occurred_end, created_at, updated_at, processed_at)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """,
-        (
-            fact_id,
-            user.id,
-            topic.id,
-            fact.what,
-            fact.when,
-            fact.where,
-            fact.who,
-            fact.why,
-            fact.confidence,
-            vector,
-            fact.fact_kind or "conversation",
-            fact.occurred_start,
-            fact.occurred_end,
-            now,
-            now,
-            None
-        ),
-        conn=conn
-    )
-    if conn is None:
-        db.commit()
+    external_session = conn is not None
+    session = conn if conn is not None else session_factory()
+    try:
+        # noinspection PyTypeChecker
+        session.add(
+            GraphFacts(  # type: ignore[arg-type]
+                id=fact_id,
+                user_id=user.id,
+                topic_id=topic.id,
+                what=fact.what,
+                when_=fact.when,
+                where_=fact.where,
+                who=fact.who,
+                why=fact.why,
+                confidence=fact.confidence,
+                vector=vector,
+                fact_kind=fact.fact_kind or "conversation",
+                occurred_start=fact.occurred_start,
+                occurred_end=fact.occurred_end,
+                created_at=now,
+                updated_at=now,
+                processed_at=None,
+            )
+        )
+        if not external_session:
+            session.commit()
+    finally:
+        if not external_session:
+            session.close()
     return fact
 
 
@@ -136,49 +163,50 @@ async def add_entity(user: IMemoryUser, entity: Entity, conn=None) -> Entity:
     entity_type = getattr(entity.entity_type, 'name', EntityType.OTHER.name)
 
     # 如果存在则不添加实体（text 和 entity_type 相同，视为同一个实体）
-    existing = db.fetchone(
-        "SELECT id, user_id, canonical_id FROM graph_entities WHERE user_id = %s AND text = %s AND entity_type = %s",
-        (user.id, text, entity_type),
-        conn=conn
-    )
-    if existing:
-        entity.set_id(existing["id"])
-        entity.set_user_id(existing["user_id"])
-        entity.set_canonical_id(existing["canonical_id"])
+    external_session = conn is not None
+    session = conn if conn is not None else session_factory()
+    try:
+        existing = session.execute(
+            select(GraphEntities.id, GraphEntities.user_id, GraphEntities.canonical_id)
+            .where(GraphEntities.user_id == user.id, GraphEntities.text == text, GraphEntities.entity_type == entity_type)
+            .limit(1)
+        ).mappings().first()
+        if existing:
+            entity.set_id(existing["id"])
+            entity.set_user_id(existing["user_id"])
+            entity.set_canonical_id(existing["canonical_id"])
+            return entity
+
+        # 标准化实体
+        canonical_entity = await entity_canonicalize.canonicalize(user, entity, conn=session)
+
+        now = datetime.datetime.now()
+        entity_id = str(uuid.uuid4())
+        entity.set_id(entity_id)
+        entity.set_user_id(user.id)
+        if canonical_entity.id:
+            entity.set_canonical_id(canonical_entity.id)
+
+        # 添加实体
+            # noinspection PyTypeChecker
+            session.add(
+            GraphEntities(  # type: ignore[arg-type]
+                id=entity_id,
+                user_id=user.id,
+                text=text,
+                entity_type=entity_type,
+                canonical_id=canonical_entity.id or None,
+                canonical_name=canonical_entity.name or None,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        if not external_session:
+            session.commit()
         return entity
-
-    # 标准化实体
-    canonical_entity = await entity_canonicalize.canonicalize(user, entity, conn=conn)
-
-    now = datetime.datetime.now()
-    entity_id = str(uuid.uuid4())
-    entity.set_id(entity_id)
-    entity.set_user_id(user.id)
-    if canonical_entity.id:
-        entity.set_canonical_id(canonical_entity.id)
-
-    # 添加实体
-    db.execute(
-        """
-        INSERT INTO graph_entities (id, user_id, text, entity_type, canonical_id, canonical_name,
-                                    created_at, updated_at)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        """, (
-            entity_id,
-            user.id,
-            text,
-            entity_type,
-            canonical_entity.id or None,
-            canonical_entity.name or None,
-            now,
-            now
-        ),
-        conn=conn
-    )
-
-    if conn is None:
-        db.commit()
-    return entity
+    finally:
+        if not external_session:
+            session.close()
 
 
 async def link_fact_entities(user: IMemoryUser, fact: Fact, conn=None) -> None:
@@ -190,49 +218,50 @@ async def link_fact_entities(user: IMemoryUser, fact: Fact, conn=None) -> None:
     :return:
     """
     now = datetime.datetime.now()
+    external_session = conn is not None
+    session = conn if conn is not None else session_factory()
 
-    for entity in fact.entities:
-        if not entity.id:
-            # 添加实体
-            entity = await add_entity(user=user, entity=entity, conn=conn)
+    try:
+        for entity in fact.entities:
+            if not entity.id:
+                # 添加实体
+                entity = await add_entity(user=user, entity=entity, conn=session)
 
         # 给 entity 增加 canonical_id 值
-        if entity.id and not entity.canonical_id:
-            entity_row = db.fetchone(
-                "SELECT canonical_id FROM graph_entities WHERE id = %s",
-                (entity.id,),
-                conn=conn
-            )
-            if entity_row and entity_row.get("canonical_id"):
-                entity.set_canonical_id(entity_row["canonical_id"])
+            if entity.id and not entity.canonical_id:
+                entity_row = session.execute(
+                    select(GraphEntities.canonical_id).where(GraphEntities.id == entity.id).limit(1)
+                ).mappings().first()
+                if entity_row and entity_row.get("canonical_id"):
+                    entity.set_canonical_id(entity_row["canonical_id"])
 
         # 添加与 Fact 的关系映射
-        _id = str(uuid.uuid4())
-        db.execute(
-            """
-            INSERT INTO graph_fact_entities (id, user_id, fact_id, entity_id, canonical_id, relation_to_user,
-                                             created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (user_id, fact_id, entity_id)
-                DO UPDATE SET canonical_id     = EXCLUDED.canonical_id,
-                              relation_to_user = EXCLUDED.relation_to_user,
-                              updated_at       = EXCLUDED.updated_at
-            """,
-            (
-                _id,
-                user.id,
-                fact.id,
-                entity.id,
-                entity.canonical_id,
-                entity.relation_to_user,
-                now,
-                now
-            ),
-            conn=conn
-        )
+            _id = str(uuid.uuid4())
+            stmt = pg_insert(GraphFactEntities).values(
+                id=_id,
+                user_id=user.id,
+                fact_id=fact.id,
+                entity_id=entity.id,
+                canonical_id=entity.canonical_id,
+                relation_to_user=entity.relation_to_user,
+                created_at=now,
+                updated_at=now,
+            )
+            stmt = stmt.on_conflict_do_update(
+                index_elements=[GraphFactEntities.user_id, GraphFactEntities.fact_id, GraphFactEntities.entity_id],
+                set_={
+                    "canonical_id": stmt.excluded.canonical_id,
+                    "relation_to_user": stmt.excluded.relation_to_user,
+                    "updated_at": stmt.excluded.updated_at,
+                },
+            )
+            session.execute(stmt)
 
-    if conn is None:
-        db.commit()
+        if not external_session:
+            session.commit()
+    finally:
+        if not external_session:
+            session.close()
 
 
 async def mark_memoires_to_fact_joined(m_ids: list[str], conn=None) -> int:
@@ -244,16 +273,16 @@ async def mark_memoires_to_fact_joined(m_ids: list[str], conn=None) -> int:
     """
     if not m_ids:
         return 0
-    format_strings = ','.join(['%s'] * len(m_ids))
-    query = f"UPDATE memories SET fact_joined = 1 WHERE id IN ({format_strings})"
-    affected_rows = db.execute(
-        query,
-        tuple(m_ids),
-        conn=conn
-    )
-    if conn is None:
-        db.commit()
-    return affected_rows
+    external_session = conn is not None
+    session = conn if conn is not None else session_factory()
+    try:
+        result = session.execute(update(Memories).where(Memories.id.in_(m_ids)).values(fact_joined=True))
+        if not external_session:
+            session.commit()
+        return int(getattr(result, "rowcount", 0) or 0)
+    finally:
+        if not external_session:
+            session.close()
 
 
 def _normalize_edge_relation(edge_relation_value: str | None) -> str:
@@ -513,107 +542,102 @@ async def infer_canonical_relations_for_fact(user: IMemoryUser, fact: Fact, conn
     ]
     inferred_relations = await asyncio.gather(*infer_tasks)
 
+    external_session = conn is not None
+    session = conn if conn is not None else session_factory()
     affected = 0
-    for inferred in inferred_relations:
-        source_canonical_id = inferred.source_canonical_id
-        target_canonical_id = inferred.target_canonical_id
-        edge_relation = inferred.edge_relation
-        relation_evidence = inferred.relation_evidence
-        infer_source = inferred.infer_source
-        confidence = inferred.confidence
+    try:
+        for inferred in inferred_relations:
+            source_canonical_id = inferred.source_canonical_id
+            target_canonical_id = inferred.target_canonical_id
+            edge_relation = inferred.edge_relation
+            relation_evidence = inferred.relation_evidence
+            infer_source = inferred.infer_source
+            confidence = inferred.confidence
 
-        existing = db.fetchone(
-            """
-            SELECT id, fact_ids
-            FROM graph_entity_relations
-            WHERE user_id = %s
-              AND source_canonical_id = %s
-              AND target_canonical_id = %s
-              AND edge_relation = %s
-            """,
-            (user.id, source_canonical_id, target_canonical_id, edge_relation),
-            conn=conn
-        )
+            existing = session.execute(
+                select(GraphEntityRelations.id, GraphEntityRelations.fact_ids)
+                .where(
+                    GraphEntityRelations.user_id == user.id,
+                    GraphEntityRelations.source_canonical_id == source_canonical_id,
+                    GraphEntityRelations.target_canonical_id == target_canonical_id,
+                    GraphEntityRelations.edge_relation == edge_relation,
+                )
+                .limit(1)
+            ).mappings().first()
 
-        # 已存在同类型边：仅追加证据 fact_id（去重），并刷新描述/来源/更新时间
-        if existing:
-            fact_ids = existing.get("fact_ids") or []
-            if isinstance(fact_ids, str):
-                try:
-                    fact_ids = json.loads(fact_ids)
-                except Exception:
+            if existing:
+                fact_ids = coerce_json_field(existing.get("fact_ids"), [])
+                if not isinstance(fact_ids, list):
                     fact_ids = []
 
-            if fact.id not in fact_ids:
-                fact_ids.append(fact.id)
-                affected += db.execute(
-                    """
-                    UPDATE graph_entity_relations
-                    SET fact_ids          = %s,
-                        relation_evidence = %s,
-                        infer_source      = %s,
-                        confidence        = %s,
-                        updated_at        = %s
-                    WHERE id = %s
-                    """,
-                    (json.dumps(fact_ids), relation_evidence, infer_source, confidence, now, existing["id"]),
-                    conn=conn
+                if fact.id not in fact_ids:
+                    fact_ids.append(fact.id)
+                    result = session.execute(
+                        update(GraphEntityRelations)
+                        .where(GraphEntityRelations.id == existing["id"])
+                        .values(
+                            fact_ids=fact_ids,
+                            relation_evidence=relation_evidence,
+                            infer_source=infer_source,
+                            confidence=confidence,
+                            updated_at=now,
+                        )
+                    )
+                    affected += int(getattr(result, "rowcount", 0) or 0)
+                continue
+
+            # 不存在则插入新边，首条证据为当前 fact.id
+            session.add(
+                GraphEntityRelations(  # type: ignore[arg-type]
+                    id=str(uuid.uuid4()),
+                    user_id=user.id,
+                    source_canonical_id=source_canonical_id,
+                    target_canonical_id=target_canonical_id,
+                    edge_relation=edge_relation,
+                    relation_evidence=relation_evidence,
+                    infer_source=infer_source,
+                    confidence=confidence,
+                    fact_ids=[fact.id],
+                    created_at=now,
+                    updated_at=now,
                 )
-            continue
+            )
+            affected += 1
 
-        # 不存在则插入新边，首条证据为当前 fact.id
-        affected += db.execute(
-            """
-            INSERT INTO graph_entity_relations (id, user_id, source_canonical_id, target_canonical_id,
-                                                edge_relation, relation_evidence, infer_source, confidence,
-                                                fact_ids, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """,
-            (
-                str(uuid.uuid4()),
-                user.id,
-                source_canonical_id,
-                target_canonical_id,
-                edge_relation,
-                relation_evidence,
-                infer_source,
-                confidence,
-                json.dumps([fact.id]),
-                now,
-                now,
-            ),
-            conn=conn
-        )
-
-    # 允许独立调用时自动提交；若外层传入事务连接，则由外层统一提交
-    if conn is None:
-        db.commit()
-    return affected
+        if not external_session:
+            session.commit()
+        return affected
+    finally:
+        if not external_session:
+            session.close()
 
 
 def find_canonical_relations(user_id: str, canonical_id: str, limit: int = 100, conn=None) -> list[dict]:
     """
     查询某个 canonical entity 参与的关系边（双向）。
     """
-    query = """
-            SELECT id,
-                   user_id,
-                   source_canonical_id,
-                   target_canonical_id,
-                   edge_relation,
-                   relation_evidence,
-                   infer_source,
-                   confidence,
-                   fact_ids,
-                   created_at,
-                   updated_at
-            FROM graph_entity_relations
-            WHERE user_id = %s
-              AND (source_canonical_id = %s OR target_canonical_id = %s)
-            ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
-            LIMIT %s
-            """
-    return db.fetchall(query, (user_id, canonical_id, canonical_id, limit), conn=conn)
+    session, external_session = _get_session(conn)
+    try:
+        query = (
+            select(GraphEntityRelations)
+            .where(
+                GraphEntityRelations.user_id == user_id,
+                or_(
+                    GraphEntityRelations.source_canonical_id == canonical_id,
+                    GraphEntityRelations.target_canonical_id == canonical_id,
+                ),
+            )
+            .order_by(
+                GraphEntityRelations.updated_at.desc().nullslast(),
+                GraphEntityRelations.created_at.desc().nullslast(),
+            )
+            .limit(limit)
+        )
+        rows = session.execute(query).scalars().all()
+        return [_model_to_dict(row) for row in rows]
+    finally:
+        if not external_session:
+            session.close()
 
 
 def find_user_facts_page(
@@ -627,71 +651,70 @@ def find_user_facts_page(
     size = max(1, int(size or 20))
     offset = (current - 1) * size
 
-    where_clauses = ["user_id = %s"]
-    where_params: list[Any] = [user_id]
+    filters_expr = [GraphFacts.user_id == user_id]
 
     if filters:
         topic_id = filters.topic_id
         if topic_id:
-            where_clauses.append("topic_id = %s")
-            where_params.append(topic_id)
+            filters_expr.append(GraphFacts.topic_id == topic_id)
 
         fact_kind = filters.fact_kind
         if fact_kind:
-            where_clauses.append("fact_kind = %s")
-            where_params.append(fact_kind)
+            filters_expr.append(GraphFacts.fact_kind == fact_kind)
 
         min_confidence = filters.min_confidence
         if min_confidence is not None:
-            where_clauses.append("confidence >= %s")
-            where_params.append(min_confidence)
+            filters_expr.append(GraphFacts.confidence >= min_confidence)
 
         max_confidence = filters.max_confidence
         if max_confidence is not None:
-            where_clauses.append("confidence <= %s")
-            where_params.append(max_confidence)
+            filters_expr.append(GraphFacts.confidence <= max_confidence)
 
         keyword = (filters.keyword or "").strip()
         if keyword:
-            where_clauses.append("(what ILIKE %s OR who ILIKE %s OR where_ ILIKE %s OR why ILIKE %s)")
             like = f"%{keyword}%"
-            where_params.extend([like, like, like, like])
+            filters_expr.append(
+                or_(
+                    GraphFacts.what.ilike(like),
+                    GraphFacts.who.ilike(like),
+                    GraphFacts.where_.ilike(like),
+                    GraphFacts.why.ilike(like),
+                )
+            )
 
-    where_sql = " AND ".join(where_clauses)
-
-    total_row = db.fetchone(
-        f"SELECT COUNT(1) AS total FROM graph_facts WHERE {where_sql}",
-        tuple(where_params),
-        conn=conn,
-    )
-    total = int((total_row or {}).get("total") or 0)
-
-    rows = db.fetchall(
-        f"""
-        SELECT id,
-               user_id,
-               topic_id,
-               what,
-               when_ AS when_text,
-               where_ AS where_text,
-               who,
-               why,
-               confidence,
-               fact_kind,
-               occurred_start,
-               occurred_end,
-               created_at,
-               updated_at,
-               processed_at
-        FROM graph_facts
-        WHERE {where_sql}
-        ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
-        LIMIT %s OFFSET %s
-        """,
-        tuple(where_params + [size, offset]),
-        conn=conn,
-    )
-    return total, rows
+    session, external_session = _get_session(conn)
+    try:
+        total = int(
+            session.execute(select(func.count()).select_from(GraphFacts).where(*filters_expr)).scalar_one() or 0
+        )
+        query = (
+            select(
+                GraphFacts.id,
+                GraphFacts.user_id,
+                GraphFacts.topic_id,
+                GraphFacts.what,
+                GraphFacts.when_.label("when_text"),
+                GraphFacts.where_.label("where_text"),
+                GraphFacts.who,
+                GraphFacts.why,
+                GraphFacts.confidence,
+                GraphFacts.fact_kind,
+                GraphFacts.occurred_start,
+                GraphFacts.occurred_end,
+                GraphFacts.created_at,
+                GraphFacts.updated_at,
+                GraphFacts.processed_at,
+            )
+            .where(*filters_expr)
+            .order_by(GraphFacts.updated_at.desc().nullslast(), GraphFacts.created_at.desc().nullslast())
+            .limit(size)
+            .offset(offset)
+        )
+        rows = session.execute(query).mappings().all()
+        return total, [_mapping_to_dict(row) for row in rows]
+    finally:
+        if not external_session:
+            session.close()
 
 
 def find_fact_canonical_entities_page(
@@ -704,45 +727,44 @@ def find_fact_canonical_entities_page(
     current = max(1, int(current or 1))
     size = max(1, int(size or 20))
     offset = (current - 1) * size
-
-    total_row = db.fetchone(
-        """
-        SELECT COUNT(1) AS total
-        FROM graph_fact_entities fe
-        WHERE fe.user_id = %s AND fe.fact_id = %s AND fe.canonical_id IS NOT NULL
-        """,
-        (user_id, fact_id),
-        conn=conn,
-    )
-    total = int((total_row or {}).get("total") or 0)
-
-    rows = db.fetchall(
-        """
-        SELECT fe.id,
-               fe.user_id,
-               fe.fact_id,
-               fe.entity_id,
-               fe.canonical_id,
-               fe.relation_to_user,
-               fe.created_at,
-               fe.updated_at,
-               ce.name AS canonical_name,
-               ce.entity_type AS canonical_entity_type,
-               ge.text AS entity_text,
-               ge.entity_type AS entity_type
-        FROM graph_fact_entities fe
-                 LEFT JOIN graph_canonical_entities ce ON fe.canonical_id = ce.id
-                 LEFT JOIN graph_entities ge ON fe.entity_id = ge.id
-        WHERE fe.user_id = %s
-          AND fe.fact_id = %s
-          AND fe.canonical_id IS NOT NULL
-        ORDER BY fe.updated_at DESC NULLS LAST, fe.created_at DESC NULLS LAST
-        LIMIT %s OFFSET %s
-        """,
-        (user_id, fact_id, size, offset),
-        conn=conn,
-    )
-    return total, rows
+    session, external_session = _get_session(conn)
+    try:
+        base_filters = [
+            GraphFactEntities.user_id == user_id,
+            GraphFactEntities.fact_id == fact_id,
+            GraphFactEntities.canonical_id.is_not(None),
+        ]
+        total = int(
+            session.execute(select(func.count()).select_from(GraphFactEntities).where(*base_filters)).scalar_one() or 0
+        )
+        query = (
+            select(
+                GraphFactEntities.id,
+                GraphFactEntities.user_id,
+                GraphFactEntities.fact_id,
+                GraphFactEntities.entity_id,
+                GraphFactEntities.canonical_id,
+                GraphFactEntities.relation_to_user,
+                GraphFactEntities.created_at,
+                GraphFactEntities.updated_at,
+                GraphCanonicalEntities.name.label("canonical_name"),
+                GraphCanonicalEntities.entity_type.label("canonical_entity_type"),
+                GraphEntities.text.label("entity_text"),
+                GraphEntities.entity_type.label("entity_type"),
+            )
+            .select_from(GraphFactEntities)
+            .outerjoin(GraphCanonicalEntities, GraphFactEntities.canonical_id == GraphCanonicalEntities.id)
+            .outerjoin(GraphEntities, GraphFactEntities.entity_id == GraphEntities.id)
+            .where(*base_filters)
+            .order_by(GraphFactEntities.updated_at.desc().nullslast(), GraphFactEntities.created_at.desc().nullslast())
+            .limit(size)
+            .offset(offset)
+        )
+        rows = session.execute(query).mappings().all()
+        return total, [_mapping_to_dict(row) for row in rows]
+    finally:
+        if not external_session:
+            session.close()
 
 
 def find_entity_relations_page(
@@ -757,64 +779,65 @@ def find_entity_relations_page(
     size = max(1, int(size or 20))
     offset = (current - 1) * size
 
-    where_clauses = ["user_id = %s", "(source_canonical_id = %s OR target_canonical_id = %s)"]
-    where_params: list[Any] = [user_id, canonical_id, canonical_id]
+    filters_expr = [
+        GraphEntityRelations.user_id == user_id,
+        or_(
+            GraphEntityRelations.source_canonical_id == canonical_id,
+            GraphEntityRelations.target_canonical_id == canonical_id,
+        ),
+    ]
 
     if filters:
         if filters.edge_relations:
-            where_clauses.append("edge_relation = ANY(%s)")
-            where_params.append(filters.edge_relations)
+            filters_expr.append(GraphEntityRelations.edge_relation.in_(filters.edge_relations))
         if filters.infer_sources:
-            where_clauses.append("infer_source = ANY(%s)")
-            where_params.append(filters.infer_sources)
+            filters_expr.append(GraphEntityRelations.infer_source.in_(filters.infer_sources))
         if filters.min_confidence is not None:
-            where_clauses.append("confidence >= %s")
-            where_params.append(filters.min_confidence)
+            filters_expr.append(GraphEntityRelations.confidence >= filters.min_confidence)
         if filters.max_confidence is not None:
-            where_clauses.append("confidence <= %s")
-            where_params.append(filters.max_confidence)
+            filters_expr.append(GraphEntityRelations.confidence <= filters.max_confidence)
         if filters.related_canonical_id:
-            where_clauses.append("(source_canonical_id = %s OR target_canonical_id = %s)")
-            where_params.extend([filters.related_canonical_id, filters.related_canonical_id])
+            filters_expr.append(
+                or_(
+                    GraphEntityRelations.source_canonical_id == filters.related_canonical_id,
+                    GraphEntityRelations.target_canonical_id == filters.related_canonical_id,
+                )
+            )
         if filters.fact_id:
-            where_clauses.append("fact_ids @> %s::jsonb")
-            where_params.append(json.dumps([filters.fact_id]))
+            filters_expr.append(GraphEntityRelations.fact_ids.contains([filters.fact_id]))
 
-    where_sql = " AND ".join(where_clauses)
-
-    total_row = db.fetchone(
-        f"""
-        SELECT COUNT(1) AS total
-        FROM graph_entity_relations
-        WHERE {where_sql}
-        """,
-        tuple(where_params),
-        conn=conn,
-    )
-    total = int((total_row or {}).get("total") or 0)
-
-    rows = db.fetchall(
-        f"""
-        SELECT id,
-               user_id,
-               source_canonical_id,
-               target_canonical_id,
-               edge_relation,
-               relation_evidence,
-               infer_source,
-               confidence,
-               fact_ids,
-               created_at,
-               updated_at
-        FROM graph_entity_relations
-        WHERE {where_sql}
-        ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
-        LIMIT %s OFFSET %s
-        """,
-        tuple(where_params + [size, offset]),
-        conn=conn,
-    )
-    return total, rows
+    session, external_session = _get_session(conn)
+    try:
+        total = int(
+            session.execute(select(func.count()).select_from(GraphEntityRelations).where(*filters_expr)).scalar_one() or 0
+        )
+        query = (
+            select(
+                GraphEntityRelations.id,
+                GraphEntityRelations.user_id,
+                GraphEntityRelations.source_canonical_id,
+                GraphEntityRelations.target_canonical_id,
+                GraphEntityRelations.edge_relation,
+                GraphEntityRelations.relation_evidence,
+                GraphEntityRelations.infer_source,
+                GraphEntityRelations.confidence,
+                GraphEntityRelations.fact_ids,
+                GraphEntityRelations.created_at,
+                GraphEntityRelations.updated_at,
+            )
+            .where(*filters_expr)
+            .order_by(
+                GraphEntityRelations.updated_at.desc().nullslast(),
+                GraphEntityRelations.created_at.desc().nullslast(),
+            )
+            .limit(size)
+            .offset(offset)
+        )
+        rows = session.execute(query).mappings().all()
+        return total, [_mapping_to_dict(row) for row in rows]
+    finally:
+        if not external_session:
+            session.close()
 
 
 def find_entity_topics_page(
@@ -827,46 +850,60 @@ def find_entity_topics_page(
     current = max(1, int(current or 1))
     size = max(1, int(size or 20))
     offset = (current - 1) * size
-
-    total_row = db.fetchone(
-        """
-        SELECT COUNT(DISTINCT gt.id) AS total
-        FROM graph_fact_entities fe
-                 JOIN graph_facts gf ON fe.fact_id = gf.id
-                 JOIN graph_topics gt ON gt.id = gf.topic_id
-        WHERE fe.user_id = %s
-          AND fe.canonical_id = %s
-        """,
-        (user_id, canonical_id),
-        conn=conn,
-    )
-    total = int((total_row or {}).get("total") or 0)
-
-    rows = db.fetchall(
-        """
-        SELECT gt.id,
-               gt.user_id,
-               gt.name,
-               gt.summary,
-               gt.keywords,
-               gt.dialogue_ids,
-               gt.created_at,
-               gt.updated_at,
-               COUNT(DISTINCT gf.id) AS fact_count,
-               COALESCE(jsonb_array_length(gt.dialogue_ids), 0) AS dialogue_count
-        FROM graph_fact_entities fe
-                 JOIN graph_facts gf ON fe.fact_id = gf.id
-                 JOIN graph_topics gt ON gt.id = gf.topic_id
-        WHERE fe.user_id = %s
-          AND fe.canonical_id = %s
-        GROUP BY gt.id, gt.user_id, gt.name, gt.summary, gt.keywords, gt.dialogue_ids, gt.created_at, gt.updated_at
-        ORDER BY gt.updated_at DESC NULLS LAST, gt.created_at DESC NULLS LAST
-        LIMIT %s OFFSET %s
-        """,
-        (user_id, canonical_id, size, offset),
-        conn=conn,
-    )
-    return total, rows
+    session, external_session = _get_session(conn)
+    try:
+        base_query = (
+            select(GraphTopics.id)
+            .select_from(GraphFactEntities)
+            .join(GraphFacts, GraphFactEntities.fact_id == GraphFacts.id)
+            .join(GraphTopics, GraphTopics.id == GraphFacts.topic_id)
+            .where(GraphFactEntities.user_id == user_id, GraphFactEntities.canonical_id == canonical_id)
+        )
+        total = int(
+            session.execute(
+                select(func.count(func.distinct(GraphTopics.id)))
+                .select_from(GraphFactEntities)
+                .join(GraphFacts, GraphFactEntities.fact_id == GraphFacts.id)
+                .join(GraphTopics, GraphTopics.id == GraphFacts.topic_id)
+                .where(GraphFactEntities.user_id == user_id, GraphFactEntities.canonical_id == canonical_id)
+            ).scalar_one() or 0
+        )
+        query = (
+            select(
+                GraphTopics.id,
+                GraphTopics.user_id,
+                GraphTopics.name,
+                GraphTopics.summary,
+                GraphTopics.keywords,
+                GraphTopics.dialogue_ids,
+                GraphTopics.created_at,
+                GraphTopics.updated_at,
+                func.count(func.distinct(GraphFacts.id)).label("fact_count"),
+                func.coalesce(func.jsonb_array_length(GraphTopics.dialogue_ids), 0).label("dialogue_count"),
+            )
+            .select_from(GraphFactEntities)
+            .join(GraphFacts, GraphFactEntities.fact_id == GraphFacts.id)
+            .join(GraphTopics, GraphTopics.id == GraphFacts.topic_id)
+            .where(GraphFactEntities.user_id == user_id, GraphFactEntities.canonical_id == canonical_id)
+            .group_by(
+                GraphTopics.id,
+                GraphTopics.user_id,
+                GraphTopics.name,
+                GraphTopics.summary,
+                GraphTopics.keywords,
+                GraphTopics.dialogue_ids,
+                GraphTopics.created_at,
+                GraphTopics.updated_at,
+            )
+            .order_by(GraphTopics.updated_at.desc().nullslast(), GraphTopics.created_at.desc().nullslast())
+            .limit(size)
+            .offset(offset)
+        )
+        rows = session.execute(query).mappings().all()
+        return total, [_mapping_to_dict(row) for row in rows]
+    finally:
+        if not external_session:
+            session.close()
 
 
 def find_topic_memories_page(
@@ -879,36 +916,33 @@ def find_topic_memories_page(
     current = max(1, int(current or 1))
     size = max(1, int(size or 20))
     offset = (current - 1) * size
+    session, external_session = _get_session(conn)
+    try:
+        topic_dialogue_ids = session.execute(
+            select(GraphTopics.dialogue_ids)
+            .where(GraphTopics.user_id == user_id, GraphTopics.id == topic_id)
+            .limit(1)
+        ).scalar_one_or_none()
+        raw_dialogue_ids = topic_dialogue_ids if isinstance(topic_dialogue_ids, list) else []
+        dialogue_ids = [str(v) for v in raw_dialogue_ids if v]
+        if not dialogue_ids:
+            return 0, []
 
-    total_row = db.fetchone(
-        """
-        SELECT COUNT(DISTINCT m.id) AS total
-        FROM graph_topics gt
-                 JOIN LATERAL jsonb_array_elements_text(gt.dialogue_ids) d(dialogue_id) ON TRUE
-                 JOIN memories m ON m.id = d.dialogue_id
-        WHERE gt.user_id = %s
-          AND gt.id = %s
-          AND m.user_id = %s
-        """,
-        (user_id, topic_id, user_id),
-        conn=conn,
-    )
-    total = int((total_row or {}).get("total") or 0)
-
-    rows = db.fetchall(
-        """
-        SELECT DISTINCT m.*
-        FROM graph_topics gt
-                 JOIN LATERAL jsonb_array_elements_text(gt.dialogue_ids) d(dialogue_id) ON TRUE
-                 JOIN memories m ON m.id = d.dialogue_id
-        WHERE gt.user_id = %s
-          AND gt.id = %s
-          AND m.user_id = %s
-        ORDER BY m.updated_at DESC NULLS LAST, m.created_at DESC NULLS LAST
-        LIMIT %s OFFSET %s
-        """,
-        (user_id, topic_id, user_id, size, offset),
-        conn=conn,
-    )
-    return total, rows
+        total = int(
+            session.execute(
+                select(func.count()).select_from(Memories).where(Memories.user_id == user_id, Memories.id.in_(dialogue_ids))
+            ).scalar_one() or 0
+        )
+        query = (
+            select(Memories)
+            .where(Memories.user_id == user_id, Memories.id.in_(dialogue_ids))
+            .order_by(Memories.updated_at.desc().nullslast(), Memories.created_at.desc().nullslast())
+            .limit(size)
+            .offset(offset)
+        )
+        rows = session.execute(query).scalars().all()
+        return total, [_model_to_dict(row) for row in rows]
+    finally:
+        if not external_session:
+            session.close()
 

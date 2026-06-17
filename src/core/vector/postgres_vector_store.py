@@ -1,14 +1,15 @@
 import asyncio
-import json
 import time
-from typing import List, Optional
+from typing import Any, List, Optional, cast
 
-import asyncpg
+from sqlalchemy import delete, literal, select, text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from agile.utils import LogHelper, singleton, timing
-from asyncpg import InvalidColumnReferenceError
 
 from src.core.config import env
+from src.core.db import get_session_factory, get_sync_engine
 from src.core.vector.base_vector_store import BaseVectorStore, VectorRow, VectorSearch
+from src.memory.entity.db_schema import Base, Vectors
 from src.memory.memory_models import IMemoryUser
 
 logger = LogHelper.get_logger(title="[POSTGRES]")
@@ -19,68 +20,45 @@ class PostgresVectorStore(BaseVectorStore):
     def __init__(self, dsn: str, vector_table_name: str = "vectors"):
         self.dsn = dsn
         self.vector_table_name = vector_table_name or "vectors"
-        self.pool = None
         self.initialized = False
         self._pool_init_lock = asyncio.Lock()
 
-    async def _get_pool(self):
+    async def _ensure_initialized(self):
         """
-        获取数据库连接池
-        该方法会确保 pgvector 扩展已启用，并初始化表结构和索引
+        确保 pgvector 扩展、表结构和索引已准备就绪。
         :return:
         """
-        if self.pool and self.initialized:
-            return self.pool
+        if self.initialized:
+            return None
 
         async with self._pool_init_lock:
-            if self.pool and self.initialized:
-                return self.pool
+            if self.initialized:
+                return None
 
             init_start = time.perf_counter()
-            pool = await asyncpg.create_pool(self.dsn)
-            try:
-                async with pool.acquire() as conn:
-                    # 确认 pgvector 扩展已启用
-                    await conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
+
+            def _init_schema():
+                engine = get_sync_engine()
+                with engine.begin() as conn:
+                    conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
                     logger.info("Plugin pgvector extension enabled")
+                Base.metadata.create_all(engine, tables=[cast(Any, Vectors.__table__)])
+                logger.info(f"Vector table and indexes ensured for {self.vector_table_name}")
 
-                    # 初始化向量表结构
-                    await conn.execute(f"""
-                        CREATE TABLE IF NOT EXISTS {self.vector_table_name} (
-                            id TEXT,
-                            sector TEXT NOT NULL,
-                            user_id TEXT,
-                            v vector({env.VECTOR_DIM}),
-                            dim INTEGER,
-                            created_at TIMESTAMPTZ DEFAULT NOW(),
-                            PRIMARY KEY (id, sector)
-                        )
-                    """)
-
-                    # 创建 HNSW 索引以加速向量相似度搜索
-                    await conn.execute(f"""
-                        CREATE INDEX IF NOT EXISTS {self.vector_table_name}_hnsw_idx
-                        ON {self.vector_table_name} USING hnsw (v vector_cosine_ops)
-                    """)
-                    logger.info(f"HNSW index created on {self.vector_table_name} for fast ANN queries")
-            except Exception:
-                await pool.close()
-                raise
-
-            self.pool = pool
+            await asyncio.to_thread(_init_schema)
             self.initialized = True
             logger.info(
                 f"PostgresVectorStore initialized for table={self.vector_table_name} "
                 f"in {(time.perf_counter() - init_start) * 1000:.2f}ms"
             )
 
-        return self.pool
+        return None
 
     async def warmup(self):
         """在服务启动阶段主动初始化连接池与表结构。"""
         warmup_start = time.perf_counter()
         was_initialized = self.initialized
-        await self._get_pool()
+        await self._ensure_initialized()
         if was_initialized:
             logger.info(
                 f"PostgresVectorStore warmup skipped (already initialized), "
@@ -119,7 +97,7 @@ class PostgresVectorStore(BaseVectorStore):
             return vec[:dim_int]
         return vec
 
-    async def store_vector(self, _id: str, sector: str, vector: List[float], dim: int, user: IMemoryUser = None):
+    async def store_vector(self, _id: str, sector: str, vector: List[float], dim: int, user: IMemoryUser | None = None):
         """
         存储向量到 PostgreSQL 数据库
         :param _id: 唯一标识
@@ -129,31 +107,29 @@ class PostgresVectorStore(BaseVectorStore):
         :param user: 用户
         :return:
         """
-        pool = await self._get_pool()
+        await self._ensure_initialized()
         src_vec = list(vector) if vector is not None else []
         logical_dim = max(0, min(len(src_vec), int(dim) if dim is not None else len(src_vec)))
         stored_vec = self._coerce_vector_for_storage(src_vec)
-        vec_str = str(stored_vec)
 
         user_id = user.id if user else None
 
-        sql = f"""
-            INSERT INTO {self.vector_table_name} (id, sector, user_id, v, dim)
-            VALUES ($1, $2, $3, $4::vector, $5)
-            ON CONFLICT (id, sector) DO UPDATE SET
-                user_id = COALESCE(EXCLUDED.user_id, {self.vector_table_name}.user_id),
-                v = EXCLUDED.v
-        """
-        async with pool.acquire() as conn:
-            try:
-                await conn.execute(sql, _id, sector, user_id, vec_str, logical_dim)
-            except InvalidColumnReferenceError as ex:
-                # This typically means there's no unique constraint on `id` for ON CONFLICT to reference.
-                # Create a unique index on id and retry once. If there are duplicate ids in the table, creating
-                # the unique index will fail, and we should let that error surface.
-                logger.warning("ON CONFLICT failed because no unique constraint on id; creating unique index and retrying")
-                await conn.execute(f"CREATE UNIQUE INDEX IF NOT EXISTS {self.vector_table_name}_id_idx ON {self.vector_table_name} (id)")
-                await conn.execute(sql, _id, sector, user_id, vec_str, logical_dim)
+        def _store():
+            stmt = pg_insert(Vectors).values(id=_id, sector=sector, user_id=user_id, v=stored_vec, dim=logical_dim)
+            stmt = stmt.on_conflict_do_update(
+                index_elements=[Vectors.id, Vectors.sector],
+                set_={
+                    "user_id": stmt.excluded.user_id,
+                    "v": stmt.excluded.v,
+                    "dim": stmt.excluded.dim,
+                },
+            )
+            session_factory = get_session_factory()
+            with session_factory() as session:
+                session.execute(stmt)
+                session.commit()
+
+        await asyncio.to_thread(_store)
 
     async def get_vectors_by_id(self, id: str) -> List[VectorRow]:
         """
@@ -161,16 +137,18 @@ class PostgresVectorStore(BaseVectorStore):
         :param id: 唯一标识
         :return:
         """
-        pool = await self._get_pool()
-        sql = f"SELECT id, sector, v::text as v_txt, dim FROM {self.vector_table_name} WHERE id=$1"
-        async with pool.acquire() as conn:
-            rows = await conn.fetch(sql, id)
+        await self._ensure_initialized()
 
-        res = []
-        for r in rows:
-            vec = json.loads(r["v_txt"])
-            res.append(VectorRow(r["id"], r["sector"], self._coerce_vector_for_read(vec, r["dim"]), r["dim"]))
-        return res
+        def _load():
+            session_factory = get_session_factory()
+            with session_factory() as session:
+                rows = session.execute(select(Vectors).where(Vectors.id == id)).scalars().all()
+                return [
+                    VectorRow(row.id, row.sector, self._coerce_vector_for_read(row.v, row.dim), row.dim)
+                    for row in rows
+                ]
+
+        return await asyncio.to_thread(_load)
 
     async def get_vector(self, id: str, sector: str) -> Optional[VectorRow]:
         """
@@ -179,15 +157,19 @@ class PostgresVectorStore(BaseVectorStore):
         :param sector: 扇区
         :return:
         """
-        pool = await self._get_pool()
-        sql = f"SELECT id, sector, v::text as v_txt, dim FROM {self.vector_table_name} WHERE id=$1 AND sector=$2"
-        async with pool.acquire() as conn:
-            r = await conn.fetchrow(sql, id, sector)
+        await self._ensure_initialized()
 
-        if not r:
-            return None
-        vec = json.loads(r["v_txt"])
-        return VectorRow(r["id"], r["sector"], self._coerce_vector_for_read(vec, r["dim"]), r["dim"])
+        def _load_one():
+            session_factory = get_session_factory()
+            with session_factory() as session:
+                row = session.execute(
+                    select(Vectors).where(Vectors.id == id, Vectors.sector == sector).limit(1)
+                ).scalars().first()
+                if not row:
+                    return None
+                return VectorRow(row.id, row.sector, self._coerce_vector_for_read(row.v, row.dim), row.dim)
+
+        return await asyncio.to_thread(_load_one)
 
     async def delete_vectors(self, id: str):
         """
@@ -195,9 +177,15 @@ class PostgresVectorStore(BaseVectorStore):
         :param id: 唯一标识
         :return:
         """
-        pool = await self._get_pool()
-        async with pool.acquire() as conn:
-            await conn.execute(f"DELETE FROM {self.vector_table_name} WHERE id=$1", id)
+        await self._ensure_initialized()
+
+        def _delete():
+            session_factory = get_session_factory()
+            with session_factory() as session:
+                session.execute(delete(Vectors).where(Vectors.id == id))
+                session.commit()
+
+        await asyncio.to_thread(_delete)
 
     @timing
     async def search(self, user: IMemoryUser, vector: List[float], sector: str, top_k: int) -> List[VectorSearch]:
@@ -209,26 +197,22 @@ class PostgresVectorStore(BaseVectorStore):
         :param top_k: 返回的相似向量数量
         :return: 相似向量列表
         """
-        pool = await self._get_pool()
-        vec_str = str(vector)
+        await self._ensure_initialized()
+        stored_vec = self._coerce_vector_for_storage(vector)
 
-        filter_sql = " AND sector=$2"
-        args = [vec_str, sector]
-        arg_idx = 3
+        def _search():
+            session_factory = get_session_factory()
+            distance_expr = Vectors.v.op("<=>")(stored_vec)
+            similarity_expr = (literal(1.0) - distance_expr).label("similarity")
+            query = (
+                select(Vectors.id, similarity_expr)
+                .where(Vectors.sector == sector, Vectors.user_id == user.id)
+                .order_by(distance_expr)
+                .limit(top_k)
+            )
+            with session_factory() as session:
+                rows = session.execute(query).mappings().all()
+                return [VectorSearch(id=row["id"], similarity=float(row["similarity"])) for row in rows]
 
-        filter_sql += f" AND user_id=${arg_idx}"
-        args.append(user.id)
-        arg_idx += 1
+        return await asyncio.to_thread(_search)
 
-        sql = f"""
-            SELECT id, 1 - (v <=> $1::vector) as similarity
-            FROM {self.vector_table_name}
-            WHERE 1=1 {filter_sql}
-            ORDER BY v <=> $1::vector
-            LIMIT {top_k}
-        """
-
-        async with pool.acquire() as conn:
-            rows = await conn.fetch(sql, *args)
-
-        return [VectorSearch(id=row["id"], similarity=float(row["similarity"])) for row in rows]

@@ -1,18 +1,62 @@
 import datetime
 import uuid
+from typing import cast
 
 from agile.utils import LogHelper
+from sqlalchemy import asc, desc, select
 
 from src.core.components import USER_IDENTITY_CACHE
-from src.core.db import get_db
+from src.core.db import get_session_factory
+from src.memory.entity.db_schema import Users
 from src.memory.memory_models import IMemoryUserIdentity, IMemoryUser
 
 logger = LogHelper.get_logger()
 
-db = get_db()
+
+def _to_memory_user(user_entity: Users) -> IMemoryUser:
+    return IMemoryUser(
+        id=user_entity.id,
+        tenant_key=user_entity.tenant_key,
+        project_key=user_entity.project_key,
+        user_key=user_entity.user_key,
+        summary=user_entity.summary,
+        reflection_count=user_entity.reflection_count or 0,
+        created_at=user_entity.created_at,
+        updated_at=user_entity.updated_at,
+    )
 
 
-async def find_user(*, ids: list[str] | None = None, order_by: list[str] = None, status: int | None = None, limit=9999, offset=0) -> list[IMemoryUser]:
+def _apply_order_by(query, order_by: list[str] | None):
+    if not order_by:
+        return query
+
+    order_columns = []
+    for item in order_by:
+        clause = (item or "").strip()
+        if not clause:
+            continue
+        parts = clause.split()
+        field = parts[0]
+        direction = parts[1].lower() if len(parts) > 1 else "asc"
+        column = Users.__table__.columns.get(field)
+        if column is None:
+            logger.warning(f"Ignore unknown order_by field: {field}")
+            continue
+        order_columns.append(desc(column) if direction == "desc" else asc(column))
+
+    if order_columns:
+        query = query.order_by(*order_columns)
+    return query
+
+
+async def find_user(
+        *,
+        ids: list[str] | None = None,
+        order_by: list[str] | None = None,
+        status: int | None = None,
+        limit=9999,
+        offset=0,
+) -> list[IMemoryUser]:
     """
     查询所有用户
     :param ids: 用户 ID 列表
@@ -22,40 +66,18 @@ async def find_user(*, ids: list[str] | None = None, order_by: list[str] = None,
     :param offset: 偏移量
     :return:
     """
-    sql_parts = [
-        "SELECT * FROM users t"
-    ]
-
-    params = []
-    where_conditions = []
-
-    # 状态 status 筛选
+    query = select(Users)
     if status is not None:
-        where_conditions.append("t.status = %s")
-        params.append(status)
+        query = query.where(Users.status == status)
+    if ids:
+        query = query.where(Users.id.in_(ids))
+    query = _apply_order_by(query, order_by)
+    query = query.limit(limit).offset(offset)
 
-    # 用户 ID 筛选
-    if ids and len(ids) > 0:
-        id_placeholders = ", ".join(["%s"] * len(ids))
-        where_conditions.append(f"t.id IN ({id_placeholders})")
-        params.extend(ids)
-
-    # 拼接 WHERE 条件
-    if where_conditions:
-        sql_parts.append("WHERE " + " AND ".join(where_conditions))
-
-    # 拼接排序
-    if order_by:
-        order_by_clause = ", ".join(order_by)
-        sql_parts.append(f"ORDER BY {order_by_clause}")
-
-    # 分页
-    sql_parts.append(f"LIMIT %s OFFSET %s")
-    params.extend([limit, offset])
-
-    final_sql = " ".join(sql_parts)
-    users = db.fetchall(final_sql, tuple(params))
-    return [IMemoryUser.from_dict(u) for u in users]
+    session_factory = get_session_factory()
+    with session_factory() as session:
+        users = session.execute(query).scalars().all()
+    return [_to_memory_user(u) for u in users]
 
 
 async def get_user(user_identity: IMemoryUserIdentity, using_cache: bool = False) -> IMemoryUser | None:
@@ -70,28 +92,22 @@ async def get_user(user_identity: IMemoryUserIdentity, using_cache: bool = False
     project_key = user_identity.project_key
 
     # 构建缓存 key
-    cache_key = f"{user_key}:{tenant_key or ""}:{project_key or ""}"
+    cache_key = f"{user_key}:{tenant_key or ''}:{project_key or ''}"
     if using_cache:
         memory_user = USER_IDENTITY_CACHE.get(cache_key)
         if memory_user:
             return memory_user
 
-    sql_parts = [
-        "SELECT * FROM users WHERE user_key = %s"
-    ]
-    params = [user_key]
-
+    query = select(Users).where(Users.user_key == user_key)
     if tenant_key:
-        sql_parts.append("AND tenant_key = %s")
-        params.append(tenant_key)
-
+        query = query.where(Users.tenant_key == tenant_key)
     if project_key:
-        sql_parts.append("AND project_key = %s")
-        params.append(project_key)
+        query = query.where(Users.project_key == project_key)
 
-    final_sql = " ".join(sql_parts)
-    user = db.fetchone(final_sql, tuple(params))
-    memory_user = IMemoryUser.from_dict(user) if user else None
+    session_factory = get_session_factory()
+    with session_factory() as session:
+        user = session.execute(query).scalars().first()
+    memory_user = _to_memory_user(user) if user else None
 
     # 加入缓存
     USER_IDENTITY_CACHE.set(cache_key, memory_user)
@@ -100,7 +116,7 @@ async def get_user(user_identity: IMemoryUserIdentity, using_cache: bool = False
     return memory_user
 
 
-async def add_user(user_identity: IMemoryUserIdentity, summary: str = None, reflection_count: int = 0) -> IMemoryUser:
+async def add_user(user_identity: IMemoryUserIdentity, summary: str | None = None, reflection_count: int = 0) -> IMemoryUser:
     """
     添加用户
     :param user_identity: 用户身份
@@ -115,29 +131,38 @@ async def add_user(user_identity: IMemoryUserIdentity, summary: str = None, refl
     summary = summary if summary else "User profile initializing..."
     reflection_count = reflection_count if reflection_count is not None else 0
 
-    # 当前时间
     now = datetime.datetime.now()
-    _id = str(uuid.uuid4())
 
-    db.execute(
-        """
-        INSERT INTO users(id, tenant_key, project_key, user_key, summary, reflection_count, created_at, updated_at)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        ON CONFLICT (tenant_key, project_key, user_key) DO NOTHING
-        """,
-        (_id, tenant_key, project_key, user_key, summary, reflection_count, now, now)
-    )
-    db.commit()
-    return IMemoryUser(
-        id=_id,
-        tenant_key=tenant_key,
-        project_key=project_key,
-        user_key=user_key,
-        summary=summary,
-        reflection_count=reflection_count,
-        created_at=now,
-        updated_at=now,
-    )
+    session_factory = get_session_factory()
+    with session_factory() as session:
+        existing_user_query = select(Users).where(Users.user_key == user_key)
+        existing_user_query = (
+            existing_user_query.where(Users.tenant_key == tenant_key)
+            if tenant_key is not None
+            else existing_user_query.where(Users.tenant_key.is_(None))
+        )
+        existing_user_query = (
+            existing_user_query.where(Users.project_key == project_key)
+            if project_key is not None
+            else existing_user_query.where(Users.project_key.is_(None))
+        )
+        existing_user = session.execute(existing_user_query).scalars().first()
+        if existing_user:
+            return _to_memory_user(existing_user)
+
+        user_entity = Users(  # type: ignore[arg-type]
+            id=str(uuid.uuid4()),
+            tenant_key=cast(str, tenant_key),
+            project_key=cast(str, project_key),
+            user_key=user_key,
+            summary=summary,
+            reflection_count=reflection_count,
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(user_entity)
+        session.commit()
+        return _to_memory_user(user_entity)
 
 
 async def update_user_summary(_id: str, summary: str) -> None:
@@ -147,7 +172,12 @@ async def update_user_summary(_id: str, summary: str) -> None:
     :param summary: 用户概要信息
     :return:
     """
-    # 当前时间
     now = datetime.datetime.now()
-    db.execute("UPDATE users SET summary = %s, updated_at = %s WHERE id = %s", (summary, now, _id))
-    db.commit()
+    session_factory = get_session_factory()
+    with session_factory() as session:
+        user = session.get(Users, _id)
+        if not user:
+            return
+        user.summary = summary
+        user.updated_at = now
+        session.commit()

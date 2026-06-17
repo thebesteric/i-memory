@@ -340,7 +340,7 @@ class GraphEntityRelations(Base):
     updated_at = Column(DateTime, nullable=False, server_default=func.now(), comment="最后更新时间戳")
 
 
-def _normalize_sync_postgres_url(db_url: str) -> tuple[str, str]:
+def normalize_sync_postgres_url(db_url: str) -> tuple[str, str]:
     """将 async PostgreSQL URL 转换为适用于 DDL 的同步 SQLAlchemy URL。"""
     parsed = urlparse(db_url)
     scheme = parsed.scheme
@@ -405,7 +405,7 @@ async def init_db_schema():
     """
     初始化数据库，创建数据库、启用 pgvector 扩展，并创建表结构。
     """
-    connect_uri, database = _normalize_sync_postgres_url(env.POSTGRES_DB_URL)
+    connect_uri, database = normalize_sync_postgres_url(env.POSTGRES_DB_URL)
     if not database:
         raise ValueError("Database name is missing from POSTGRES_DB_URL")
 

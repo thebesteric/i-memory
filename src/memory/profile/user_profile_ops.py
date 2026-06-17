@@ -1,16 +1,20 @@
 import datetime
-import json
 import uuid
 
 from agile.utils import LogHelper
+from sqlalchemy import desc, select, update
 
 from src.core.components import USER_PROFILE_CACHE
-from src.core.db import get_db
+from src.core.db import get_session_factory
+from src.memory.entity.db_schema import Memories, UserProfiles
 from src.memory.memory_models import IMemoryUser
-from src.memory.profile.user_profile_models import UserProfile, Habit, Tag
+from src.memory.profile.user_profile_models import UserProfile
 
 logger = LogHelper.get_logger()
-db = get_db()
+
+
+def _profile_entity_to_row(profile: UserProfiles) -> dict:
+    return {k: v for k, v in vars(profile).items() if not k.startswith("_")}
 
 
 async def get_user_profile(user: IMemoryUser, query_cache: bool = False) -> UserProfile:
@@ -27,10 +31,15 @@ async def get_user_profile(user: IMemoryUser, query_cache: bool = False) -> User
             # 返回
             return user_profile
 
-    row = db.fetchone(
-        "SELECT * FROM user_profiles WHERE is_active = TRUE AND user_id = %s",
-        (user.id,)
-    )
+    session_factory = get_session_factory()
+    with session_factory() as session:
+        entity = session.execute(
+            select(UserProfiles)
+            .where(UserProfiles.is_active.is_(True), UserProfiles.user_id == user.id)
+            .order_by(desc(UserProfiles.updated_at))
+            .limit(1)
+        ).scalars().first()
+    row = _profile_entity_to_row(entity) if entity else None
     # 字段转 UserProfile 对象
     user_profile = UserProfile.from_dict(row)
     # 加入缓存
@@ -47,19 +56,11 @@ async def upsert_user_profile(cur_user: IMemoryUser, cur_user_profile: UserProfi
     :param conn: 数据库连接对象
     :return:
     """
-    # 1. 先将原有 is_active = True 的 user_profiles 置为 False
-    db.execute(
-        "UPDATE user_profiles SET is_active = FALSE WHERE user_id = %s AND is_active = TRUE",
-        (cur_user.id,),
-        conn=conn
-    )
-
-    # 2. 插入新画像（is_active = True）
-    def json_serial(obj):
-        if isinstance(obj, datetime.datetime):
-            # 转成标准时间字符串
-            return obj.isoformat()
-        raise TypeError(f"无法序列化: {type(obj)}")
+    external_session = conn is not None
+    session = conn
+    if session is None:
+        session_factory = get_session_factory()
+        session = session_factory()
 
     # 用户习惯淘汰逻辑
     high_confidence_habits = [h for h in cur_user_profile.preferences.habits if h.confidence >= 0.5]
@@ -68,24 +69,41 @@ async def upsert_user_profile(cur_user: IMemoryUser, cur_user_profile: UserProfi
     high_weight_tags = [t for t in cur_user_profile.tags if t.weight >= 0.5]
     cur_user_profile.tags = high_weight_tags
 
-    demographic = json.dumps(cur_user_profile.demographic.model_dump(mode="json"), default=json_serial, ensure_ascii=False)
-    preferences = json.dumps(cur_user_profile.preferences.model_dump(mode="json"), default=json_serial, ensure_ascii=False)
-    attributes = json.dumps(cur_user_profile.attributes.model_dump(mode="json"), default=json_serial, ensure_ascii=False)
-    tags = json.dumps([tag.model_dump() for tag in cur_user_profile.tags], default=json_serial, ensure_ascii=False)
+    demographic = cur_user_profile.demographic.model_dump(mode="json")
+    preferences = cur_user_profile.preferences.model_dump(mode="json")
+    attributes = cur_user_profile.attributes.model_dump(mode="json")
+    tags = [tag.model_dump(mode="json") for tag in cur_user_profile.tags]
 
     _id = str(uuid.uuid4())
     now = datetime.datetime.now()
 
-    db.execute(
-        """
-        INSERT INTO user_profiles (id, user_id, demographic, preferences, attributes, tags, is_active, created_at, updated_at)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """,
-        (_id, cur_user.id, demographic, preferences, attributes, tags, True, now, now),
-        conn=conn
-    )
-    if conn is None:
-        db.commit()
+    try:
+        # 1. 先将原有 is_active = True 的 user_profiles 置为 False
+        session.execute(
+            update(UserProfiles)
+            .where(UserProfiles.user_id == cur_user.id, UserProfiles.is_active.is_(True))
+            .values(is_active=False, updated_at=now)
+        )
+
+        # 2. 插入新画像（is_active = True）
+        session.add(
+            UserProfiles(  # type: ignore[arg-type]
+                id=_id,
+                user_id=cur_user.id,
+                demographic=demographic,
+                preferences=preferences,
+                attributes=attributes,
+                tags=tags,
+                is_active=True,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        if not external_session:
+            session.commit()
+    finally:
+        if not external_session:
+            session.close()
 
     cur_user_profile.set_id(_id)
     cur_user_profile.set_user_id(cur_user.id)
@@ -103,13 +121,17 @@ async def mark_memoires_to_profile_joined(m_ids: list[str], conn=None) -> int:
     """
     if not m_ids:
         return 0
-    format_strings = ','.join(['%s'] * len(m_ids))
-    query = f"UPDATE memories SET profile_joined = 1 WHERE id IN ({format_strings})"
-    affected_rows = db.execute(
-        query,
-        tuple(m_ids),
-        conn=conn
-    )
-    if conn is None:
-        db.commit()
-    return affected_rows
+    stmt = update(Memories).where(Memories.id.in_(m_ids)).values(profile_joined=True)
+    external_session = conn is not None
+    session = conn
+    if session is None:
+        session_factory = get_session_factory()
+        session = session_factory()
+    try:
+        result = session.execute(stmt)
+        if not external_session:
+            session.commit()
+        return int(getattr(result, "rowcount", 0) or 0)
+    finally:
+        if not external_session:
+            session.close()

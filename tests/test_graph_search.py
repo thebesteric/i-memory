@@ -1,18 +1,6 @@
 from src.memory import graph_search
 
 
-class _FakeDB:
-    def __init__(self, responses):
-        self._responses = list(responses)
-        self.calls = []
-
-    def fetchall(self, sql, params):
-        self.calls.append((sql, params))
-        if not self._responses:
-            return []
-        return self._responses.pop(0)
-
-
 class _FakeLogger:
     def __init__(self):
         self.info_msgs = []
@@ -30,15 +18,31 @@ class _FakeLogger:
 
 
 def test_expand_candidate_ids_via_graph_happy_path_with_deterministic_ordering(monkeypatch):
-    fake_db = _FakeDB([
-        [
-            {"id": "m3", "graph_score": 0.82},
-            {"id": "m4", "graph_score": 0.61},
-        ],
-    ])
     fake_logger = _FakeLogger()
-    monkeypatch.setattr(graph_search, "db", fake_db)
     monkeypatch.setattr(graph_search, "logger", fake_logger)
+    monkeypatch.setattr(graph_search, "_find_seed_topic_ids", lambda *args, **kwargs: ["t1"])
+    monkeypatch.setattr(graph_search, "_find_seed_fact_ids", lambda *args, **kwargs: ["f1"])
+    monkeypatch.setattr(graph_search, "_find_seed_canonical_ids", lambda *args, **kwargs: ["c1"])
+    monkeypatch.setattr(
+        graph_search,
+        "_walk_related_canonical_scores",
+        lambda *args, **kwargs: {"c2": 0.82, "c3": 0.61},
+    )
+    monkeypatch.setattr(
+        graph_search,
+        "_fetch_related_fact_scores",
+        lambda *args, **kwargs: {"f2": 0.82, "f3": 0.61},
+    )
+    monkeypatch.setattr(
+        graph_search,
+        "_fetch_related_topic_scores",
+        lambda *args, **kwargs: {"t2": 0.82, "t3": 0.61},
+    )
+    monkeypatch.setattr(
+        graph_search,
+        "_collect_related_memory_scores",
+        lambda *args, **kwargs: {"m3": 0.82, "m4": 0.61, "m1": 0.95},
+    )
 
     result = graph_search.expand_candidate_ids_via_graph(
         user_id="u1",
@@ -49,19 +53,24 @@ def test_expand_candidate_ids_via_graph_happy_path_with_deterministic_ordering(m
 
     assert [c.id for c in result] == ["m3", "m4"]
     assert result[0].score >= result[1].score
-    assert len(fake_db.calls) == 1
-    assert "WITH RECURSIVE seed_memory AS" in fake_db.calls[0][0]
-    assert "relation_weights AS" in fake_db.calls[0][0]
-    assert "walk AS" in fake_db.calls[0][0]
     assert any("Expanded memory candidates by graph" in msg for msg in fake_logger.info_msgs)
 
 
 def test_expand_candidate_ids_via_graph_clamps_invalid_confidence(monkeypatch):
-    fake_db = _FakeDB([
-        [],
-    ])
-    monkeypatch.setattr(graph_search, "db", fake_db)
     monkeypatch.setattr(graph_search, "logger", _FakeLogger())
+    monkeypatch.setattr(graph_search, "_find_seed_topic_ids", lambda *args, **kwargs: ["t1"])
+    monkeypatch.setattr(graph_search, "_find_seed_fact_ids", lambda *args, **kwargs: ["f1"])
+    monkeypatch.setattr(graph_search, "_find_seed_canonical_ids", lambda *args, **kwargs: ["c1"])
+    captured = {}
+
+    def _fake_walk(*args, **kwargs):
+        captured.update(kwargs)
+        return {}
+
+    monkeypatch.setattr(graph_search, "_walk_related_canonical_scores", _fake_walk)
+    monkeypatch.setattr(graph_search, "_fetch_related_fact_scores", lambda *args, **kwargs: {})
+    monkeypatch.setattr(graph_search, "_fetch_related_topic_scores", lambda *args, **kwargs: {})
+    monkeypatch.setattr(graph_search, "_collect_related_memory_scores", lambda *args, **kwargs: {})
 
     result = graph_search.expand_candidate_ids_via_graph(
         user_id="u1",
@@ -70,17 +79,25 @@ def test_expand_candidate_ids_via_graph_clamps_invalid_confidence(monkeypatch):
         min_relation_confidence=9.9,
     )
 
-    relation_query_params = fake_db.calls[0][1]
-    assert relation_query_params[11] == 1.0
+    assert captured["min_relation_confidence"] == 1.0
     assert result == []
 
 
 def test_expand_candidate_ids_via_graph_clamps_invalid_max_hops(monkeypatch):
-    fake_db = _FakeDB([
-        [],
-    ])
-    monkeypatch.setattr(graph_search, "db", fake_db)
     monkeypatch.setattr(graph_search, "logger", _FakeLogger())
+    monkeypatch.setattr(graph_search, "_find_seed_topic_ids", lambda *args, **kwargs: ["t1"])
+    monkeypatch.setattr(graph_search, "_find_seed_fact_ids", lambda *args, **kwargs: ["f1"])
+    monkeypatch.setattr(graph_search, "_find_seed_canonical_ids", lambda *args, **kwargs: ["c1"])
+    captured = {}
+
+    def _fake_walk(*args, **kwargs):
+        captured.update(kwargs)
+        return {}
+
+    monkeypatch.setattr(graph_search, "_walk_related_canonical_scores", _fake_walk)
+    monkeypatch.setattr(graph_search, "_fetch_related_fact_scores", lambda *args, **kwargs: {})
+    monkeypatch.setattr(graph_search, "_fetch_related_topic_scores", lambda *args, **kwargs: {})
+    monkeypatch.setattr(graph_search, "_collect_related_memory_scores", lambda *args, **kwargs: {})
 
     graph_search.expand_candidate_ids_via_graph(
         user_id="u1",
@@ -89,14 +106,11 @@ def test_expand_candidate_ids_via_graph_clamps_invalid_max_hops(monkeypatch):
         max_hops=99,
     )
 
-    relation_query_params = fake_db.calls[0][1]
-    assert relation_query_params[10] == 4
+    assert captured["max_hops"] == 4
 
 
 def test_expand_candidate_ids_via_graph_empty_user_id_short_circuit(monkeypatch):
-    fake_db = _FakeDB([])
     fake_logger = _FakeLogger()
-    monkeypatch.setattr(graph_search, "db", fake_db)
     monkeypatch.setattr(graph_search, "logger", fake_logger)
 
     result = graph_search.expand_candidate_ids_via_graph(
@@ -106,6 +120,5 @@ def test_expand_candidate_ids_via_graph_empty_user_id_short_circuit(monkeypatch)
     )
 
     assert result == []
-    assert fake_db.calls == []
     assert any("empty user_id" in msg for msg in fake_logger.warning_msgs)
 

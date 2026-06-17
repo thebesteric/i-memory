@@ -5,10 +5,13 @@ import uuid
 import numpy as np
 from agile.db.vector.base.base_embed_model import BaseEmbedModel
 from agile.utils import singleton, LogHelper
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sklearn.metrics.pairwise import cosine_similarity
 
 from src.core.components import get_embed_model
-from src.core.db import get_db
+from src.core.db import get_session_factory
+from src.memory.entity.db_schema import GraphCanonicalEntities
 from src.memory.graph.graph_models import Entity, CanonicalEntity
 from src.memory.memory_models import IMemoryUser
 
@@ -19,8 +22,8 @@ logger = LogHelper.get_logger()
 class EntityCanonicalize:
 
     def __init__(self, threshold: float = 0.85):
-        # 数据库对象
-        self.db = get_db()
+        # ORM session factory
+        self.session_factory = get_session_factory()
         # 嵌入模型
         self.embed_model: BaseEmbedModel = get_embed_model()
         # 加载标准化实体
@@ -32,32 +35,22 @@ class EntityCanonicalize:
 
     def load_canonical_entities(self) -> dict[str, dict[str, CanonicalEntity]]:
         canonical_entity_cache: dict[str, dict[str, CanonicalEntity]] = {}
-        rows = self.db.fetchall(
-            """
-            SELECT id,
-                   user_id,
-                   name,
-                   entity_type,
-                   entity_label,
-                   vector,
-                   occurrence_count,
-                   first_seen_at,
-                   last_seen_at,
-                   is_active,
-                   created_at,
-                   updated_at
-            FROM graph_canonical_entities
-            WHERE vector IS NOT NULL
-              AND is_active = TRUE
-            """)
+        with self.session_factory() as session:
+            rows = session.execute(
+                select(GraphCanonicalEntities).where(
+                    GraphCanonicalEntities.vector.is_not(None),
+                    GraphCanonicalEntities.is_active.is_(True),
+                )
+            ).scalars().all()
 
         # 加入缓存
         for row in rows or []:
-            entity_id = row["id"]
-            user_id = row["user_id"]
+            row_dict = {k: v for k, v in vars(row).items() if not k.startswith("_")}
+            entity_id = row_dict["id"]
+            user_id = row_dict["user_id"]
             if user_id not in canonical_entity_cache:
                 canonical_entity_cache[user_id] = {}
-            canonical_entity_cache[user_id][entity_id] = CanonicalEntity.from_dict(row)
+            canonical_entity_cache[user_id][entity_id] = CanonicalEntity.from_dict(row_dict)
 
         return canonical_entity_cache
 
@@ -74,18 +67,35 @@ class EntityCanonicalize:
         now = datetime.datetime.now()
         _id = str(uuid.uuid4())
         entity_type = entity.entity_type
-        # 写入数据库
-        self.db.execute(
-            """
-            INSERT INTO graph_canonical_entities (id, user_id, name, entity_type, entity_label, vector,
-                                                  occurrence_count, first_seen_at, last_seen_at,
-                                                  created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (user_id, name, entity_type) DO NOTHING
-            """,
-            (_id, user.id, entity.text, entity_type.name, entity_type.label, vector, 1, now, now, now, now),
-            conn=conn
-        )
+        external_session = conn is not None
+        session = conn if conn is not None else self.session_factory()
+        try:
+            stmt = pg_insert(GraphCanonicalEntities).values(
+                id=_id,
+                user_id=user.id,
+                name=entity.text,
+                entity_type=entity_type.name,
+                entity_label=entity_type.label,
+                vector=vector,
+                occurrence_count=1,
+                first_seen_at=now,
+                last_seen_at=now,
+                created_at=now,
+                updated_at=now,
+            )
+            stmt = stmt.on_conflict_do_nothing(
+                index_elements=[
+                    GraphCanonicalEntities.user_id,
+                    GraphCanonicalEntities.name,
+                    GraphCanonicalEntities.entity_type,
+                ]
+            )
+            session.execute(stmt)
+            if not external_session:
+                session.commit()
+        finally:
+            if not external_session:
+                session.close()
         return CanonicalEntity(
             id=_id,
             name=entity.text,

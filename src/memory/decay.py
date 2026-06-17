@@ -6,14 +6,16 @@ import time
 from typing import Optional, Any
 
 from agile.utils import LogHelper, singleton, timing
+from sqlalchemy import desc, select, update
 
 from src.core.components import get_vector_store
 from src.core.config import env
 from src.core.constants import HYBRID_PARAMS
-from src.core.db import get_db, DB
+from src.core.db import get_session_factory
 from src.core.mem_ops import mem_ops
 from src.core.sector_classify import SECTOR_CONFIGS, SectorCfg
 from src.core.vector.base_vector_store import BaseVectorStore
+from src.memory.entity.db_schema import Memories
 from src.tools.text import canonical_tokens_from_text
 
 logger = LogHelper.get_logger(title="[DECAY]")
@@ -64,7 +66,14 @@ class Decay:
         interval_sec = max(1, int(getattr(env, "DECAY_INTERVAL_SECONDS", 60) or 60))
         self.cooldown = self._derive_cooldown_ms(interval_sec)
         self.vector_store: BaseVectorStore = get_vector_store()
-        self.db: DB = get_db()
+        self.session_factory = get_session_factory()
+
+    @staticmethod
+    def _memory_to_dict(memory: Memories) -> dict[str, Any]:
+        # ORM 对象转字典，兼容原有基于 dict 的衰减计算逻辑
+        data = {k: v for k, v in vars(memory).items() if not k.startswith("_")}
+        data["coactivations"] = data.get("feedback_score") or 0
+        return data
 
     @classmethod
     def inc_q(cls):
@@ -275,8 +284,14 @@ class Decay:
         if self.cfg.reinforce_on_query:
             # 计算新的显著性，增加 0.15，最大不超过 1.0
             new_sal = min(1.0, (m["salience"] or 0.5) + 0.15)
-            self.db.execute("UPDATE memories SET salience = %s, last_seen_at = %s WHERE id = %s", (new_sal, datetime.datetime.now(), mem_id))
-            self.db.commit()
+            now = datetime.datetime.now()
+            with self.session_factory() as session:
+                session.execute(
+                    update(Memories)
+                    .where(Memories.id == mem_id)
+                    .values(salience=new_sal, last_seen_at=now)
+                )
+                session.commit()
             updated = True
 
         if updated:
@@ -303,12 +318,7 @@ class Decay:
 
         # 记录本次衰减时间戳
         self.last_decay = now_ts
-
         t0 = time.time()
-
-        # 读取 segment 列表，按照 segment 降序（越新的 segment 越先处理），每次处理一个 segment 的一部分记忆
-        segments_rows = self.db.fetchall("SELECT DISTINCT segment FROM memories ORDER BY segment DESC")
-        segments = [r["segment"] for r in segments_rows]
 
         # 处理规模
         tot_proc = 0
@@ -321,113 +331,104 @@ class Decay:
         # tier 分布
         tier_counts = {"hot": 0, "warm": 0, "cold": 0}
 
-        for seg in segments:
-            # feedback_score as coactivations 把反馈分当作激活强度；后续公式会用它减缓衰减
-            rows = self.db.fetchall(
-                """
-                SELECT id,
-                       content,
-                       summary,
-                       salience,
-                       decay_lambda,
-                       last_seen_at,
-                       updated_at,
-                       primary_sector,
-                       feedback_score as coactivations
-                FROM memories
-                WHERE segment = %s
-                """,
-                (seg,))
+        with self.session_factory() as session:
+            # 读取 segment 列表，按照 segment 降序（越新的 segment 越先处理），每次处理一个 segment 的一部分记忆
+            segments = session.execute(
+                select(Memories.segment)
+                .distinct()
+                .order_by(desc(Memories.segment))
+            ).scalars().all()
 
-            # 衰减比例
-            decay_ratio = env.DECAY_RATIO or 0.03
-            # 批次大小，最少 1 条，控制每个 segment 每轮只处理一部分记忆，形成“渐进式衰减”
-            batch_sz = max(1, int(len(rows) * decay_ratio))
-            if not rows:
-                continue
+            for seg in segments:
+                rows = session.execute(
+                    select(Memories).where(Memories.segment == seg)
+                ).scalars().all()
 
-            if batch_sz >= len(rows):
-                batch = rows
-            else:
-                # True random sample avoids contiguous-window bias.
-                batch = random.sample(rows, batch_sz)
+                # 衰减比例
+                decay_ratio = env.DECAY_RATIO or 0.03
+                # 批次大小，最少 1 条，控制每个 segment 每轮只处理一部分记忆，形成“渐进式衰减”
+                batch_sz = max(1, int(len(rows) * decay_ratio))
+                if not rows:
+                    continue
 
-            for m in batch:
-                # 将记忆转换为字段
-                dict_m = dict(m)
-                # 单条记忆分层，返回记忆热度：hot/warm/cold
-                m_tier = self.pick_tier(dict_m, now_ts)
-                tier_counts[m_tier] += 1
+                if batch_sz >= len(rows):
+                    batch = rows
+                else:
+                    # True random sample avoids contiguous-window bias.
+                    batch = random.sample(rows, batch_sz)
 
-                # 根据记忆热度，获取衰减系数，越热的记忆，衰减越小
-                lam = self.cfg.lambda_hot if m_tier == "hot" else (self.cfg.lambda_warm if m_tier == "warm" else self.cfg.lambda_cold)
+                for mem in batch:
+                    # 将记忆转换为字段
+                    dict_m = self._memory_to_dict(mem)
+                    # 单条记忆分层，返回记忆热度：hot/warm/cold
+                    m_tier = self.pick_tier(dict_m, now_ts)
+                    tier_counts[m_tier] += 1
 
-                # 距上次访问的时间（按天归一）
-                last_touch = self.to_ms(dict_m.get("last_seen_at") or dict_m.get("updated_at"), now_ts)
-                dt = max(0.0, (now_ts - last_touch) / self.cfg.time_unit_ms)
-                # 激活强度
-                act = max(0, dict_m.get("coactivations") or dict_m.get("feedback_score") or 0)
-                # 显著性增强值：act 增大时，sal 增大，从而减慢衰减
-                sal = max(0.0, min(1.0, (dict_m["salience"] or 0.5) * (1 + math.log1p(act))))
+                    # 根据记忆热度，获取衰减系数，越热的记忆，衰减越小
+                    lam = self.cfg.lambda_hot if m_tier == "hot" else (self.cfg.lambda_warm if m_tier == "warm" else self.cfg.lambda_cold)
 
-                # 公式：时间越久、tier 越冷（lam 越大）则衰减越强；显著性高则衰减更慢
-                f = math.exp(-lam * (dt / (sal + 0.1)))
-                # 计算最新的显著性值
-                new_sal = max(0.0, min(1.0, sal * f))
-                # 差值 > 0.001 才算变化，避免无意义写库
-                changed = abs(new_sal - (dict_m["salience"] or 0)) > 0.001
+                    # 距上次访问的时间（按天归一）
+                    last_touch = self.to_ms(dict_m.get("last_seen_at") or dict_m.get("updated_at"), now_ts)
+                    dt = max(0.0, (now_ts - last_touch) / self.cfg.time_unit_ms)
+                    # 激活强度
+                    act = max(0, dict_m.get("coactivations") or dict_m.get("feedback_score") or 0)
+                    # 显著性增强值：act 增大时，sal 增大，从而减慢衰减
+                    sal = max(0.0, min(1.0, (dict_m["salience"] or 0.5) * (1 + math.log1p(act))))
 
-                # 分级降级策略（随遗忘加深）
-                # 当遗忘较明显时，把向量降维（compress_vector），减少存储与检索开销
-                # 关键点：这是“信息保留 + 成本下降”的中间态，不直接删除语义
-                if f < 0.7:
-                    sector = dict_m["primary_sector"] or "semantic"
-                    # 取当前 sector 向量
-                    vec_row = await self.vector_store.get_vector(dict_m["id"], sector)
-                    if vec_row and vec_row.vector:
-                        vec = vec_row.vector
-                        if len(vec) > 0:
-                            # 计算新向量
-                            new_vec = self.compress_vector(vec, f, self.cfg.min_vec_dim, self.cfg.max_vec_dim)
-                            # 仅当维度变小才回写
-                            if len(new_vec) < len(vec):
-                                # 更新向量表
-                                await self.vector_store.store_vector(dict_m["id"], sector, new_vec, len(new_vec))
-                                # 压缩次数 +1
-                                tot_comp += 1
-                                changed = True
+                    # 公式：时间越久、tier 越冷（lam 越大）则衰减越强；显著性高则衰减更慢
+                    f = math.exp(-lam * (dt / (sal + 0.1)))
+                    # 计算最新的显著性值
+                    new_sal = max(0.0, min(1.0, sal * f))
+                    # 差值 > 0.001 才算变化，避免无意义写库
+                    changed = abs(new_sal - (dict_m["salience"] or 0)) > 0.001
 
-                # 更冷的记忆降级为“指纹向量 + 关键词摘要”
-                # 关键点：这是强降级，召回精度会下降，用关键词重写 summary，保留最小可检索性
-                if f < max(0.3, self.cfg.cold_threshold):
-                    sector = dict_m["primary_sector"] or "semantic"
-                    # 生成 32 维 hash 向量和短摘要
-                    fp = self.fingerprint_mem(dict_m)
-                    # 更新向量表
-                    await self.vector_store.store_vector(dict_m["id"], sector, fp["vector"], len(fp["vector"]))
-                    # 更新记忆摘要
-                    self.db.execute(
-                        "UPDATE memories SET summary = %s WHERE id = %s",
-                        (fp["summary"], dict_m["id"])
-                    )
-                    # 指纹化次数 +1
-                    tot_fp += 1
-                    changed = True
+                    # 分级降级策略（随遗忘加深）
+                    # 当遗忘较明显时，把向量降维（compress_vector），减少存储与检索开销
+                    # 关键点：这是“信息保留 + 成本下降”的中间态，不直接删除语义
+                    if f < 0.7:
+                        sector = dict_m["primary_sector"] or "semantic"
+                        # 取当前 sector 向量
+                        vec_row = await self.vector_store.get_vector(dict_m["id"], sector)
+                        if vec_row and vec_row.vector:
+                            vec = vec_row.vector
+                            if len(vec) > 0:
+                                # 计算新向量
+                                new_vec = self.compress_vector(vec, f, self.cfg.min_vec_dim, self.cfg.max_vec_dim)
+                                # 仅当维度变小才回写
+                                if len(new_vec) < len(vec):
+                                    # 更新向量表
+                                    await self.vector_store.store_vector(dict_m["id"], sector, new_vec, len(new_vec))
+                                    # 压缩次数 +1
+                                    tot_comp += 1
+                                    changed = True
 
-                # 更新数据库
-                if changed:
-                    self.db.execute(
-                        "UPDATE memories SET salience = %s, updated_at = %s WHERE id = %s",
-                        (new_sal, datetime.datetime.now(), dict_m["id"])
-                    )
-                    tot_chg += 1
+                    # 更冷的记忆降级为“指纹向量 + 关键词摘要”
+                    # 关键点：这是强降级，召回精度会下降，用关键词重写 summary，保留最小可检索性
+                    if f < max(0.3, self.cfg.cold_threshold):
+                        sector = dict_m["primary_sector"] or "semantic"
+                        # 生成 32 维 hash 向量和短摘要
+                        fp = self.fingerprint_mem(dict_m)
+                        # 更新向量表
+                        await self.vector_store.store_vector(dict_m["id"], sector, fp["vector"], len(fp["vector"]))
+                        # 更新记忆摘要
+                        mem.summary = fp["summary"]
+                        # 指纹化次数 +1
+                        tot_fp += 1
+                        changed = True
 
-                # 处理规模 +1
-                tot_proc += 1
-                # sleep(0) 能提升协作公平性，避免长循环饿死其他协程
-                await asyncio.sleep(0)
+                    # 更新数据库（ORM 赋值，commit 时统一落库）
+                    if changed:
+                        mem.salience = new_sal
+                        mem.updated_at = datetime.datetime.now()
+                        tot_chg += 1
 
-        self.db.commit()
+                    # 处理规模 +1
+                    tot_proc += 1
+                    # sleep(0) 能提升协作公平性，避免长循环饿死其他协程
+                    await asyncio.sleep(0)
+
+                # 每个 segment 提交一次，控制事务体积
+                session.commit()
 
         # 计算耗时
         dur = (time.time() - t0) * 1000

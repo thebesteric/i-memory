@@ -1,4 +1,3 @@
-import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Literal, Any
@@ -6,6 +5,7 @@ from typing import Literal, Any
 from agile.commons.enum import LabeledStrEnum
 from agile.utils import LogHelper
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator
+from src.utils.json_utils import coerce_json_field
 
 logger = LogHelper.get_logger()
 
@@ -154,11 +154,14 @@ class CanonicalEntity(BaseModel):
 
     @staticmethod
     def from_dict(row: dict[str, Any]) -> "CanonicalEntity":
+        vector = coerce_json_field(row.get("vector"), [])
+        if not isinstance(vector, list):
+            vector = []
         return CanonicalEntity(
             id=row["id"],
             name=row["name"],
             entity_type=EntityType.from_name(row["entity_type"]),
-            vector=row["vector"] if isinstance(row["vector"], list) else json.loads(row["vector"]),
+            vector=vector,
             occurrence_count=row["occurrence_count"],
             first_seen_at=row["first_seen_at"],
             last_seen_at=row["last_seen_at"],

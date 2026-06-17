@@ -1,10 +1,10 @@
-import json
 import math
 from typing import Any, Set
 
 from agile.utils import LogHelper
 
 from src.core.constants import HYBRID_PARAMS
+from src.utils.json_utils import coerce_json_field
 
 logger = LogHelper.get_logger()
 
@@ -23,7 +23,7 @@ async def compute_tag_match_score(mem: dict[str, Any], query_tokens: Set[str]) -
         return 0.0
     try:
         # 获取记忆的标签字段：["美食", "北京", "旅游"]
-        tags = json.loads(mem["tags"])
+        tags = coerce_json_field(mem.get("tags"), [])
         if not isinstance(tags, list):
             return 0.0
 

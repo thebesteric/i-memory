@@ -4,16 +4,18 @@ from typing import List
 import numpy as np
 from agile.utils import LogHelper, singleton, timing
 from pydantic import BaseModel, Field
+from sqlalchemy import desc, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from src.core import user_ops
-from src.core.db import get_db
+from src.core.db import get_session_factory
 from src.core.mem_ops import mem_ops
 from src.exceptions.exceptions import UserNotFoundError
+from src.memory.entity.db_schema import Waypoints as WaypointEntity
 from src.memory.memory_models import IMemoryUserIdentity, IMemoryUser
 from src.tools.vectors import buf_to_vec, cos_sim
 
 logger = LogHelper.get_logger(title="[WAYPOINTS]")
-db = get_db()
 
 
 class Expansion(BaseModel):
@@ -26,7 +28,7 @@ class Expansion(BaseModel):
 class Waypoints:
 
     def __init__(self):
-        self.db = db
+        self.session_factory = get_session_factory()
 
     async def link(self, user_identity: IMemoryUserIdentity, rid: str, cid: str, idx: int):
         """
@@ -44,13 +46,17 @@ class Waypoints:
             raise UserNotFoundError(user_identity)
 
         now = datetime.datetime.now()
-        self.db.execute(
-            """
-            INSERT INTO waypoints(src_id, dst_id, user_id, weight, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            """,
-            (rid, cid, user.id, 1.0, now, now))
-        self.db.commit()
+        waypoint = WaypointEntity(
+            src_id=rid,
+            dst_id=cid,
+            user_id=user.id,
+            weight=1.0,
+            created_at=now,
+            updated_at=now,
+        )
+        with self.session_factory() as session:
+            session.add(waypoint)
+            session.commit()
 
     @timing
     async def expand_via_waypoints(self, ids: List[str], max_expansion: int = 10) -> List[Expansion]:
@@ -66,28 +72,32 @@ class Waypoints:
         cnt = 0
 
         # 广度优先遍历路标关系，进行记忆扩展
-        while q_arr and cnt < max_expansion:
-            cur: Expansion = q_arr.pop(0)
-            # 获取当前记忆的所有邻居（通过 waypoints 关系）
-            neighs = self.db.fetchall("SELECT dst_id, weight FROM waypoints WHERE src_id=%s ORDER BY weight DESC", (cur.id,))
-            for n in neighs:
-                dst = n["dst_id"]
-                # 已经存在则忽略
-                if dst in vis:
-                    continue
-                # 获取权重
-                wt = min(1.0, max(0.0, float(n["weight"])))
-                # 计算扩展权重
-                exp_wt = cur.weight * wt * 0.8
-                # 权重过低则忽略
-                if exp_wt < 0.1:
-                    continue
-                # 添加扩展记忆项
-                item = Expansion(id=dst, weight=exp_wt, path=cur.path + [dst])
-                expansion.append(item)
-                vis.add(dst)
-                q_arr.append(item)
-                cnt += 1
+        with self.session_factory() as session:
+            while q_arr and cnt < max_expansion:
+                cur: Expansion = q_arr.pop(0)
+                # 获取当前记忆的所有邻居（通过 waypoints 关系）
+                neighs = session.execute(
+                    select(WaypointEntity.dst_id, WaypointEntity.weight)
+                    .where(WaypointEntity.src_id == cur.id)
+                    .order_by(desc(WaypointEntity.weight))
+                ).all()
+                for dst, weight in neighs:
+                    # 已经存在则忽略
+                    if dst in vis:
+                        continue
+                    # 获取权重
+                    wt = min(1.0, max(0.0, float(weight or 0.0)))
+                    # 计算扩展权重
+                    exp_wt = cur.weight * wt * 0.8
+                    # 权重过低则忽略
+                    if exp_wt < 0.1:
+                        continue
+                    # 添加扩展记忆项
+                    item = Expansion(id=dst, weight=exp_wt, path=cur.path + [dst])
+                    expansion.append(item)
+                    vis.add(dst)
+                    q_arr.append(item)
+                    cnt += 1
 
         logger.info(f"Waypoint expansion completed, expanded {cnt} memories")
 
@@ -130,24 +140,26 @@ class Waypoints:
                 best_sim = sim
                 best = mem["id"]
 
-        # 如果找到最佳匹配，创建 waypoint 关联
-        # Use Postgres UPSERT syntax (ON CONFLICT) — waypoints has PRIMARY KEY (src_id, dst_id)
-        insert_sql = (
-            """
-            INSERT INTO waypoints(src_id, dst_id, user_id, weight, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            ON CONFLICT (src_id, dst_id) DO UPDATE SET user_id    = EXCLUDED.user_id,
-                                                       weight     = EXCLUDED.weight,
-                                                       created_at = EXCLUDED.created_at,
-                                                       updated_at = EXCLUDED.updated_at
-            """
+        # 如果找到了最佳相似记忆，创建指向该记忆的 waypoint，否则创建自指向的 waypoint
+        dst_id = best if best else new_id
+        weight = float(best_sim) if best else 1.0
+        stmt = pg_insert(WaypointEntity).values(
+            src_id=new_id,
+            dst_id=dst_id,
+            user_id=user.id,
+            weight=weight,
+            created_at=dt,
+            updated_at=dt,
         )
-
-        # 如果找到了最佳相似记忆，创建指向该记忆的 waypoint
-        if best:
-            self.db.execute(insert_sql, (new_id, best, user.id, float(best_sim), dt, dt))
-        # 否则创建自指向的 waypoint
-        else:
-            self.db.execute(insert_sql, (new_id, new_id, user.id, 1.0, dt, dt))
-        # 提交事务
-        self.db.commit()
+        stmt = stmt.on_conflict_do_update(
+            index_elements=[WaypointEntity.src_id, WaypointEntity.dst_id],
+            set_={
+                "user_id": stmt.excluded.user_id,
+                "weight": stmt.excluded.weight,
+                "created_at": stmt.excluded.created_at,
+                "updated_at": stmt.excluded.updated_at,
+            },
+        )
+        with self.session_factory() as session:
+            session.execute(stmt)
+            session.commit()

@@ -7,7 +7,6 @@ from typing import Dict, Any
 from agile.utils import LogHelper
 
 from src.core import user_ops
-from src.core.db import get_db
 from src.core.mem_ops import mem_ops
 from src.core.waypoints import Waypoints
 from src.exceptions.exceptions import UserNotFoundError
@@ -15,8 +14,7 @@ from src.memory.hsg import add_hsg_memory
 from src.memory.memory_models import IMemoryConfig, IMemoryUserIdentity, QARole
 from src.ops.extract import extract_text
 
-logger = LogHelper.get_logger()
-db = get_db()
+logger = LogHelper.get_logger(title="[INGEST]")
 
 
 def split_text(t: str, sz: int) -> list[str]:

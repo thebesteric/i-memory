@@ -1,16 +1,37 @@
 from sqlite3 import OperationalError
 from typing import Optional, Tuple, Dict, List, Any
+from functools import lru_cache
 
 import psycopg2
 from agile.utils import LogHelper, singleton
 from psycopg2.extras import DictCursor
 from psycopg2.pool import ThreadedConnectionPool
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 import inspect
 import logging
 
 from src.core.config import env
+from src.memory.entity.db_schema import normalize_sync_postgres_url
 
 logger = LogHelper.get_logger(title="[DB]")
+
+
+@lru_cache(maxsize=1)
+def get_sync_engine():
+    """Return a cached synchronous SQLAlchemy engine for ORM CRUD modules."""
+    connect_uri, database = normalize_sync_postgres_url(env.POSTGRES_DB_URL)
+    if not database:
+        raise ValueError("Database name is missing from POSTGRES_DB_URL")
+    engine = create_engine(f"{connect_uri}/{database}", pool_pre_ping=True)
+    return engine
+
+
+@lru_cache(maxsize=1)
+def get_session_factory() -> sessionmaker:
+    """Return a cached SQLAlchemy session factory for ORM CRUD modules."""
+    engine = get_sync_engine()
+    return sessionmaker(bind=engine, expire_on_commit=False)
 
 
 def _get_caller_info(skip_modules: Tuple[str, ...] = ("src.core.db",)) -> str:
@@ -36,7 +57,7 @@ def _get_caller_info(skip_modules: Tuple[str, ...] = ("src.core.db",)) -> str:
 @singleton
 class DB:
 
-    def __init__(self, db_url: str = None, autocommit: bool = True):
+    def __init__(self, db_url: str | None = None, autocommit: bool | None = True):
         self.db_url = db_url if db_url else env.POSTGRES_DB_URL
         self.autocommit = autocommit if autocommit is not None else env.POSTGRES_DB_AUTOCOMMIT
         self._pool: Optional[ThreadedConnectionPool] = None
@@ -62,6 +83,8 @@ class DB:
                 f"Connection pool created for [{env.POSTGRES_DB_NAME}] "
                 f"(min={self._pool_min_conn}, max={self._pool_max_conn})"
             )
+            if self._pool is None:
+                raise OperationalError("Connection pool initialization failed unexpectedly.")
             return self._pool
         except psycopg2.OperationalError as e:
             raise OperationalError(
@@ -87,7 +110,7 @@ class DB:
         conn = self.get_conn()
         self.put_conn(conn)
 
-    def execute(self, sql: str, params: Tuple = None, conn=None) -> int:
+    def execute(self, sql: str, params: Tuple | None = None, conn=None) -> int:
         """
         执行增删改SQL语句，返回受影响行数
         :param sql: SQL语句

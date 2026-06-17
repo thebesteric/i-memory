@@ -1,17 +1,21 @@
-import json
 import asyncio
-from typing import Dict, List
+from typing import Any, Dict, List
 
 from agile.utils import LogHelper
+from sqlalchemy import desc, select
 
 from src.core.config import env
-from src.core.db import get_db
+from src.core.db import get_session_factory
 from src.core import user_ops
+from src.memory.entity.db_schema import Memories
 from src.memory.memory_models import IMemoryUser
+from src.utils.json_utils import coerce_json_field
 
 logger = LogHelper.get_logger()
 
-db = get_db()
+
+def _memory_to_row(memory: Memories) -> Dict[str, Any]:
+    return {k: v for k, v in vars(memory).items() if not k.startswith("_")}
 
 
 def gen_user_summary(memories: List[Dict]) -> str:
@@ -35,7 +39,7 @@ def gen_user_summary(memories: List[Dict]) -> str:
         # 读取 meta 字段
         if d.get("meta"):
             try:
-                meta = json.loads(m["meta"]) if isinstance(m["meta"], str) else m["meta"]
+                meta = coerce_json_field(m.get("meta"), {})
                 if not isinstance(meta, dict): meta = {}
                 # 收集项目名
                 if meta.get("ide_project_name"): projects.add(meta["ide_project_name"])
@@ -71,8 +75,16 @@ async def gen_user_summary_async(user: IMemoryUser) -> str:
     """
     异步获取该用户最近 100 条记忆并生成概要字符串
     """
-    sql = "SELECT * FROM memories WHERE user_id = %s ORDER BY created_at DESC LIMIT 100 OFFSET 0"
-    rows = db.fetchall(sql, (user.id,))
+    query = (
+        select(Memories)
+        .where(Memories.user_id == user.id)
+        .order_by(desc(Memories.created_at))
+        .limit(100)
+        .offset(0)
+    )
+    session_factory = get_session_factory()
+    with session_factory() as session:
+        rows = [_memory_to_row(item) for item in session.execute(query).scalars().all()]
     return gen_user_summary(rows)
 
 
@@ -101,7 +113,7 @@ async def auto_update_user_summaries():
     return {"updated": updated}
 
 
-_timer_task = None
+_timer_task: asyncio.Task | None = None
 
 
 async def user_summary_loop():

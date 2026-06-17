@@ -1,17 +1,18 @@
 import datetime
-import json
 import uuid
 from typing import Any
 
 from agile.utils import LogHelper, timing
+from sqlalchemy import Text, cast, literal, select, update
 
 from src.core.components import get_embed_model
-from src.core.db import get_db
+from src.core.db import get_session_factory
+from src.memory.entity.db_schema import Memories, Sessions as SessionEntity
 from src.memory.memory_models import IMemoryUser
 from src.memory.session.session_models import Session, Sessions
+from src.utils.json_utils import coerce_json_field
 
 logger = LogHelper.get_logger()
-db = get_db()
 embed_model = get_embed_model()
 
 
@@ -23,47 +24,46 @@ def _normalize_list_payload(value: Any) -> list[Any]:
     if isinstance(value, tuple):
         return list(value)
     if isinstance(value, str):
-        try:
-            parsed = json.loads(value)
-        except Exception:
-            return []
+        parsed = coerce_json_field(value, [])
         return parsed if isinstance(parsed, list) else []
     return []
 
 
 async def insert_sessions(user: IMemoryUser, sessions: Sessions, conn=None) -> Sessions:
     embed_model = get_embed_model()
+    external_session = conn is not None
+    orm_session = conn
+    if orm_session is None:
+        session_factory = get_session_factory()
+        orm_session = session_factory()
+    try:
+        for session in sessions.sessions:
+            now = datetime.datetime.now()
+            # 摘要向量化
+            vector = await embed_model.embed(session.summary)
 
-    for session in sessions.sessions:
-        now = datetime.datetime.now()
-        # 摘要向量化
-        vector = await embed_model.embed(session.summary)
+            _id = str(uuid.uuid4())
+            session.set_id(_id)
+            session.set_user_id(user.id)
+            session.set_vector(vector)
 
-        _id = str(uuid.uuid4())
-        session.set_id(_id)
-        session.set_user_id(user.id)
-        session.set_vector(vector)
-
-        db.execute(
-            """
-            INSERT INTO sessions (id, user_id, summary, vector, dialogue_ids, key_facts, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            """,
-            (
-                _id,
-                user.id,
-                session.summary,
-                vector,
-                json.dumps(session.dialogue_ids or [], ensure_ascii=False),
-                json.dumps(session.key_facts or [], ensure_ascii=False),
-                now,
-                now
-            ),
-            conn=conn
-        )
-
-    if conn is None:
-        db.commit()
+            orm_session.add(
+                SessionEntity(  # type: ignore[arg-type]
+                    id=_id,
+                    user_id=user.id,
+                    summary=session.summary,
+                    vector=vector,
+                    dialogue_ids=session.dialogue_ids or [],
+                    key_facts=session.key_facts or [],
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+        if not external_session:
+            orm_session.commit()
+    finally:
+        if not external_session:
+            orm_session.close()
     return sessions
 
 @timing
@@ -72,24 +72,26 @@ async def session_search(user: IMemoryUser, query: str, top_k: int = 5) -> Sessi
         return Sessions(sessions=[])
 
     query_vector = await embed_model.embed(query)
-
-    query_vector_str = str(query_vector)
-    rows = db.fetchall(
-        """
-        SELECT id,
-               user_id,
-               summary,
-               vector::text                AS vector,
-               dialogue_ids,
-               key_facts,
-               1 - (vector <=> %s::vector) AS similarity
-        FROM sessions
-        WHERE user_id = %s
-        ORDER BY vector <=> %s::vector
-        LIMIT %s
-        """,
-        (query_vector_str, user.id, query_vector_str, top_k)
+    distance_expr = SessionEntity.vector.op("<=>")(query_vector)
+    similarity_expr = (literal(1.0) - distance_expr).label("similarity")
+    query_stmt = (
+        select(
+            SessionEntity.id,
+            SessionEntity.user_id,
+            SessionEntity.summary,
+            cast(SessionEntity.vector, Text).label("vector"),
+            SessionEntity.dialogue_ids,
+            SessionEntity.key_facts,
+            similarity_expr,
+        )
+        .where(SessionEntity.user_id == user.id)
+        .order_by(distance_expr)
+        .limit(top_k)
     )
+
+    session_factory = get_session_factory()
+    with session_factory() as orm_session:
+        rows = orm_session.execute(query_stmt).mappings().all()
 
     sessions: list[Session] = []
     for row in rows:
@@ -103,11 +105,7 @@ async def session_search(user: IMemoryUser, query: str, top_k: int = 5) -> Sessi
         session.set_similarity(float(row.get("similarity", 0.0)))
 
         vector_value = row.get("vector")
-        if isinstance(vector_value, str):
-            try:
-                vector_value = json.loads(vector_value)
-            except Exception:
-                vector_value = None
+        vector_value = coerce_json_field(vector_value, None)
         if isinstance(vector_value, (list, tuple)):
             session.set_vector(list(vector_value))
 
@@ -125,13 +123,17 @@ async def mark_memoires_to_session_joined(m_ids: list[str], conn=None) -> int:
     """
     if not m_ids:
         return 0
-    format_strings = ','.join(['%s'] * len(m_ids))
-    query = f"UPDATE memories SET session_joined = 1 WHERE id IN ({format_strings})"
-    affected_rows = db.execute(
-        query,
-        tuple(m_ids),
-        conn=conn
-    )
-    if conn is None:
-        db.commit()
-    return affected_rows
+    stmt = update(Memories).where(Memories.id.in_(m_ids)).values(session_joined=True)
+    external_session = conn is not None
+    orm_session = conn
+    if orm_session is None:
+        session_factory = get_session_factory()
+        orm_session = session_factory()
+    try:
+        result = orm_session.execute(stmt)
+        if not external_session:
+            orm_session.commit()
+        return int(getattr(result, "rowcount", 0) or 0)
+    finally:
+        if not external_session:
+            orm_session.close()

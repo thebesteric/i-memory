@@ -1,9 +1,9 @@
 from datetime import datetime
 from typing import Literal, Any, cast
-import json
 
 from agile.commons.enum import LabeledStrEnum
 from pydantic import BaseModel, Field, ConfigDict, PrivateAttr
+from src.utils.json_utils import coerce_json_field
 
 
 class Personality(LabeledStrEnum):
@@ -171,14 +171,7 @@ class UserProfile(BaseModel):
             return None
 
         def parse_json_field(val, default):
-            if val is None:
-                return default
-            if isinstance(val, (dict, list)):
-                return val
-            try:
-                return json.loads(val)
-            except Exception:
-                return default
+            return coerce_json_field(val, default)
 
         # 解析 JSON 字段
         demographic_data = parse_json_field(row.get("demographic"), {})

@@ -1,4 +1,3 @@
-import json
 from typing import Any
 
 from agile.web import PagingResponse
@@ -8,6 +7,7 @@ from fastapi import APIRouter
 from src.core import user_ops
 from src.exceptions.exceptions import UserNotFoundError
 from src.memory.graph import graph_ops
+from src.utils.json_utils import coerce_json_field
 from src.web.models.web_models import GraphFactsRequest, GraphFactEntitiesRequest, GraphEntityRelationsRequest, \
     GraphEntityTopicsRequest, GraphTopicMemoriesRequest, GraphExploreRequest, GraphFactsFilters
 
@@ -89,12 +89,11 @@ async def entity_relations(req: GraphEntityRelationsRequest):
         req.size or 20,
         filters=req.filters
     )
+
     for row in records:
-        if isinstance(row.get("fact_ids"), str):
-            try:
-                row["fact_ids"] = json.loads(row["fact_ids"])
-            except Exception:
-                row["fact_ids"] = []
+        fact_ids = coerce_json_field(row.get("fact_ids"), [])
+        row["fact_ids"] = fact_ids if isinstance(fact_ids, list) else []
+
     return R.success(
         data=PagingResponse(
             records=records,
@@ -120,19 +119,15 @@ async def entity_topics(req: GraphEntityTopicsRequest):
         raise UserNotFoundError(req.user_identity)
 
     total, records = graph_ops.find_entity_topics_page(user.id, req.canonical_id, req.current or 1, req.size or 20)
+
     for row in records:
-        if isinstance(row.get("keywords"), str):
-            try:
-                row["keywords"] = json.loads(row["keywords"])
-            except Exception:
-                row["keywords"] = []
-        if isinstance(row.get("dialogue_ids"), str):
-            try:
-                row["dialogue_ids"] = json.loads(row["dialogue_ids"])
-            except Exception:
-                row["dialogue_ids"] = []
+        keywords = coerce_json_field(row.get("keywords"), [])
+        row["keywords"] = keywords if isinstance(keywords, list) else []
+        dialogue_ids = coerce_json_field(row.get("dialogue_ids"), [])
+        row["dialogue_ids"] = dialogue_ids if isinstance(dialogue_ids, list) else []
         row["fact_count"] = int(row.get("fact_count") or 0)
         row["dialogue_count"] = int(row.get("dialogue_count") or 0)
+
     return R.success(
         data=PagingResponse(
             records=records,
@@ -440,20 +435,12 @@ def _normalize_memories(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
         sectors = memory.get("sectors")
         tags = memory.get("tags")
         meta = memory.get("meta")
-        if isinstance(sectors, str):
-            try:
-                memory["sectors"] = json.loads(sectors)
-            except Exception:
-                memory["sectors"] = []
-        if isinstance(tags, str):
-            try:
-                memory["tags"] = json.loads(tags)
-            except Exception:
-                memory["tags"] = []
-        if isinstance(meta, str):
-            try:
-                memory["meta"] = json.loads(meta)
-            except Exception:
-                memory["meta"] = {}
+        sectors = coerce_json_field(sectors, [])
+        memory["sectors"] = sectors if isinstance(sectors, list) else []
+        tags = coerce_json_field(tags, [])
+        memory["tags"] = tags if isinstance(tags, list) else []
+        meta = coerce_json_field(meta, {})
+        memory["meta"] = meta if isinstance(meta, dict) else {}
         normalized.append(memory)
+
     return normalized

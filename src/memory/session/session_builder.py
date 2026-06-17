@@ -1,19 +1,20 @@
 import asyncio
 import datetime
-from contextlib import contextmanager
 
 from agile.utils import LogHelper
 
 from src.core import user_ops
 from src.core.config import env
-from src.core.db import transaction
+from src.core.db import get_session_factory
 from src.core.mem_ops import mem_ops
 from src.memory.memory_models import IMemoryUser
 from src.memory.session import session_ops
 from src.memory.session.session_extractor import SessionExtractor
 from src.memory.session.session_models import Sessions
 
-logger = LogHelper.get_logger()
+logger = LogHelper.get_logger(title="[SESSION_BUILD]")
+session_factory = get_session_factory()
+
 # 进程内按用户维度的锁映射表，用于避免为同一用户重复构建用户画像。
 _SESSION_LOCKS: dict[str, asyncio.Lock] = {}
 _LOCKS_GUARD = asyncio.Lock()
@@ -48,12 +49,13 @@ async def _process_session(user: IMemoryUser, yesterday_end: datetime.datetime, 
                 return False
 
             sessions: Sessions = await session_extractor.invoke(memories=memories)
-            with contextmanager(transaction)() as conn:
-                sessions = await session_ops.insert_sessions(user, sessions, conn=conn)
-                affected_rows = await session_ops.mark_memoires_to_session_joined([m["id"] for m in memories],
-                                                                                  conn=conn)
-                logger.info(
-                    f"[SESSION_BUILD] User session created, User ID: {user.id}, Associated memories: {affected_rows}")
+            with session_factory() as db_session:
+                with db_session.begin():
+                    sessions = await session_ops.insert_sessions(user, sessions, conn=db_session)
+                    affected_rows = await session_ops.mark_memoires_to_session_joined([m["id"] for m in memories],
+                                                                                       conn=db_session)
+                    logger.info(
+                        f"[SESSION_BUILD] User session created, User ID: {user.id}, Associated memories: {affected_rows}")
             return True
 
 

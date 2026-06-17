@@ -1,192 +1,319 @@
-from contextlib import contextmanager
-from typing import Optional, Any, Dict, List, Literal
+import json
+from typing import Optional, Any, Dict, List, Literal, cast
 
 from agile.utils import singleton, timing
+from sqlalchemy import and_, asc, delete, desc, func, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from src.core.db import DB, get_db, transaction
+from src.core.db import get_session_factory
+from src.memory.entity.db_schema import (
+    EmbedLogs,
+    GraphCanonicalEntities,
+    GraphEntities,
+    GraphEntityRelations,
+    GraphFactEntities,
+    GraphFacts,
+    GraphTopics,
+    Memories,
+    Sessions,
+    UserProfiles,
+    Vectors,
+    Waypoints,
+)
 from src.memory.memory_models import IMemoryUser
-
-db = get_db()
+from utils.json_utils import coerce_json_field
 
 
 @singleton
 class MemOps:
 
     def __init__(self):
-        self.db: DB = db
+        self._session_factory = get_session_factory
+
+    @staticmethod
+    def _model_to_dict(model_obj) -> Dict[str, Any]:
+        return {c.name: getattr(model_obj, c.name) for c in model_obj.__table__.columns}
+
+    @staticmethod
+    def _parse_order_item(order_item: str, default_model=Memories):
+        clause = (order_item or "").strip()
+        if not clause:
+            return None
+        parts = clause.split()
+        col_name = parts[0]
+        direction = parts[1].lower() if len(parts) > 1 else "asc"
+
+        model = default_model
+        field = col_name
+        if "." in col_name:
+            alias, field = col_name.split(".", 1)
+            if alias == "v":
+                model = Vectors
+            else:
+                model = Memories
+
+        col = model.__table__.columns.get(field)
+        if col is None:
+            return None
+        return desc(col) if direction == "desc" else asc(col)
+
+    @staticmethod
+    def _parse_condition(condition: str, params_iter, default_model=Memories):
+        cond = (condition or "").strip()
+        if not cond:
+            return None
+
+        for op in ("<=", ">=", "!=", "=", "<", ">"):
+            if op in cond:
+                left, right = [x.strip() for x in cond.split(op, 1)]
+                break
+        else:
+            return None
+
+        model = default_model
+        field = left
+        if "." in left:
+            alias, field = left.split(".", 1)
+            if alias == "v":
+                model = Vectors
+            else:
+                model = Memories
+
+        col = model.__table__.columns.get(field)
+        if col is None:
+            return None
+
+        if right == "%s":
+            value = next(params_iter)
+        else:
+            lowered = right.lower()
+            if lowered in ("true", "false"):
+                value = lowered == "true"
+            elif right in ("0", "1") and field.endswith("_joined"):
+                value = right == "1"
+            else:
+                try:
+                    value = int(right)
+                except ValueError:
+                    value = right.strip("'\"")
+
+        if op == "=":
+            return col == value
+        if op == "!=":
+            return col != value
+        if op == "<":
+            return col < value
+        if op == ">":
+            return col > value
+        if op == "<=":
+            return col <= value
+        if op == ">=":
+            return col >= value
+        return None
+
+    @staticmethod
+    def _build_filters(conditions: list[str], params: list[Any] | None, default_model=Memories) -> list[Any]:
+        params_iter = iter(params or [])
+        filters = []
+        for cond in conditions:
+            expr = MemOps._parse_condition(cond, params_iter, default_model=default_model)
+            if expr is not None:
+                filters.append(expr)
+        return filters
 
     def ins_mem(self, **k) -> int:
-        sql = """
-              INSERT INTO memories(id, user_id, segment, content, primary_sector, sectors, tags, meta, created_at,
-                                   updated_at,
-                                   last_seen_at, salience, decay_lambda, version, mean_dim, mean_vec, compressed_vec,
-                                   feedback_score,
-                                   qa_role, qa_pair_id)
-              VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-              ON CONFLICT (id) DO UPDATE SET user_id=EXCLUDED.user_id,
-                                             segment=EXCLUDED.segment,
-                                             content=EXCLUDED.content,
-                                             primary_sector=EXCLUDED.primary_sector,
-                                             sectors=EXCLUDED.sectors,
-                                             tags=EXCLUDED.tags,
-                                             meta=EXCLUDED.meta,
-                                             created_at=EXCLUDED.created_at,
-                                             updated_at=EXCLUDED.updated_at,
-                                             last_seen_at=EXCLUDED.last_seen_at,
-                                             salience=EXCLUDED.salience,
-                                             decay_lambda=EXCLUDED.decay_lambda,
-                                             version=EXCLUDED.version,
-                                             mean_dim=EXCLUDED.mean_dim,
-                                             mean_vec=EXCLUDED.mean_vec,
-                                             compressed_vec=EXCLUDED.compressed_vec,
-                                             feedback_score=EXCLUDED.feedback_score,
-                                             qa_role=EXCLUDED.qa_role,
-                                             qa_pair_id=EXCLUDED.qa_pair_id
-              """
-        vals = (
-            k.get("id"), k.get("user_id"), k.get("segment", 0), k.get("content"),
-            k.get("primary_sector"), k.get("sectors"), k.get("tags"), k.get("meta"), k.get("created_at"),
-            k.get("updated_at"),
-            k.get("last_seen_at"), k.get("salience", 1.0), k.get("decay_lambda", 0.02), k.get("version", 1),
-            k.get("mean_dim"), k.get("mean_vec"), k.get("compressed_vec"), k.get("feedback_score", 0),
-            k.get("qa_role"), k.get("qa_pair_id")
+        payload = {
+            "id": k.get("id"),
+            "user_id": k.get("user_id"),
+            "segment": k.get("segment", 0),
+            "content": k.get("content"),
+            "primary_sector": k.get("primary_sector"),
+            "sectors": coerce_json_field(k.get("sectors"), []),
+            "tags": coerce_json_field(k.get("tags"), []),
+            "meta": coerce_json_field(k.get("meta"), {}),
+            "created_at": k.get("created_at"),
+            "updated_at": k.get("updated_at"),
+            "last_seen_at": k.get("last_seen_at"),
+            "salience": k.get("salience", 1.0),
+            "decay_lambda": k.get("decay_lambda", 0.02),
+            "version": k.get("version", 1),
+            "mean_dim": k.get("mean_dim"),
+            "mean_vec": k.get("mean_vec"),
+            "compressed_vec": k.get("compressed_vec"),
+            "feedback_score": k.get("feedback_score", 0),
+            "qa_role": k.get("qa_role"),
+            "qa_pair_id": k.get("qa_pair_id"),
+        }
+
+        stmt = pg_insert(Memories).values(**payload)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=[Memories.id],
+            set_={field: getattr(stmt.excluded, field) for field in payload.keys() if field != "id"},
         )
-        affected_rows = self.db.execute(sql, vals)
-        self.db.commit()
-        return affected_rows
+        session_factory = self._session_factory()
+        with session_factory() as session:
+            session.execute(stmt)
+            session.commit()
+        return 1
 
     def get_mem(self, mid: str) -> Dict[str, Any] | None:
-        return self.db.fetchone("SELECT * FROM memories WHERE id = %s", (mid,))
+        session_factory = self._session_factory()
+        with session_factory() as session:
+            mem = session.get(Memories, mid)
+            return self._model_to_dict(mem) if mem else None
 
     def all_mem(self, limit=10, offset=0) -> List[Dict[str, Any]]:
-        return self.db.fetchall("SELECT * FROM memories ORDER BY created_at DESC LIMIT %s OFFSET %s", (limit, offset))
+        query = select(Memories).order_by(desc(Memories.created_at)).limit(limit).offset(offset)
+        session_factory = self._session_factory()
+        with session_factory() as session:
+            rows = session.execute(query).scalars().all()
+            return [self._model_to_dict(r) for r in rows]
 
     def ins_log(self, _id: str, user_id: str, mem_id: str, model: str, status: str, ts: int,
                 err: Optional[str] = None) -> int:
-        affected_rows = self.db.execute(
-            "INSERT INTO embed_logs(id, user_id, memory_id, model, status, ts, err) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-            (_id, user_id, mem_id, model, status, ts, err)
-        )
-        self.db.commit()
-        return affected_rows
+        session_factory = self._session_factory()
+        with session_factory() as session:
+            session.add(EmbedLogs(id=_id, user_id=user_id, memory_id=mem_id, model=model, status=status, ts=ts, err=err))  # type: ignore[arg-type]
+            session.commit()
+        return 1
 
     def upd_log(self, _id: str, status: str, err: Optional[str] = None) -> int:
-        affected_rows = self.db.execute(
-            "UPDATE embed_logs SET status = %s, err = %s WHERE id = %s",
-            (status, err, _id)
-        )
-        self.db.commit()
-        return affected_rows
+        stmt = update(EmbedLogs).where(EmbedLogs.id == _id).values(status=status, err=err)
+        session_factory = self._session_factory()
+        with session_factory() as session:
+            ret = session.execute(stmt)
+            session.commit()
+            return cast(int, getattr(ret, "rowcount", 0) or 0)
 
     @timing
     def find_mem_by_ids(self, mids: list[str]) -> List[Dict[str, Any]]:
         if not mids:
             return []
-        format_strings = ','.join(['%s'] * len(mids))
-        query = f"SELECT * FROM memories WHERE id IN ({format_strings})"
-        return self.db.fetchall(query, tuple(mids))
+        query = select(Memories).where(Memories.id.in_(mids))
+        session_factory = self._session_factory()
+        with session_factory() as session:
+            rows = session.execute(query).scalars().all()
+            return [self._model_to_dict(r) for r in rows]
 
     @timing
     def find_mem_by_user(self, user: IMemoryUser, order_by: List[str], limit=10, offset=0) -> List[Dict[str, Any]]:
-        sql_parts = [
-            """
-            SELECT *
-            FROM memories t
-                     LEFT JOIN vectors v on t.id = v.id
-            WHERE t.user_id = %s
-              AND v.v IS NOT NULL
-            """,
-        ]
+        query = (
+            select(Memories, Vectors.v, Vectors.sector, Vectors.dim)
+            .join(Vectors, Memories.id == Vectors.id, isouter=True)
+            .where(and_(Memories.user_id == user.id, Vectors.v.is_not(None)))
+        )
 
-        # 查询参数列表，初始包含 user_id
-        params = [user.id]
+        order_exprs = []
+        for item in order_by or []:
+            parsed = self._parse_order_item(item)
+            if parsed is not None:
+                order_exprs.append(parsed)
+        if order_exprs:
+            query = query.order_by(*order_exprs)
 
-        # 拼接排序
-        if order_by:
-            order_by_clause = ", ".join(order_by)
-            sql_parts.append(f"ORDER BY {order_by_clause}")
+        query = query.limit(limit).offset(offset)
+        session_factory = self._session_factory()
+        with session_factory() as session:
+            rows = session.execute(query).all()
+            result = []
+            for mem, vec, sector, dim in rows:
+                item = self._model_to_dict(mem)
+                # Keep backward-compatible payload shape for callers that json.loads(user_memory["v"]).
+                item["v"] = json.dumps(vec) if isinstance(vec, (list, tuple)) else vec
+                item["sector"] = sector
+                item["dim"] = dim
+                result.append(item)
+            return result
 
-        # 分页
-        sql_parts.append(f"LIMIT %s OFFSET %s")
-        params.extend([str(limit), str(offset)])
-
-        final_sql = " ".join(sql_parts)
-        return self.db.fetchall(final_sql, tuple(params))
-
-    def find_mem_by_conditions(self, *, conditions: list[str], order_by: List[str] = None, params: list[Any] = None,
-                               limit: int = None, offset: int = 0) -> List[Dict[str, Any]]:
+    def find_mem_by_conditions(self, *, conditions: list[str], order_by: List[str] | None = None,
+                               params: list[Any] | None = None,
+                               limit: int | None = None, offset: int = 0) -> List[Dict[str, Any]]:
         if not conditions:
             return []
+        query = select(Memories)
+        filters = self._build_filters(conditions, params, default_model=Memories)
+        if filters:
+            query = query.where(and_(*filters))
 
-        sql_parts = [
-            "SELECT * FROM memories WHERE 1=1"
-        ]
-        sql_parts.append("AND " + " AND ".join(conditions))
-
-        if order_by:
-            order_by_clause = ", ".join(order_by)
-            sql_parts.append(f"ORDER BY {order_by_clause}")
+        order_exprs = []
+        for item in order_by or []:
+            parsed = self._parse_order_item(item)
+            if parsed is not None:
+                order_exprs.append(parsed)
+        if order_exprs:
+            query = query.order_by(*order_exprs)
 
         if limit is not None:
-            sql_parts.append("LIMIT %s OFFSET %s")
-            params = params + [limit, offset]
+            query = query.limit(limit).offset(offset)
 
-        final_sql = " ".join(sql_parts)
-        return self.db.fetchall(final_sql, tuple(params or []))
+        session_factory = self._session_factory()
+        with session_factory() as session:
+            rows = session.execute(query).scalars().all()
+            return [self._model_to_dict(r) for r in rows]
 
     def all_mem_by_user(self,
                         user: IMemoryUser,
                         limit=10,
                         offset=0,
                         sort_order: Literal["asc", "desc"] = "desc") -> List[Dict[str, Any]]:
+        sort_order = sort_order.lower()
+        order_expr = asc(Memories.created_at) if sort_order == "asc" else desc(Memories.created_at)
+        query = select(Memories).where(Memories.user_id == user.id).order_by(order_expr).limit(limit).offset(offset)
+        session_factory = self._session_factory()
+        with session_factory() as session:
+            rows = session.execute(query).scalars().all()
+            return [self._model_to_dict(r) for r in rows]
 
-        sql = f"SELECT * FROM memories WHERE user_id = %s ORDER BY created_at {sort_order} LIMIT %s OFFSET %s"
-        return self.db.fetchall(sql, (user.id, limit, offset))
-
-    def count_mem_by_user(self, user: IMemoryUser, conditions: list[str] = None) -> int:
-        sql_parts = [
-            "SELECT COUNT(*) as cnt FROM memories WHERE user_id = %s"
-        ]
-        params = [user.id]
-
+    def count_mem_by_user(self, user: IMemoryUser, conditions: list[str] | None = None) -> int:
+        query = select(func.count(Memories.id)).where(Memories.user_id == user.id)
         if conditions:
-            sql_parts.append("AND " + " AND ".join(conditions))
+            filters = self._build_filters(conditions, [], default_model=Memories)
+            if filters:
+                query = query.where(and_(*filters))
 
-        final_sql = " ".join(sql_parts)
-        row = self.db.fetchone(final_sql, tuple(params))
-
-        return row["cnt"] if row else 0
+        session_factory = self._session_factory()
+        with session_factory() as session:
+            cnt = session.execute(query).scalar_one()
+            return int(cnt or 0)
 
     def get_waypoints_by_src(self, src_id: str) -> List[Dict[str, Any]]:
-        return self.db.fetchall("SELECT * FROM waypoints WHERE src_id = %s", (src_id,))
+        query = select(Waypoints).where(Waypoints.src_id == src_id)
+        session_factory = self._session_factory()
+        with session_factory() as session:
+            rows = session.execute(query).scalars().all()
+            return [self._model_to_dict(r) for r in rows]
 
     def del_mem(self, mem_id: str) -> int:
-        self.db.execute("DELETE FROM vectors WHERE id = %s", (mem_id,))
-        self.db.execute("DELETE FROM waypoints WHERE src_id = %s OR dst_id = %s", (mem_id, mem_id))
-        self.db.execute("DELETE FROM embed_logs WHERE memory_id = %s", (mem_id,))
-        affected_rows = self.db.execute("DELETE FROM memories WHERE id = %s", (mem_id,))
-        self.db.commit()
-        return affected_rows
+        session_factory = self._session_factory()
+        with session_factory() as session:
+            session.execute(delete(Vectors).where(Vectors.id == mem_id))
+            session.execute(delete(Waypoints).where((Waypoints.src_id == mem_id) | (Waypoints.dst_id == mem_id)))
+            session.execute(delete(EmbedLogs).where(EmbedLogs.memory_id == mem_id))
+            ret = session.execute(delete(Memories).where(Memories.id == mem_id))
+            session.commit()
+            return cast(int, getattr(ret, "rowcount", 0) or 0)
 
     def del_mem_by_user(self, user: IMemoryUser) -> int:
         user_id = user.id
-        with contextmanager(transaction)() as conn:
-            self.db.execute("DELETE FROM graph_entity_relations WHERE user_id = %s", (user_id,), conn=conn)
-            self.db.execute("DELETE FROM graph_fact_entities WHERE user_id = %s", (user_id,), conn=conn)
-            self.db.execute("DELETE FROM graph_entities WHERE user_id = %s", (user_id,), conn=conn)
-            self.db.execute("DELETE FROM graph_canonical_entities WHERE user_id = %s", (user_id,), conn=conn)
-            self.db.execute("DELETE FROM graph_facts WHERE user_id = %s", (user_id,), conn=conn)
-            self.db.execute("DELETE FROM graph_topics WHERE user_id = %s", (user_id,), conn=conn)
+        session_factory = self._session_factory()
+        with session_factory() as session:
+            session.execute(delete(GraphEntityRelations).where(GraphEntityRelations.user_id == user_id))
+            session.execute(delete(GraphFactEntities).where(GraphFactEntities.user_id == user_id))
+            session.execute(delete(GraphEntities).where(GraphEntities.user_id == user_id))
+            session.execute(delete(GraphCanonicalEntities).where(GraphCanonicalEntities.user_id == user_id))
+            session.execute(delete(GraphFacts).where(GraphFacts.user_id == user_id))
+            session.execute(delete(GraphTopics).where(GraphTopics.user_id == user_id))
 
-            self.db.execute("DELETE FROM sessions WHERE user_id = %s", (user_id,), conn=conn)
-            self.db.execute("DELETE FROM user_profiles WHERE user_id = %s", (user_id,), conn=conn)
+            session.execute(delete(Sessions).where(Sessions.user_id == user_id))
+            session.execute(delete(UserProfiles).where(UserProfiles.user_id == user_id))
 
-            self.db.execute("DELETE FROM vectors WHERE user_id = %s", (user_id,), conn=conn)
-            self.db.execute("DELETE FROM waypoints WHERE user_id = %s", (user_id,), conn=conn)
-            self.db.execute("DELETE FROM embed_logs WHERE user_id = %s", (user_id,), conn=conn)
+            session.execute(delete(Vectors).where(Vectors.user_id == user_id))
+            session.execute(delete(Waypoints).where(Waypoints.user_id == user_id))
+            session.execute(delete(EmbedLogs).where(EmbedLogs.user_id == user_id))
 
-            affected_rows = self.db.execute("DELETE FROM memories WHERE user_id = %s", (user_id,), conn=conn)
-            return affected_rows
+            ret = session.execute(delete(Memories).where(Memories.user_id == user_id))
+            session.commit()
+            return cast(int, getattr(ret, "rowcount", 0) or 0)
 
 
 mem_ops = MemOps()

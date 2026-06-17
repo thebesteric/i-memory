@@ -1,4 +1,3 @@
-import json
 from typing import Dict, List
 
 from agile.web import PagingResponse
@@ -13,6 +12,7 @@ from src.memory.graph import graph_ops
 from src.memory.memory_models import IMemoryUserIdentity, IMemorySearchResult
 from src.memory.profile import user_profile_ops
 from src.memory.profile.user_profile_models import UserProfile
+from src.utils.json_utils import coerce_json_field
 from src.web.models.web_models import AddMemoryRequest, SearchMemoryRequest, HistoryMemoryRequest, \
     CanonicalRelationsRequest
 
@@ -102,10 +102,10 @@ async def history(req: HistoryMemoryRequest):
     summary="获取指定 ID 的记忆内容",
     response_model=gen_response_model(
         "GetResponse",
-        data_type=dict[str, Any],
+        data_type=dict[str, Any] | None,
         data_desc="记忆内容详情",
     ),
-    description="根据记忆ID获取详细内容。"
+    description="根据记忆 ID 获取详细内容。"
 )
 async def get(memory_id: str = Path(..., description="记忆 ID")):
     """
@@ -211,8 +211,12 @@ def _handle_memories(memories: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     for memory in memories:
         memory.pop("mean_vec", None)
         memory.pop("compressed_vec", None)
-        memory["sectors"] = json.loads(memory.get("sectors", []))
-        memory["tags"] = json.loads(memory.get("tags", []))
-        memory["meta"] = json.loads(memory.get("meta", {}))
+        sectors = coerce_json_field(memory.get("sectors"), [])
+        tags = coerce_json_field(memory.get("tags"), [])
+        meta = coerce_json_field(memory.get("meta"), {})
+
+        memory["sectors"] = sectors if isinstance(sectors, list) else []
+        memory["tags"] = tags if isinstance(tags, list) else []
+        memory["meta"] = meta if isinstance(meta, dict) else {}
         processed.append(memory)
     return processed

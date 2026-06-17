@@ -1,19 +1,19 @@
 import asyncio
 import datetime
-from contextlib import contextmanager
 
 from agile.utils import LogHelper
 
 from src.core import user_ops
 from src.core.config import env
-from src.core.db import transaction
+from src.core.db import get_session_factory
 from src.core.mem_ops import mem_ops
 from src.memory.memory_models import IMemoryUser
 from src.memory.profile import user_profile_ops
 from src.memory.profile.user_profile_extractor import UserProfileExtractor
 from src.memory.profile.user_profile_models import UserProfile
 
-logger = LogHelper.get_logger()
+logger = LogHelper.get_logger(title="[USER_PROFILE_BUILD]")
+session_factory = get_session_factory()
 
 # 进程内按用户维度的锁映射表，用于避免为同一用户重复构建用户画像。
 _USER_PROFILE_LOCKS: dict[str, asyncio.Lock] = {}
@@ -57,12 +57,13 @@ async def _process_user_profile(user: IMemoryUser, yesterday_end: datetime.datet
                 return False
 
             user_profile: UserProfile = await user_profile_extractor.invoke(user, memories=memories)
-            with contextmanager(transaction)() as conn:
-                user_profile = await user_profile_ops.upsert_user_profile(user, user_profile, conn=conn)
-                affected_rows = await user_profile_ops.mark_memoires_to_profile_joined([m["id"] for m in memories],
-                                                                                       conn=conn)
-                logger.info(
-                    f"[USER_PROFILE] User profile updated, User ID: {user.id}, Profile ID: {user_profile.id}, Associated memories: {affected_rows}")
+            with session_factory() as db_session:
+                with db_session.begin():
+                    user_profile = await user_profile_ops.upsert_user_profile(user, user_profile, conn=db_session)
+                    affected_rows = await user_profile_ops.mark_memoires_to_profile_joined([m["id"] for m in memories],
+                                                                                           conn=db_session)
+                    logger.info(
+                        f"[USER_PROFILE] User profile updated, User ID: {user.id}, Profile ID: {user_profile.id}, Associated memories: {affected_rows}")
             return True
 
 

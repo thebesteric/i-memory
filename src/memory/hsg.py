@@ -9,11 +9,12 @@ from typing import Any, Dict, List
 from agile.db.vector.base.base_embed_model import BaseEmbedModel
 from agile.search import BM25Searcher
 from agile.utils import LogHelper, timing
+from sqlalchemy import desc, func, select, update
 
 from src.core.components import get_sector_classifier, get_vector_store, MEMORIES_CACHE, get_embed_model
 from src.core.config import env
 from src.core.constants import SECTOR_RELATIONSHIPS, HYBRID_PARAMS, get_dynamic_sector_weights
-from src.core.db import get_db
+from src.core.db import get_session_factory
 from src.core.mem_ops import mem_ops
 from src.core.extract_essence import ExtractEssence
 from src.core.score import compute_tag_match_score, compute_hybrid_score
@@ -23,6 +24,7 @@ from src.core.waypoints import Waypoints, Expansion
 from src.core import user_ops
 from src.exceptions.exceptions import UserNotFoundError
 from src.memory.decay import Decay
+from src.memory.entity.db_schema import Memories, Segment
 from src.memory.embed import embed_multi_sector, calc_mean_vec, embed, embed_batch
 from src.memory import graph_search
 from src.memory.memory_models import IMemoryFilters, IMemoryItemDebugInfo, IMemoryItemInfo, IMemoryUserIdentity, \
@@ -38,15 +40,63 @@ from src.tools.chunking import chunk_text
 from src.tools.keyword import compute_keyword_overlap, compute_token_overlap
 from src.tools.text import canonical_token_set
 from src.tools.vectors import vec_to_buf, cos_sim
+from src.utils.json_utils import coerce_json_field
 
 logger = LogHelper.get_logger(title="[HSG]")
 waypoints = Waypoints()
-db = get_db()
+session_factory = get_session_factory()
 decay = Decay(reinforce_on_query=True, regeneration_enabled=True)
 vector_store: BaseVectorStore = get_vector_store()
 sector_classifier: SectorClassifier = get_sector_classifier()
 embed_model: BaseEmbedModel = get_embed_model()
 bm25_searcher = BM25Searcher(id_field="id", content_field="content")
+
+
+def _memory_entity_to_dict(memory: Memories | None) -> dict[str, Any] | None:
+    if not memory:
+        return None
+    return {key: value for key, value in vars(memory).items() if not key.startswith("_")}
+
+
+def _update_memory_fields(memory_id: str, **values: Any) -> int:
+    with session_factory() as session:
+        result = session.execute(update(Memories).where(Memories.id == memory_id).values(**values))
+        session.commit()
+        return int(getattr(result, "rowcount", 0) or 0)
+
+
+def _get_or_rotate_segment() -> int:
+    now = datetime.datetime.now()
+    with session_factory() as session:
+        segment_row = session.execute(select(Segment).with_for_update().limit(1)).scalars().first()
+        if not segment_row:
+            segment_row = Segment(current_segment=0, created_at=now, updated_at=now)  # type: ignore[arg-type]
+            session.add(segment_row)
+            session.flush()
+
+        cur_seg = int(segment_row.current_segment or 0)
+        # 获取当前 segment 中的记忆总数量
+        cnt = session.execute(select(func.count(Memories.id)).where(Memories.segment == cur_seg)).scalar_one()
+        # 如果当前 SECTOR 记忆数达到上限，则切换到下一个 SECTOR
+        if int(cnt or 0) >= env.SECTOR_SIZE:
+            cur_seg += 1
+            segment_row.current_segment = cur_seg
+            segment_row.updated_at = now
+            logger.info(f"Rotated to segment [{cur_seg}]")
+
+        session.commit()
+        return cur_seg
+
+
+def _find_latest_assistant_by_pair_id(qa_pair_id: str) -> dict[str, Any] | None:
+    with session_factory() as session:
+        memory = session.execute(
+            select(Memories)
+            .where(Memories.qa_pair_id == qa_pair_id, Memories.qa_role == "assistant")
+            .order_by(desc(Memories.created_at))
+            .limit(1)
+        ).scalars().first()
+        return _memory_entity_to_dict(memory)
 
 
 @timing
@@ -90,7 +140,7 @@ def compress_vec_for_storage(vec: List[float], target_dim: int) -> List[float]:
 
 async def add_hsg_memory(user_identity: IMemoryUserIdentity,
                          content: str,
-                         tags: List[str] = None,
+                         tags: List[str] | None = None,
                          metadata: Any = None,
                          qa_role: QARole | None = None) -> Dict[str, Any]:
     """
@@ -127,8 +177,13 @@ async def add_hsg_memory(user_identity: IMemoryUserIdentity,
     best_sim_mem_similarity = tuple()
     if user_memories:
         for user_memory in user_memories:
-            v_list_json = json.loads(user_memory["v"])
-            v = [float(s) for s in v_list_json]
+            v_list_json = coerce_json_field(user_memory.get("v"), [])
+            if not isinstance(v_list_json, list) or not v_list_json:
+                continue
+            try:
+                v = [float(s) for s in v_list_json]
+            except (TypeError, ValueError):
+                continue
             similarity = embed_model.similarity(vec, v)
             # 找到相似度最高的记忆
             if not best_sim_mem_similarity or similarity > best_sim_mem_similarity[0]:
@@ -157,9 +212,7 @@ async def add_hsg_memory(user_identity: IMemoryUserIdentity,
         # 提升显著性，但不超过 1.0
         boost = min(1.0, (best_sim_mem["salience"] or 0) + 0.15)
         # 更新最后访问时间和显著性
-        db.execute("UPDATE memories SET last_seen_at=%s, salience=%s, updated_at=%s WHERE id=%s",
-                   (now, boost, now, best_sim_mem['id']))
-        db.commit()
+        _update_memory_fields(best_sim_mem["id"], last_seen_at=now, salience=boost, updated_at=now)
         return {
             "id": best_sim_mem["id"],
             "primary_sector": best_sim_mem["primary_sector"],
@@ -182,15 +235,8 @@ async def add_hsg_memory(user_identity: IMemoryUserIdentity,
     all_secs = [cls_ret.primary] + cls_ret.additional
 
     try:
-        current_seg_result = db.fetchone("SELECT current_segment FROM segment FOR UPDATE")
-        cur_seg = current_seg_result["current_segment"] if current_seg_result else 0
-        # 获取当前 segment 中的记忆总数量
-        cnt_res = db.fetchone("SELECT count(*) as c FROM memories WHERE segment=%s", (cur_seg,))
-        # 如果当前 SECTOR 记忆数达到上限，则切换到下一个 SECTOR
-        if cnt_res["c"] >= env.SECTOR_SIZE:
-            cur_seg += 1
-            db.execute("UPDATE segment SET current_segment=%s, updated_at=NOW()", (cur_seg,))
-            logger.info(f"Rotated to segment [{cur_seg}]")
+        # 获取记忆扇区
+        cur_seg = _get_or_rotate_segment()
 
         # 调用 extract_essence，生成摘要（内容长度 > 1000，模型调用）
         essence = await ExtractEssence(content=content, max_len=env.SUMMARY_MAX_LENGTH).extract()
@@ -250,7 +296,7 @@ async def add_hsg_memory(user_identity: IMemoryUserIdentity,
         # 将一个浮点数列表（向量）序列化为二进制字节流（bytes）
         mean_buf = vec_to_buf(mean_vec)
         # 更新记忆的均值向量和维度
-        db.execute("UPDATE memories SET mean_dim=%s, mean_vec=%s WHERE id=%s", (len(mean_vec), mean_buf, mid))
+        _update_memory_fields(mid, mean_dim=len(mean_vec), mean_vec=mean_buf)
 
         # 若向量维度大于 128，则压缩存储
         if len(mean_vec) > 128:
@@ -259,7 +305,7 @@ async def add_hsg_memory(user_identity: IMemoryUserIdentity,
             # 将压缩向量序列化为二进制字节流（bytes）
             comp_mean_buf = vec_to_buf(comp)
             # 更新记忆的压缩向量
-            db.execute("UPDATE memories SET compressed_vec=%s WHERE id=%s", (comp_mean_buf, mid))
+            _update_memory_fields(mid, compressed_vec=comp_mean_buf)
 
         # 建立 Waypoint 关联，为新记忆建立与其他记忆的关联
         await waypoints.create_single_waypoint(mid, mean_vec, now, user)
@@ -296,12 +342,11 @@ async def reinforce_memories(effective_k_list):
         try:
             reinforcement_sal = await apply_retrieval_trace_reinforcement_to_memory(_item.id, _item.salience)
             now = datetime.datetime.now()
-            db.execute("UPDATE memories SET salience=%s, last_seen_at = %s WHERE id = %s",
-                       (reinforcement_sal, now, _item.id))
+            _update_memory_fields(_item.id, salience=reinforcement_sal, last_seen_at=now)
 
             # 有图遍历路径时
             if len(_item.path) > 1:
-                wps_rows = db.fetchall("SELECT dst_id, weight FROM waypoints WHERE src_id=%s", (_item.id,))
+                wps_rows = mem_ops.get_waypoints_by_src(_item.id)
                 wps = [{"target_id": row["dst_id"], "weight": row["weight"]} for row in wps_rows]
 
                 # 向关联节点传播（得到关联节点新的显著性）
@@ -321,8 +366,7 @@ async def reinforce_memories(effective_k_list):
                         # 更新关联记忆的显著性
                         new_sal = max(0.0, min(1.0, (linked_mem["salience"] or 0) + ctx_boost))
                         # 更新关联记忆的显著性和最后访问时间
-                        db.execute("UPDATE memories SET salience = %s, last_seen_at = %s WHERE id = %s",
-                                   (new_sal, now, u["node_id"]))
+                        _update_memory_fields(u["node_id"], salience=new_sal, last_seen_at=now)
 
             # 记录查询命中事件并触发动态更新
             await decay.on_query_hit(_item.id, _item.primary_sector, lambda t: embed(t, _item.primary_sector))
@@ -331,7 +375,7 @@ async def reinforce_memories(effective_k_list):
 
 
 @timing
-async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilters = None) -> IMemorySearchResult:
+async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilters | None = None) -> IMemorySearchResult:
     """
     基于混合评分机制（内容相似度、关键词重叠、路标关联、图检索、时间衰减等）进行记忆检索
     @param query: 查询文本
@@ -565,13 +609,19 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
                                                tag_match=tag_match_score)
             final_score = max(0.0, min(1.0, final_score + graph_bonus))
 
-            metadata = json.loads(mem["meta"]) or {}
+            metadata = coerce_json_field(mem.get("meta"), {})
+            if not isinstance(metadata, dict):
+                metadata = {}
             metadata.update({
                 "type": "memory",
                 "from": mem_from.get(mid, "unknown"),
                 "graph_score": graph_score,
                 "graph_bonus": graph_bonus,
             })
+
+            tags = coerce_json_field(mem.get("tags"), [])
+            if not isinstance(tags, list):
+                tags = []
 
             # 构建结果项
             item = IMemoryItemInfo(
@@ -583,7 +633,7 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
                 salience=salience,
                 last_seen_at=mem["last_seen_at"],
                 created_at=mem["created_at"],
-                tags=json.loads(mem["tags"] or "[]"),
+                tags=tags,
                 qa_role=mem.get("qa_role"),
                 qa_pair_id=mem.get("qa_pair_id"),
                 metadata=metadata
@@ -780,16 +830,7 @@ def _promote_qa_assistant_answer(items: List[IMemoryItemInfo], query_sector: str
     # 尝试查找与该 human 记忆配对的 assistant 记忆
     pair_row = None
     if best_human.qa_pair_id:
-        pair_row = db.fetchone(
-            """
-            SELECT *
-            FROM memories
-            WHERE qa_pair_id = %s
-              AND qa_role = 'assistant'
-            ORDER BY created_at DESC LIMIT 1
-            """,
-            (best_human.qa_pair_id,)
-        )
+        pair_row = _find_latest_assistant_by_pair_id(best_human.qa_pair_id)
 
     if not pair_row:
         logger.info(
@@ -810,6 +851,12 @@ def _promote_qa_assistant_answer(items: List[IMemoryItemInfo], query_sector: str
 
     # 不在候选列表中：动态追加
     pair_id = pair_row.get("id")
+    pair_tags = coerce_json_field(pair_row.get("tags"), [])
+    if not isinstance(pair_tags, list):
+        pair_tags = []
+    pair_meta = coerce_json_field(pair_row.get("meta"), {})
+    if not isinstance(pair_meta, dict):
+        pair_meta = {}
     items.append(IMemoryItemInfo(
         id=pair_id,
         content=pair_row.get("content"),
@@ -818,10 +865,10 @@ def _promote_qa_assistant_answer(items: List[IMemoryItemInfo], query_sector: str
         path=[str(pair_id)] if pair_id else [],
         salience=pair_row.get("salience") or 0.0,
         last_seen_at=pair_row.get("last_seen_at"),
-        tags=json.loads(pair_row.get("tags") or "[]"),
+        tags=pair_tags,
         qa_role=pair_row.get("qa_role"),
         qa_pair_id=pair_row.get("qa_pair_id"),
-        metadata=json.loads(pair_row.get("meta") or "{}")
+        metadata=pair_meta
     ))
     return items
 
@@ -839,21 +886,32 @@ def _resolve_auto_qa_linking(user: IMemoryUser, qa_role: QARole | None) -> str |
         return str(uuid.uuid4())
 
     # assistant 自动配对：匹配同身份下最近未配对的 human
-    sql = """
-          SELECT h.qa_pair_id
-          FROM memories h
-          WHERE h.qa_role = 'human'
-            AND h.user_id = %s
-            AND h.qa_pair_id IS NOT NULL
-            AND NOT EXISTS (SELECT 1
-                            FROM memories a
-                            WHERE a.qa_role = 'assistant'
-                              AND a.qa_pair_id = h.qa_pair_id
-                              AND a.user_id = h.user_id)
-          ORDER BY h.created_at DESC LIMIT 1
-          """
-    row = db.fetchone(sql, (user.id,))
-    if not row:
-        return str(uuid.uuid4())
+    with session_factory() as session:
+        assistant_pair_ids = {
+            pair_id
+            for pair_id in session.execute(
+                select(Memories.qa_pair_id)
+                .where(
+                    Memories.qa_role == "assistant",
+                    Memories.user_id == user.id,
+                    Memories.qa_pair_id.is_not(None),
+                )
+            ).scalars().all()
+            if pair_id
+        }
+        human_pair_ids = session.execute(
+            select(Memories.qa_pair_id)
+            .where(
+                Memories.qa_role == "human",
+                Memories.user_id == user.id,
+                Memories.qa_pair_id.is_not(None),
+            )
+            .order_by(desc(Memories.created_at))
+        ).scalars().all()
 
-    return row.get("qa_pair_id")
+    for pair_id in human_pair_ids:
+        if pair_id and pair_id not in assistant_pair_ids:
+            return pair_id
+
+    return str(uuid.uuid4())
+
