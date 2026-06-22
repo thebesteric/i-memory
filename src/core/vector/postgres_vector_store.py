@@ -9,7 +9,7 @@ from agile.utils import LogHelper, singleton, timing
 from src.core.config import env
 from src.core.db import get_session_factory, get_sync_engine
 from src.core.vector.base_vector_store import BaseVectorStore, VectorRow, VectorSearch
-from src.memory.entity.db_schema import Base, Vectors
+from src.entity.db_schema import Base, Vectors
 from src.memory.memory_models import IMemoryUser
 
 logger = LogHelper.get_logger(title="[POSTGRES]")

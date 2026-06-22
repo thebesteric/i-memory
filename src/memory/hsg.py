@@ -24,7 +24,7 @@ from src.core.waypoints import Waypoints, Expansion
 from src.core import user_ops
 from src.exceptions.exceptions import UserNotFoundError
 from src.memory.decay import Decay
-from src.memory.entity.db_schema import Memories, Segment
+from src.entity.db_schema import Memories, Segment
 from src.memory.embed import embed_multi_sector, calc_mean_vec, embed, embed_batch
 from src.memory import graph_search
 from src.memory.memory_models import IMemoryFilters, IMemoryItemDebugInfo, IMemoryItemInfo, IMemoryUserIdentity, \

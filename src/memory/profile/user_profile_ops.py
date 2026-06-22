@@ -6,7 +6,7 @@ from sqlalchemy import desc, select, update
 
 from src.core.components import USER_PROFILE_CACHE
 from src.core.db import get_session_factory
-from src.memory.entity.db_schema import Memories, UserProfiles
+from src.entity.db_schema import Memories, UserProfiles
 from src.memory.memory_models import IMemoryUser
 from src.memory.profile.user_profile_models import UserProfile
 

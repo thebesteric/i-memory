@@ -11,7 +11,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 from src.core.components import get_embed_model
 from src.core.db import get_session_factory
-from src.memory.entity.db_schema import GraphCanonicalEntities
+from src.entity.db_schema import GraphCanonicalEntities
 from src.memory.graph.graph_models import Entity, CanonicalEntity
 from src.memory.memory_models import IMemoryUser
 

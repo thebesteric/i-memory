@@ -7,7 +7,7 @@ from sqlalchemy import Text, cast, literal, select, update
 
 from src.core.components import get_embed_model
 from src.core.db import get_session_factory
-from src.memory.entity.db_schema import Memories, Sessions as SessionEntity
+from src.entity.db_schema import Memories, Sessions as SessionEntity
 from src.memory.memory_models import IMemoryUser
 from src.memory.session.session_models import Session, Sessions
 from src.utils.json_utils import coerce_json_field

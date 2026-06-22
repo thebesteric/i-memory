@@ -7,7 +7,7 @@ from sqlalchemy import desc, select
 from src.core.config import env
 from src.core.db import get_session_factory
 from src.core import user_ops
-from src.memory.entity.db_schema import Memories
+from src.entity.db_schema import Memories
 from src.memory.memory_models import IMemoryUser
 from src.utils.json_utils import coerce_json_field
 

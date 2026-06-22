@@ -27,7 +27,7 @@ sys.path.append(project_root)
 
 from src.core.config import env
 from src.core.components import get_vector_store
-from src.memory.entity.db_schema import init_db_schema
+from src.entity.db_schema import init_db_schema
 from src.memory.tasks import start_background_tasks, stop_background_tasks
 from src.web.routes import health_router, memory_router, graph_router, auth_router, backend_router
 

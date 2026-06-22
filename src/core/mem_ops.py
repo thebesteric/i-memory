@@ -6,7 +6,7 @@ from sqlalchemy import and_, asc, delete, desc, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from src.core.db import get_session_factory
-from src.memory.entity.db_schema import (
+from src.entity.db_schema import (
     EmbedLogs,
     GraphCanonicalEntities,
     GraphEntities,

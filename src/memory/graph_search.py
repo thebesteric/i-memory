@@ -5,7 +5,7 @@ from agile.utils import LogHelper
 from sqlalchemy import or_, select
 
 from src.core.db import get_session_factory
-from src.memory.entity.db_schema import GraphEntityRelations, GraphFactEntities, GraphFacts, GraphTopics, Memories
+from src.entity.db_schema import GraphEntityRelations, GraphFactEntities, GraphFacts, GraphTopics, Memories
 from src.memory.graph.graph_node_models import EdgeRelation
 from src.utils.json_utils import coerce_json_field
 

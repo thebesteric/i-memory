@@ -15,7 +15,7 @@ from src.core.db import get_session_factory
 from src.core.mem_ops import mem_ops
 from src.core.sector_classify import SECTOR_CONFIGS, SectorCfg
 from src.core.vector.base_vector_store import BaseVectorStore
-from src.memory.entity.db_schema import Memories
+from src.entity.db_schema import Memories
 from src.tools.text import canonical_tokens_from_text
 
 logger = LogHelper.get_logger(title="[DECAY]")

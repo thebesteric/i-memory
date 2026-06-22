@@ -13,7 +13,7 @@ from src.core.config import env
 from src.core.db import get_db
 from src.core.mem_ops import mem_ops
 from src.exceptions.exceptions import UserNotFoundError
-from src.memory.entity.db_schema import init_db_schema
+from src.entity.db_schema import init_db_schema
 from src.memory.hsg import query_hsg_memories
 from src.memory.memory_models import IMemoryConfig, IMemoryFilters, IMemoryUserIdentity, QARole, IMemoryUser, IMemorySearchResult
 from src.ops.ingest import ingest_document

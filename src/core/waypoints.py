@@ -11,7 +11,7 @@ from src.core import user_ops
 from src.core.db import get_session_factory
 from src.core.mem_ops import mem_ops
 from src.exceptions.exceptions import UserNotFoundError
-from src.memory.entity.db_schema import Waypoints as WaypointEntity
+from src.entity.db_schema import Waypoints as WaypointEntity
 from src.memory.memory_models import IMemoryUserIdentity, IMemoryUser
 from src.tools.vectors import buf_to_vec, cos_sim
 

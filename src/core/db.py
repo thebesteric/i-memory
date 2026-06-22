@@ -12,7 +12,7 @@ import inspect
 import logging
 
 from src.core.config import env
-from src.memory.entity.db_schema import normalize_sync_postgres_url
+from src.entity.db_schema import normalize_sync_postgres_url
 
 logger = LogHelper.get_logger(title="[DB]")
 

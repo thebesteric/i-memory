@@ -11,7 +11,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from src.core.components import get_embed_model
 from src.core.config import env
 from src.core.db import get_session_factory
-from src.memory.entity.db_schema import (
+from src.entity.db_schema import (
     GraphCanonicalEntities,
     GraphEntities,
     GraphEntityRelations,

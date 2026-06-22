@@ -1,7 +1,7 @@
 import json
 
 from src.core.mem_ops import mem_ops
-from src.memory.entity.db_schema import Memories
+from src.entity.db_schema import Memories
 from src.memory.memory_models import IMemoryUser
 
 

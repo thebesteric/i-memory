@@ -7,7 +7,7 @@ from sqlalchemy import asc, desc, select
 
 from src.core.components import USER_IDENTITY_CACHE
 from src.core.db import get_session_factory
-from src.memory.entity.db_schema import Users
+from src.entity.db_schema import Users
 from src.memory.memory_models import IMemoryUserIdentity, IMemoryUser
 
 logger = LogHelper.get_logger()
