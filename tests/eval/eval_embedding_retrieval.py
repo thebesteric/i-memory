@@ -9,9 +9,9 @@ from typing import Dict, List, Sequence, Tuple
 import numpy as np
 import pyrootutils
 
-from src.ai.embed.synthetic_embed import SyntheticEmbed
-from src.core.constants import SECTOR_RELATIONSHIPS
-from src.memory import embed as memory_embed
+from infra.ai.embedding.providers.synthetic_embed import SyntheticEmbed
+from shared.config.constants import SECTOR_RELATIONSHIPS
+from services.memory import embed as memory_embed
 
 
 @dataclass

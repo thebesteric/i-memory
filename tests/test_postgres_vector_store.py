@@ -1,9 +1,9 @@
 import asyncio
 
-from src.core.config import env
-import src.core.vector.postgres_vector_store as pvs
-from src.core.vector.postgres_vector_store import PostgresVectorStore
-from src.memory.memory_models import IMemoryUser
+from shared.config.settings import env
+import infra.vector_store.postgres_impl as pvs
+from infra.vector_store.postgres_impl import PostgresVectorStore
+from domain.memory.models import IMemoryUser
 
 
 class _FakeVectorEntity:

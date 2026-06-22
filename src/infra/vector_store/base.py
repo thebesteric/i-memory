@@ -1,0 +1,80 @@
+from abc import ABC, abstractmethod
+from typing import List, Optional
+
+from agile.utils import LogHelper
+
+from domain.memory.models import IMemoryUser
+
+logger = LogHelper.get_logger()
+
+
+class VectorRow:
+
+    def __init__(self, id: str, sector: str, vector: List[float], dim: int):
+        self.id = id
+        self.sector = sector
+        self.vector = vector
+        self.dim = dim
+
+
+class VectorSearch:
+
+    def __init__(self, id: str, similarity: float):
+        self.id = id
+        self.similarity = similarity
+
+
+class BaseVectorStore(ABC):
+
+    @abstractmethod
+    async def store_vector(self, _id: str, sector: str, vector: List[float], dim: int, user: IMemoryUser = None):
+        """
+        存储向量
+        :param _id: 唯一标识
+        :param sector: 扇区名称
+        :param vector: 向量列表
+        :param dim: 向量维度
+        :param user: 用户
+        :return:
+        """
+        pass
+
+    @abstractmethod
+    async def get_vectors_by_id(self, id: str) -> List[VectorRow]:
+        """
+        根据 ID 获取所有相关向量
+        :param id: 唯一标识
+        :return:
+        """
+        pass
+
+    @abstractmethod
+    async def get_vector(self, id: str, sector: str) -> Optional[VectorRow]:
+        """
+        根据 ID 和 sector 获取单个向量
+        :param id: 唯一标识
+        :param sector: 扇区名称
+        :return:
+        """
+        pass
+
+    @abstractmethod
+    async def delete_vectors(self, id: str):
+        """
+        删除指定 ID 的所有向量
+        :param id: 唯一标识
+        :return:
+        """
+        pass
+
+    @abstractmethod
+    async def search(self, user: IMemoryUser, vector: List[float], sector: str, k: int) -> List[VectorSearch]:
+        """
+        相似度搜索
+        :param user: 用户
+        :param vector: 向量列表
+        :param sector: 扇区名称
+        :param k: 返回结果数量
+        :return:
+        """
+        pass

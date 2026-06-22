@@ -1,8 +1,7 @@
 import asyncio
-import sys
 import unittest
 
-from src.core.extract_essence import ExtractEssence
+from services.memory.extract_essence import ExtractEssence
 
 class TestIMemoryExtractEssence(unittest.TestCase):
 

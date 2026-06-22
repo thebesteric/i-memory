@@ -1,8 +1,8 @@
 import json
 
-from src.core.mem_ops import mem_ops
-from src.entity.db_schema import Memories
-from src.memory.memory_models import IMemoryUser
+from infra.db.repositories.memory_repo import mem_ops
+from infra.db.orm_models import Memories
+from domain.memory.models import IMemoryUser
 
 
 class _FakeResult:

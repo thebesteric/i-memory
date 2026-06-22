@@ -2,8 +2,8 @@ import unittest
 
 import torch
 
-from src.ai.model.bert.bert_manager import BertManager
-from src.core.sector_classify import SECTOR_INDEX_KEY_MAPPING
+from infra.ai.classifier.bert_manager import BertManager
+from services.memory.sector_classify import SECTOR_INDEX_KEY_MAPPING
 
 
 class TestBertManager(unittest.TestCase):

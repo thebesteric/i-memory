@@ -1,7 +1,7 @@
 import asyncio
 import unittest
 
-from src.memory.profile.user_profile_builder import describe_user_profile
+from services.profile.user_profile_builder import describe_user_profile
 
 
 class TestDescribeUserProfile(unittest.TestCase):

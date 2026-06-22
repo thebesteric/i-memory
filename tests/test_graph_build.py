@@ -1,7 +1,7 @@
 import asyncio
 import unittest
 
-from src.memory.graph.graph_builder import graph_build, process_user_queue
+from services.graph.graph_builder import graph_build, process_user_queue
 
 
 class TestGraphBuild(unittest.TestCase):

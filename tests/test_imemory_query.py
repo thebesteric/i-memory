@@ -1,9 +1,9 @@
 import asyncio
 import unittest
 
-from src.imemory import IMemory
+from services.i_memory import IMemory
 
-from src.memory.memory_models import IMemoryUserIdentity, IMemoryFilters, IMemoryItemInfo, IMemorySearchResult
+from domain.memory.models import IMemoryUserIdentity, IMemoryFilters, IMemoryItemInfo, IMemorySearchResult
 
 
 # @unittest.skip("Skipping TestIMemory")

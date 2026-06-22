@@ -1,9 +1,9 @@
 import asyncio
 import unittest
 
-from src.memory.graph.fact_extractor import FactExtractor
-from src.memory.graph.semantic_spliter import Topic
-from src.memory.graph.graph_models import Fact
+from services.graph.fact_extractor import FactExtractor
+from services.graph.semantic_spliter import Topic
+from domain.graph.models import Fact
 
 
 class TestSemanticSplit(unittest.TestCase):

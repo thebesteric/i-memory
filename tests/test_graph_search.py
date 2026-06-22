@@ -1,4 +1,4 @@
-from src.memory import graph_search
+from services.graph import graph_search
 
 
 class _FakeLogger:

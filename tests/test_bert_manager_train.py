@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import torch
 
-from src.ai.model.bert.bert_manager import BertManager, LabelConfig, LabelBranchConfig, BertDataset, BertIncrModel
+from infra.ai.classifier.bert_manager import BertManager, LabelConfig, LabelBranchConfig, BertDataset, BertIncrModel
 
 
 class DummyDataset:

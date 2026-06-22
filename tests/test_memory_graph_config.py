@@ -1,4 +1,4 @@
-from src.memory.memory_models import IMemoryFiltersConfig, IMemoryGraphConfig
+from domain.memory.models import IMemoryFiltersConfig, IMemoryGraphConfig
 
 
 def test_graph_presets_recall_vs_precision():

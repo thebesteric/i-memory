@@ -1,9 +1,9 @@
 import asyncio
 import unittest
 
-from src.core import user_ops
-from src.imemory import IMemory
-from src.memory.memory_models import IMemoryConfig, IMemoryUserIdentity
+from infra.db.repositories import user_repo
+from services.i_memory import IMemory
+from domain.memory.models import IMemoryConfig, IMemoryUserIdentity
 
 
 # @unittest.skip
@@ -21,8 +21,8 @@ class TestIMemoryAdd(unittest.TestCase):
         cls.tags = ["test", "memory"]
 
         # 新增用户
-        if not asyncio.run(user_ops.get_user(cls.user_identity)):
-            asyncio.run(user_ops.add_user(cls.user_identity))
+        if not asyncio.run(user_repo.get_user(cls.user_identity)):
+            asyncio.run(user_repo.add_user(cls.user_identity))
 
     @classmethod
     def tearDownClass(cls):

@@ -1,10 +1,10 @@
 import datetime
 from types import SimpleNamespace
 
-from src.memory.graph_search import GraphExpansionCandidate
-from src.memory.hsg import query_hsg_memories
-from src.memory.memory_models import IMemoryFilters, IMemoryFiltersConfig, IMemoryGraphConfig, IMemoryUserIdentity
-from src.memory.session.session_models import Sessions
+from services.graph.graph_search import GraphExpansionCandidate
+from services.memory.hsg import query_hsg_memories
+from domain.memory.models import IMemoryFilters, IMemoryFiltersConfig, IMemoryGraphConfig, IMemoryUserIdentity
+from domain.session.models import SessionCollection
 
 
 class _MemoryCache:
@@ -23,14 +23,14 @@ async def _noop_async(*args, **kwargs):
 
 
 def test_query_hsg_memories_uses_graph_candidate_scores(monkeypatch):
-    import src.memory.hsg as hsg
+    import services.memory.hsg as hsg
 
     now = datetime.datetime.now()
     fake_cache = _MemoryCache()
     fake_user = SimpleNamespace(id="u1")
 
     monkeypatch.setattr(hsg, "MEMORIES_CACHE", fake_cache)
-    monkeypatch.setattr(hsg.user_ops, "get_user", lambda **kwargs: _return(fake_user))
+    monkeypatch.setattr(infra.db.repositories.user_ops, "get_user", lambda **kwargs: _return(fake_user))
     monkeypatch.setattr(
         hsg,
         "embed_query_for_all_sectors",
@@ -45,7 +45,7 @@ def test_query_hsg_memories_uses_graph_candidate_scores(monkeypatch):
         captured_graph_kwargs.update(kwargs)
         return [GraphExpansionCandidate(id="m3", score=0.9)]
 
-    monkeypatch.setattr(hsg.graph_search, "expand_candidate_ids_via_graph", _fake_expand_candidate_ids_via_graph)
+    monkeypatch.setattr(app.services.graph.graph_search, "expand_candidate_ids_via_graph", _fake_expand_candidate_ids_via_graph)
     monkeypatch.setattr(
         hsg.mem_ops,
         "find_mem_by_ids",
@@ -70,8 +70,8 @@ def test_query_hsg_memories_uses_graph_candidate_scores(monkeypatch):
     monkeypatch.setattr(hsg.decay, "calc_recency_score_decay", lambda *args, **kwargs: 0.2)
     monkeypatch.setattr(hsg.asyncio, "create_task", lambda coro: coro.close())
     monkeypatch.setattr(hsg, "update_user_summary", lambda *args, **kwargs: _noop_async())
-    monkeypatch.setattr(hsg.user_profile_ops, "get_user_profile", lambda *args, **kwargs: _noop_async())
-    monkeypatch.setattr(hsg.session_ops, "session_search", lambda *args, **kwargs: _return(Sessions()))
+    monkeypatch.setattr(app.services.profile.user_profile_ops, "get_user_profile", lambda *args, **kwargs: _noop_async())
+    monkeypatch.setattr(app.services.session.session_ops, "session_search", lambda *args, **kwargs: _return(SessionCollection()))
     monkeypatch.setattr(hsg, "compute_hybrid_score", lambda **kwargs: 0.5)
 
     filters = IMemoryFilters(
@@ -109,7 +109,7 @@ def test_query_hsg_memories_uses_graph_candidate_scores(monkeypatch):
 
 
 def test_query_hsg_memories_uses_recall_graph_config(monkeypatch):
-    import src.memory.hsg as hsg
+    import services.memory.hsg as hsg
 
     now = datetime.datetime.now()
     fake_cache = _MemoryCache()
@@ -117,7 +117,7 @@ def test_query_hsg_memories_uses_recall_graph_config(monkeypatch):
     recall = IMemoryGraphConfig.recall_first()
 
     monkeypatch.setattr(hsg, "MEMORIES_CACHE", fake_cache)
-    monkeypatch.setattr(hsg.user_ops, "get_user", lambda **kwargs: _return(fake_user))
+    monkeypatch.setattr(infra.db.repositories.user_ops, "get_user", lambda **kwargs: _return(fake_user))
     monkeypatch.setattr(
         hsg,
         "embed_query_for_all_sectors",
@@ -132,7 +132,7 @@ def test_query_hsg_memories_uses_recall_graph_config(monkeypatch):
         captured_graph_kwargs.update(kwargs)
         return [GraphExpansionCandidate(id="m3", score=0.9)]
 
-    monkeypatch.setattr(hsg.graph_search, "expand_candidate_ids_via_graph", _fake_expand_candidate_ids_via_graph)
+    monkeypatch.setattr(app.services.graph.graph_search, "expand_candidate_ids_via_graph", _fake_expand_candidate_ids_via_graph)
     monkeypatch.setattr(
         hsg.mem_ops,
         "find_mem_by_ids",
@@ -157,8 +157,8 @@ def test_query_hsg_memories_uses_recall_graph_config(monkeypatch):
     monkeypatch.setattr(hsg.decay, "calc_recency_score_decay", lambda *args, **kwargs: 0.2)
     monkeypatch.setattr(hsg.asyncio, "create_task", lambda coro: coro.close())
     monkeypatch.setattr(hsg, "update_user_summary", lambda *args, **kwargs: _noop_async())
-    monkeypatch.setattr(hsg.user_profile_ops, "get_user_profile", lambda *args, **kwargs: _noop_async())
-    monkeypatch.setattr(hsg.session_ops, "session_search", lambda *args, **kwargs: _return(Sessions()))
+    monkeypatch.setattr(app.services.profile.user_profile_ops, "get_user_profile", lambda *args, **kwargs: _noop_async())
+    monkeypatch.setattr(app.services.session.session_ops, "session_search", lambda *args, **kwargs: _return(SessionCollection()))
     monkeypatch.setattr(hsg, "compute_hybrid_score", lambda **kwargs: 0.5)
 
     filters = IMemoryFilters(
@@ -184,7 +184,7 @@ def test_query_hsg_memories_uses_recall_graph_config(monkeypatch):
 
 
 def test_query_hsg_memories_uses_precision_default_graph_config(monkeypatch):
-    import src.memory.hsg as hsg
+    import services.memory.hsg as hsg
 
     now = datetime.datetime.now()
     fake_cache = _MemoryCache()
@@ -192,7 +192,7 @@ def test_query_hsg_memories_uses_precision_default_graph_config(monkeypatch):
     precision = IMemoryGraphConfig.precision_first()
 
     monkeypatch.setattr(hsg, "MEMORIES_CACHE", fake_cache)
-    monkeypatch.setattr(hsg.user_ops, "get_user", lambda **kwargs: _return(fake_user))
+    monkeypatch.setattr(infra.db.repositories.user_ops, "get_user", lambda **kwargs: _return(fake_user))
     monkeypatch.setattr(
         hsg,
         "embed_query_for_all_sectors",
@@ -207,7 +207,7 @@ def test_query_hsg_memories_uses_precision_default_graph_config(monkeypatch):
         captured_graph_kwargs.update(kwargs)
         return [GraphExpansionCandidate(id="m3", score=0.9)]
 
-    monkeypatch.setattr(hsg.graph_search, "expand_candidate_ids_via_graph", _fake_expand_candidate_ids_via_graph)
+    monkeypatch.setattr(app.services.graph.graph_search, "expand_candidate_ids_via_graph", _fake_expand_candidate_ids_via_graph)
     monkeypatch.setattr(
         hsg.mem_ops,
         "find_mem_by_ids",
@@ -232,8 +232,8 @@ def test_query_hsg_memories_uses_precision_default_graph_config(monkeypatch):
     monkeypatch.setattr(hsg.decay, "calc_recency_score_decay", lambda *args, **kwargs: 0.2)
     monkeypatch.setattr(hsg.asyncio, "create_task", lambda coro: coro.close())
     monkeypatch.setattr(hsg, "update_user_summary", lambda *args, **kwargs: _noop_async())
-    monkeypatch.setattr(hsg.user_profile_ops, "get_user_profile", lambda *args, **kwargs: _noop_async())
-    monkeypatch.setattr(hsg.session_ops, "session_search", lambda *args, **kwargs: _return(Sessions()))
+    monkeypatch.setattr(app.services.profile.user_profile_ops, "get_user_profile", lambda *args, **kwargs: _noop_async())
+    monkeypatch.setattr(app.services.session.session_ops, "session_search", lambda *args, **kwargs: _return(SessionCollection()))
     monkeypatch.setattr(hsg, "compute_hybrid_score", lambda **kwargs: 0.5)
 
     filters = IMemoryFilters(

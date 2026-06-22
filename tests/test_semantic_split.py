@@ -1,7 +1,7 @@
 import asyncio
 import unittest
 
-from src.memory.graph.semantic_spliter import Dialogue, SemanticSpliter, SemanticsOutput
+from services.graph.semantic_spliter import Dialogue, SemanticSpliter, SemanticsOutput
 
 
 class TestSemanticSplit(unittest.TestCase):

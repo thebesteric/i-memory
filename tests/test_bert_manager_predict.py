@@ -1,7 +1,7 @@
 import os
 import unittest
 
-from src.ai.model.bert.bert_manager import BertIncrModel, BertManager, LabelBranchConfig, LabelConfig
+from infra.ai.classifier.bert_manager import BertIncrModel, BertManager, LabelBranchConfig, LabelConfig
 
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))

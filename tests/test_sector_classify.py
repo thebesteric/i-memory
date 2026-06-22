@@ -1,8 +1,8 @@
 import asyncio
 import unittest
 
-from src.core.components import get_sector_classifier
-from src.core.sector_classify import ClassifyResult
+from services.memory.components import get_sector_classifier
+from services.memory.sector_classify import ClassifyResult
 
 
 class TestSector_classify(unittest.TestCase):

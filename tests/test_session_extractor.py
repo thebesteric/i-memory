@@ -1,7 +1,7 @@
 import asyncio
 import unittest
 
-from src.memory.session.session_builder import session_build
+from services.session.session_builder import session_build
 
 
 class TestSessionExtractor(unittest.TestCase):

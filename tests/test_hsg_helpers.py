@@ -2,8 +2,8 @@ import datetime
 
 import pytest
 
-from src.memory.hsg import _promote_qa_assistant_answer, _resolve_auto_qa_linking
-from src.memory.memory_models import IMemoryItemInfo, IMemoryUser
+from services.memory.hsg import _promote_qa_assistant_answer, _resolve_auto_qa_linking
+from domain.memory.models import IMemoryItemInfo, IMemoryUser
 
 
 class _FakeScalarResult:
@@ -37,7 +37,7 @@ class _FakeSession:
 
 
 def test_resolve_auto_qa_linking_reuses_latest_unpaired_human(monkeypatch):
-    import src.memory.hsg as hsg
+    import services.memory.hsg as hsg
 
     fake_user = IMemoryUser(id="u1")
     fake_session = _FakeSession([
@@ -52,7 +52,7 @@ def test_resolve_auto_qa_linking_reuses_latest_unpaired_human(monkeypatch):
 
 
 def test_resolve_auto_qa_linking_generates_new_pair_when_no_candidate(monkeypatch):
-    import src.memory.hsg as hsg
+    import services.memory.hsg as hsg
 
     fake_user = IMemoryUser(id="u1")
     fake_session = _FakeSession([
@@ -68,7 +68,7 @@ def test_resolve_auto_qa_linking_generates_new_pair_when_no_candidate(monkeypatc
 
 
 def test_promote_qa_assistant_answer_appends_missing_assistant(monkeypatch):
-    import src.memory.hsg as hsg
+    import services.memory.hsg as hsg
 
     now = datetime.datetime.now()
     human = IMemoryItemInfo(
