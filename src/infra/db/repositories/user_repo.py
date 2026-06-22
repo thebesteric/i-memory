@@ -9,6 +9,7 @@ from services.memory.components import USER_IDENTITY_CACHE
 from infra.db.engine import get_session_factory
 from infra.db.orm_models import Users
 from domain.memory.models import IMemoryUserIdentity, IMemoryUser
+from shared.utils.encryption import EncryptionKeyTool
 
 logger = LogHelper.get_logger()
 
@@ -19,6 +20,7 @@ def _to_memory_user(user_entity: Users) -> IMemoryUser:
         tenant_key=user_entity.tenant_key,
         project_key=user_entity.project_key,
         user_key=user_entity.user_key,
+        encryption_key=user_entity.encryption_key,
         summary=user_entity.summary,
         reflection_count=user_entity.reflection_count or 0,
         created_at=user_entity.created_at,
@@ -155,6 +157,7 @@ async def add_user(user_identity: IMemoryUserIdentity, summary: str | None = Non
             tenant_key=cast(str, tenant_key),
             project_key=cast(str, project_key),
             user_key=user_key,
+            encryption_key=EncryptionKeyTool.generate_aes_256_gcm_key(),
             summary=summary,
             reflection_count=reflection_count,
             created_at=now,

@@ -110,6 +110,7 @@ class Users(Base):
     tenant_key = Column(String(128), nullable=True, comment="租户标识")
     project_key = Column(String(128), nullable=True, comment="项目标识")
     user_key = Column(String(128), nullable=True, comment="用户标识")
+    encryption_key = Column(String(128), nullable=True, comment="用户加密密钥（AES-256-GCM）")
     summary = Column(Text, nullable=True, comment="用户摘要文本")
     reflection_count = Column(Integer, nullable=True, comment="反思计数")
     status = Column(Integer, nullable=False, server_default="1", comment="用户状态，0 = 禁用，1 = 启用")

@@ -142,6 +142,9 @@ class EnvConfig:
         # 会话总结并发线程数量
         self.SESSION_BUILD_THREADS = env_helper.get("IM_SESSION_BUILD_THREADS", 5)
 
+        # ================ 内容加密配置 ================
+        self.ENCRYPTION_ENABLE = env_helper.get("IM_ENCRYPTION_ENABLE", True)
+
 
 def _load_env_file():
     parser = argparse.ArgumentParser()

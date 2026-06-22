@@ -180,6 +180,7 @@ class IMemoryUser(BaseModel):
     tenant_key: str | None = Field(default=None, description="租户标识")
     project_key: str | None = Field(default=None, description="项目标识")
     user_key: str | None = Field(default=None, description="用户标识")
+    encryption_key: str | None = Field(default=None, description="用户加密密钥")
     summary: str | None = Field(default=None, description="用户摘要")
     reflection_count: int = Field(default=0, description="反思次数")
     created_at: datetime.datetime | None = Field(default=None, description="创建时间")
@@ -192,6 +193,7 @@ class IMemoryUser(BaseModel):
             tenant_key=data["tenant_key"],
             project_key=data["project_key"],
             user_key=data["user_key"],
+            encryption_key=data.get("encryption_key"),
             summary=data["summary"],
             reflection_count=data["reflection_count"],
             created_at=data["created_at"],

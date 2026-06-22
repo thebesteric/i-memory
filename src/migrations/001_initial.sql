@@ -112,6 +112,7 @@ CREATE TABLE IF NOT EXISTS users
     tenant_key       TEXT,
     project_key      TEXT,
     user_key         TEXT,
+    encryption_key   TEXT,
     summary          TEXT,
     reflection_count INTEGER,
     status           SMALLINT DEFAULT 1,
@@ -125,6 +126,7 @@ COMMENT ON COLUMN users.id IS '用户主键';
 COMMENT ON COLUMN users.tenant_key IS '租户标识';
 COMMENT ON COLUMN users.project_key IS '项目标识';
 COMMENT ON COLUMN users.user_key IS '用户标识';
+COMMENT ON COLUMN users.encryption_key IS '用户加密密钥（AES-256-GCM）';
 COMMENT ON COLUMN users.summary IS '用户摘要文本';
 COMMENT ON COLUMN users.reflection_count IS '反思计数';
 COMMENT ON COLUMN users.status IS '用户状态，0 = 禁用，1 = 启用';

@@ -45,6 +45,7 @@ dependencies = [
     "whoosh>=2.7.4,<3.0.0",
     "psycopg[binary,pool]>=3.3.4",
     "pgvector>=0.4.2",
+    "cryptography>=48.0.1",
 ]
 
 
