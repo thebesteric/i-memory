@@ -9,7 +9,7 @@ from services.memory.components import USER_IDENTITY_CACHE
 from infra.db.engine import get_session_factory
 from infra.db.orm_models import Users
 from domain.memory.models import IMemoryUserIdentity, IMemoryUser
-from shared.utils.encryption import EncryptionKeyTool
+from shared.utils.encrypt_utils import EncryptionKeyTool
 
 logger = LogHelper.get_logger()
 
@@ -116,6 +116,18 @@ async def get_user(user_identity: IMemoryUserIdentity, using_cache: bool = False
 
     # 返回用户
     return memory_user
+
+
+async def get_user_by_id(_id: str) -> IMemoryUser | None:
+    """
+    根据 ID 获取用户信息
+    :param _id: 用户 ID
+    :return:
+    """
+    session_factory = get_session_factory()
+    with session_factory() as session:
+        user = session.execute(select(Users).where(Users.id == _id)).scalars().first()
+    return _to_memory_user(user) if user else None
 
 
 async def add_user(user_identity: IMemoryUserIdentity, summary: str | None = None, reflection_count: int = 0) -> IMemoryUser:

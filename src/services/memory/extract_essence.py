@@ -5,7 +5,7 @@ from langchain_core.prompts import PromptTemplate
 from services.memory.components import get_chat_model
 from shared.config.settings import env
 
-logger = LogHelper.get_logger()
+logger = LogHelper.get_logger(title="[EXTRACT-ESSENCE]")
 
 
 class ExtractEssence:
@@ -73,6 +73,7 @@ class ExtractEssence:
             # 使用大模型提取精华内容
             chain = self.get_chain()
             essence = await chain.ainvoke({"content": self.content})
+            logger.info(f"Used LLM extract content to essence: {essence}")
             return essence.strip()
         except Exception as e:
             logger.error(f"Error during extraction: {e}. Falling back to original content slicing.", exc_info=True)

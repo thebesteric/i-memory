@@ -16,6 +16,7 @@ from infra.db.repositories.memory_repo import mem_ops
 from domain.common.exceptions import UserNotFoundError
 from infra.db.orm_models import init_db_schema
 from services.memory.hsg import query_hsg_memories
+from services.commons.encrypt_service import decrypt_if_necessary
 from domain.memory.models import (
     IMemoryConfig,
     IMemoryFilters,
@@ -31,7 +32,7 @@ logger = LogHelper.get_logger(title="[IMEMORY]")
 @singleton
 class IMemory:
 
-    def __init__(self, user_identity: IMemoryUserIdentity = None):
+    def __init__(self, user_identity: IMemoryUserIdentity | None = None):
         self.default_user_identity: IMemoryUserIdentity = user_identity or IMemoryUserIdentity()
         self.mem_ops = mem_ops
         self._openai = OpenAIRegistrar(self)
@@ -67,10 +68,10 @@ class IMemory:
 
     async def add(self,
                   content: str,
-                  user_identity: IMemoryUserIdentity = None,
-                  cfg: IMemoryConfig = None,
-                  tags: List[str] = None,
-                  meta: Dict[str, Any] = None,
+                  user_identity: IMemoryUserIdentity | None = None,
+                  cfg: IMemoryConfig | None = None,
+                  tags: List[str] | None = None,
+                  meta: Dict[str, Any] | None = None,
                   qa_role: QARole | None = None) -> Dict[str, Any]:
         """
         添加记忆内容
@@ -99,7 +100,7 @@ class IMemory:
                      query: str,
                      *,
                      limit: int | None = None,
-                     filters: IMemoryFilters = None) -> IMemorySearchResult:
+                     filters: IMemoryFilters | None = None) -> IMemorySearchResult:
         """
         搜索记忆内容
         :param query: 查询文本
@@ -121,7 +122,15 @@ class IMemory:
         :param memory_id: 记忆标识
         :return: 记忆内容
         """
-        return self.mem_ops.get_mem(memory_id)
+        row = self.mem_ops.get_mem(memory_id)
+        if not row:
+            return None
+        user_id = row.get("user_id")
+        if user_id and isinstance(row.get("content"), str):
+            user = await user_repo.get_user_by_id(str(user_id))
+            if user:
+                row["content"] = decrypt_if_necessary(user, row["content"], aad={"id": row.get("id")})
+        return row
 
     async def delete(self, memory_id: str) -> int:
         """
@@ -131,7 +140,7 @@ class IMemory:
         """
         return self.mem_ops.del_mem(memory_id)
 
-    async def clear(self, user_identity: IMemoryUserIdentity = None) -> int:
+    async def clear(self, user_identity: IMemoryUserIdentity | None = None) -> int:
         """
         清除用户所有记忆内容
         :param user_identity: 用户身份
@@ -142,7 +151,7 @@ class IMemory:
 
     async def history(self,
                       *,
-                      user_identity: IMemoryUserIdentity = None,
+                      user_identity: IMemoryUserIdentity | None = None,
                       current: int | None = None,
                       size: int | None = None,
                       sort_order: Literal["asc", "desc"] | None) -> PagingResponse:
@@ -162,6 +171,9 @@ class IMemory:
         total = self.mem_ops.count_mem_by_user(user)
         offset = (safe_current - 1) * safe_size
         rows = self.mem_ops.all_mem_by_user(user, safe_size, offset, sort_order)
+        for row in rows:
+            if isinstance(row.get("content"), str):
+                row["content"] = decrypt_if_necessary(user, row["content"], aad={"id": row.get("id")})
         return PagingResponse(
             records=[dict(r) for r in rows],
             total=total,

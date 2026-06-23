@@ -218,11 +218,11 @@ async def mk_child(user_identity: IMemoryUserIdentity,
 
 async def ingest_document(*,
                           content_type: str,
-                          user_identity: IMemoryUserIdentity = None,
+                          user_identity: IMemoryUserIdentity | None = None,
                           data: Any,
-                          meta: Dict[str, Any] = None,
-                          cfg: IMemoryConfig = None,
-                          tags: list[str] = None,
+                          meta: Dict[str, Any] | None = None,
+                          cfg: IMemoryConfig | None = None,
+                          tags: list[str] | None = None,
                           qa_role: QARole | None = None) -> Dict[str, Any]:
     # 使用默认配置（如果未提供）
     if not cfg:

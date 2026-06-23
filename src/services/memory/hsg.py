@@ -33,6 +33,7 @@ from domain.memory.models import IMemoryFilters, IMemoryItemDebugInfo, IMemoryIt
 from services.memory.user_summary import update_user_summary
 from services.profile import user_profile_ops
 from services.session import session_ops
+from services.commons.encrypt_service import encrypt_if_necessary, decrypt_if_necessary
 from domain.session.models import SessionCollection
 from services.memory.dynamic_memory import calc_cross_sector_resonance_score, apply_retrieval_trace_reinforcement_to_memory, \
     propagate_associative_reinforcement_to_linked_nodes
@@ -88,7 +89,7 @@ def _get_or_rotate_segment() -> int:
         return cur_seg
 
 
-def _find_latest_assistant_by_pair_id(qa_pair_id: str) -> dict[str, Any] | None:
+def _find_latest_assistant_by_pair_id(qa_pair_id: str, user: IMemoryUser | None = None) -> dict[str, Any] | None:
     with session_factory() as session:
         memory = session.execute(
             select(Memories)
@@ -96,7 +97,10 @@ def _find_latest_assistant_by_pair_id(qa_pair_id: str) -> dict[str, Any] | None:
             .order_by(desc(Memories.created_at))
             .limit(1)
         ).scalars().first()
-        return _memory_entity_to_dict(memory)
+        row = _memory_entity_to_dict(memory)
+        if row and user and isinstance(row.get("content"), str):
+            row["content"] = decrypt_if_necessary(user, row["content"], aad={"id": row.get("id")})
+        return row
 
 
 @timing
@@ -239,7 +243,8 @@ async def add_hsg_memory(user_identity: IMemoryUserIdentity,
         cur_seg = _get_or_rotate_segment()
 
         # 调用 extract_essence，生成摘要（内容长度 > 1000，模型调用）
-        essence = await ExtractEssence(content=content, max_len=env.SUMMARY_MAX_LENGTH).extract()
+        extract_essence = ExtractEssence(content=content, max_len=env.SUMMARY_MAX_LENGTH)
+        essence = await extract_essence.extract()
 
         # 获取主 sector 的配置
         sec_cfg = SECTOR_CONFIGS[cls_ret.primary]
@@ -250,11 +255,13 @@ async def add_hsg_memory(user_identity: IMemoryUserIdentity,
 
         # 调用 mem_ops.ins_mem，将记忆内容、摘要、sector、标签、元数据等插入数据库
         mid = str(uuid.uuid4())
+        # 如果有必要进行数据加密
+        encrypted_essence = encrypt_if_necessary(user, essence, aad={"id": mid})
         mem_ops.ins_mem(
             id=mid,
             user_id=user.id,
             segment=cur_seg,
-            content=essence,
+            content=encrypted_essence,
             primary_sector=cls_ret.primary,
             sectors=json.dumps(all_secs or [], ensure_ascii=False),
             tags=json.dumps(tags or [], ensure_ascii=False),
@@ -437,6 +444,9 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
                 order_by=["t.created_at DESC"],
                 limit=2000
             )
+            for bm25_mem in bm25_memories:
+                if isinstance(bm25_mem.get("content"), str):
+                    bm25_mem["content"] = decrypt_if_necessary(user, bm25_mem["content"], aad={"id": bm25_mem.get("id")})
             bm25_search_timing_wrapped = timing(bm25_searcher.search)
             bm25_ids = set(bm25_search_timing_wrapped(query, docs=bm25_memories, top_k=top_k * 3))
 
@@ -513,6 +523,9 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
 
         # 获取候选记忆内容
         memories = mem_ops.find_mem_by_ids(list(ids))
+        for mem in memories:
+            if isinstance(mem.get("content"), str):
+                mem["content"] = decrypt_if_necessary(user, mem["content"], aad={"id": mem.get("id")})
 
         # 计算每个候选的关键词重叠分数
         kw_scores = {}
@@ -653,7 +666,7 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
 
         # QA 模式：prefer/qa 时尝试配对提升
         if filters.query_mode and filters.query_mode in ("qa", "prefer"):
-            res_list = _promote_qa_assistant_answer(res_list, query_classify.primary)
+            res_list = _promote_qa_assistant_answer(res_list, query_classify.primary, user)
 
         # 按分数降序
         res_list.sort(key=lambda x: x.score, reverse=True)
@@ -810,7 +823,7 @@ async def calc_multi_vec_fusion_score(mid: str, qe: Dict[str, List[float]], weig
     return s / tot if tot > 0 else 0.0
 
 
-def _promote_qa_assistant_answer(items: List[IMemoryItemInfo], query_sector: str) -> List[IMemoryItemInfo]:
+def _promote_qa_assistant_answer(items: List[IMemoryItemInfo], query_sector: str, user: IMemoryUser) -> List[IMemoryItemInfo]:
     """
     在 prefer/qa 模式下，优先把与高分问题匹配的 assistant 回答提升到顶部。
     配对关系仅依赖写入时存储的 qa_pair_id，查询方无需传入会话标识。
@@ -830,7 +843,7 @@ def _promote_qa_assistant_answer(items: List[IMemoryItemInfo], query_sector: str
     # 尝试查找与该 human 记忆配对的 assistant 记忆
     pair_row = None
     if best_human.qa_pair_id:
-        pair_row = _find_latest_assistant_by_pair_id(best_human.qa_pair_id)
+        pair_row = _find_latest_assistant_by_pair_id(best_human.qa_pair_id, user)
 
     if not pair_row:
         logger.info(
@@ -914,4 +927,3 @@ def _resolve_auto_qa_linking(user: IMemoryUser, qa_role: QARole | None) -> str |
             return pair_id
 
     return str(uuid.uuid4())
-
