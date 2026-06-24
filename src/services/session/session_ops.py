@@ -7,9 +7,11 @@ from sqlalchemy import Text, cast, literal, select, update
 
 from services.memory.components import get_embed_model
 from infra.db.engine import get_session_factory
+from infra.db.repos.user_repo import load_user_encryption_keys
 from infra.db.orm_models import Memories, Sessions as SessionEntity
 from domain.memory.models import IMemoryUser
 from domain.session.models import Session, SessionCollection
+from services.commons.encrypt_service import decrypt_if_necessary, encrypt_if_necessary
 from shared.utils.json_utils import coerce_json_field
 
 logger = LogHelper.get_logger()
@@ -29,6 +31,15 @@ def _normalize_list_payload(value: Any) -> list[Any]:
     return []
 
 
+def _resolve_user_encryption_key(orm_session, user: IMemoryUser) -> str | None:
+    if user.encryption_key:
+        return user.encryption_key
+    if not user.id:
+        return None
+    key_cache = load_user_encryption_keys(orm_session, [str(user.id)])
+    return key_cache.get(str(user.id))
+
+
 async def insert_sessions(user: IMemoryUser, sessions: SessionCollection, conn=None) -> SessionCollection:
     embed_model = get_embed_model()
     external_session = conn is not None
@@ -37,12 +48,14 @@ async def insert_sessions(user: IMemoryUser, sessions: SessionCollection, conn=N
         session_factory = get_session_factory()
         orm_session = session_factory()
     try:
+        key_b64 = _resolve_user_encryption_key(orm_session, user)
         for session in sessions.sessions:
             now = datetime.datetime.now()
             # 摘要向量化
             vector = await embed_model.embed(session.summary)
 
             _id = str(uuid.uuid4())
+            encrypted_summary = encrypt_if_necessary(session.summary, key_b64=key_b64, aad={"id": _id})
             session.set_id(_id)
             session.set_user_id(user.id)
             session.set_vector(vector)
@@ -51,7 +64,7 @@ async def insert_sessions(user: IMemoryUser, sessions: SessionCollection, conn=N
                 SessionEntity(  # type: ignore[arg-type]
                     id=_id,
                     user_id=user.id,
-                    summary=session.summary,
+                    summary=encrypted_summary,
                     vector=vector,
                     dialogue_ids=session.dialogue_ids or [],
                     key_facts=session.key_facts or [],
@@ -65,6 +78,7 @@ async def insert_sessions(user: IMemoryUser, sessions: SessionCollection, conn=N
         if not external_session:
             orm_session.close()
     return sessions
+
 
 @timing
 async def session_search(user: IMemoryUser, query: str, top_k: int = 5) -> SessionCollection:
@@ -91,12 +105,13 @@ async def session_search(user: IMemoryUser, query: str, top_k: int = 5) -> Sessi
 
     session_factory = get_session_factory()
     with session_factory() as orm_session:
+        key_b64 = _resolve_user_encryption_key(orm_session, user)
         rows = orm_session.execute(query_stmt).mappings().all()
 
     sessions: list[Session] = []
     for row in rows:
         session = Session(
-            summary=row["summary"],
+            summary=decrypt_if_necessary(row["summary"], key_b64=key_b64, aad={"id": row["id"]}),
             dialogue_ids=[str(v) for v in _normalize_list_payload(row.get("dialogue_ids"))],
             key_facts=[str(v) for v in _normalize_list_payload(row.get("key_facts"))],
         )

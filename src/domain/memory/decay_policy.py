@@ -302,7 +302,7 @@ class Decay:
     @timing
     async def apply_decay(self):
         """
-        批处理衰减器，按 segment 抽样一部分记忆，计算“遗忘程度”，并在必要时做向量压缩或指纹化降级
+        批处理衰减器，按 segment 抽样一部分记忆，计算“遗忘程度”，并在必要时做向量压缩或指纹化降级（由 jobs 的 memory_decay 调度器调用）
         核心：分段抽样 + 渐进衰减 + 分级降级
         :return:
         """

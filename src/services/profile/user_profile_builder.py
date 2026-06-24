@@ -40,7 +40,7 @@ async def _process_user_profile(user: IMemoryUser, yesterday_end: datetime.datet
     """
     user_lock = await _get_user_lock(str(user.id))
     if user_lock.locked():
-        logger.info(f"[USER_PROFILE] Skip reentrant user profile build, User ID: {user.id}")
+        logger.info(f"Skip reentrant user profile build, User ID: {user.id}")
         return False
 
     async with user_lock:
@@ -52,8 +52,7 @@ async def _process_user_profile(user: IMemoryUser, yesterday_end: datetime.datet
 
             memories_at_least = max(env.USER_PROFILE_AT_LEAST or 10, 10)
             if not memories:
-                logger.info(
-                    f"[USER_PROFILE] No memory found for User ID: {user.id} at {yesterday_end.strftime("%Y-%m-%d %H:%M:%S")} or less than {memories_at_least}")
+                logger.info(f"No memory found for User ID: {user.id} at {yesterday_end.strftime("%Y-%m-%d %H:%M:%S")} or less than {memories_at_least}")
                 return False
 
             user_profile: UserProfile = await user_profile_extractor.invoke(user, memories=memories)
@@ -62,14 +61,13 @@ async def _process_user_profile(user: IMemoryUser, yesterday_end: datetime.datet
                     user_profile = await user_profile_ops.upsert_user_profile(user, user_profile, conn=db_session)
                     affected_rows = await user_profile_ops.mark_memoires_to_profile_joined([m["id"] for m in memories],
                                                                                            conn=db_session)
-                    logger.info(
-                        f"[USER_PROFILE] User profile updated, User ID: {user.id}, Profile ID: {user_profile.id}, Associated memories: {affected_rows}")
+                    logger.info(f"User profile updated, User ID: {user.id}, Profile ID: {user_profile.id}, Associated memories: {affected_rows}")
             return True
 
 
 async def describe_user_profile(user_ids: list[str] | None = None):
     """
-    用户画像（由定时任务调用）
+    用户画像（由 jobs 的 user_profile 定时任务调用）
 
     :param user_ids: 用户 ID 列表，通常由用户主动调用时传入，定时任务调用时为 None
     :return:
@@ -88,7 +86,7 @@ async def describe_user_profile(user_ids: list[str] | None = None):
         users: list[IMemoryUser] = await user_repo.find_user(status=1, limit=9999)
 
     if not users:
-        logger.info("[USER_PROFILE] No active user found.")
+        logger.info("No active user found.")
         return
 
     semaphore = asyncio.Semaphore(concurrency)
@@ -98,11 +96,12 @@ async def describe_user_profile(user_ids: list[str] | None = None):
     success_count = 0
     for idx, result in enumerate(results):
         if isinstance(result, Exception):
-            logger.exception(
-                f"[USER_PROFILE] Failed to describe user profile, User ID: {users[idx].id}, Error: {result}")
+            logger.exception(f"Failed to describe user profile, User ID: {users[idx].id}, Error: {result}")
             continue
         if result:
             success_count += 1
 
-    logger.info(
-        f"[USER_PROFILE] User profile describe finished, total_users: {len(users)}, success_users: {success_count}, failed_users: {sum(isinstance(r, Exception) for r in results)}")
+    logger.info(f"User profile describe finished, "
+                f"total_users: {len(users)}, "
+                f"success_users: {success_count}, "
+                f"failed_users: {sum(isinstance(r, Exception) for r in results)}")

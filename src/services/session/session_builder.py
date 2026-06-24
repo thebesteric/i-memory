@@ -32,7 +32,7 @@ async def _get_user_lock(user_id: str) -> asyncio.Lock:
 async def _process_session(user: IMemoryUser, yesterday_end: datetime.datetime, semaphore: asyncio.Semaphore) -> bool:
     user_lock = await _get_user_lock(str(user.id))
     if user_lock.locked():
-        logger.info(f"[SESSION_BUILD] Skip reentrant user session build, User ID: {user.id}")
+        logger.info(f"Skip reentrant user session build, User ID: {user.id}")
         return False
 
     async with user_lock:
@@ -44,8 +44,7 @@ async def _process_session(user: IMemoryUser, yesterday_end: datetime.datetime, 
 
             memories_at_least = max(env.SESSION_BUILD_AT_LEAST or 10, 10)
             if not memories or len(memories) < memories_at_least:
-                logger.info(
-                    f"[SESSION_BUILD] No memory found for User ID: {user.id} at {yesterday_end.strftime("%Y-%m-%d %H:%M:%S")} or less than {memories_at_least}")
+                logger.info(f"No memory found for User ID: {user.id} at {yesterday_end.strftime("%Y-%m-%d %H:%M:%S")} or less than {memories_at_least}")
                 return False
 
             sessions: SessionCollection = await session_extractor.invoke(memories=memories)
@@ -54,14 +53,13 @@ async def _process_session(user: IMemoryUser, yesterday_end: datetime.datetime, 
                     sessions = await session_ops.insert_sessions(user, sessions, conn=db_session)
                     affected_rows = await session_ops.mark_memoires_to_session_joined([m["id"] for m in memories],
                                                                                       conn=db_session)
-                    logger.info(
-                        f"[SESSION_BUILD] User session created, User ID: {user.id}, Associated memories: {affected_rows}")
+                    logger.info(f"User session created, User ID: {user.id}, Associated memories: {affected_rows}")
             return True
 
 
 async def session_build():
     """
-    会话总结创建
+    会话总结创建（由 jobs 的 session_build 定时任务触发）
     :return:
     """
     concurrency = max(1, env.SESSION_BUILD_THREADS or 5)
@@ -73,7 +71,7 @@ async def session_build():
     # 查询所有用户
     users: list[IMemoryUser] = await user_repo.find_user(status=1)
     if not users:
-        logger.info("[SESSION_BUILD] No active user found.")
+        logger.info("No active user found.")
         return
 
     semaphore = asyncio.Semaphore(concurrency)
@@ -83,10 +81,10 @@ async def session_build():
     success_count = 0
     for idx, result in enumerate(results):
         if isinstance(result, Exception):
-            logger.exception(f"[SESSION_BUILD] Failed to create session, User ID: {users[idx].id}, Error: {result}")
+            logger.exception(f"Failed to create session, User ID: {users[idx].id}, Error: {result}")
             continue
         if result:
             success_count += 1
 
     logger.info(
-        f"[SESSION_BUILD] Session created finished, total_users: {len(users)}, success_users: {success_count}, failed_users: {sum(isinstance(r, Exception) for r in results)}")
+        f"Session created finished, total_users: {len(users)}, success_users: {success_count}, failed_users: {sum(isinstance(r, Exception) for r in results)}")

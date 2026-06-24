@@ -12,7 +12,7 @@ from services.graph.fact_extractor import FactExtractor
 from services.graph.semantic_spliter import SemanticSpliter, Dialogue, SemanticsOutput
 from domain.memory.models import IMemoryUser
 
-logger = LogHelper.get_logger(title="[GRAPH]")
+logger = LogHelper.get_logger(title="[GRAPH_BUILD]")
 session_factory = get_session_factory()
 
 # 存放待图化的用户队列（异步队列）
@@ -35,7 +35,7 @@ async def get_un_fact_join_mem_count(callback: Callable[[IMemoryUser, int], None
 
 async def graph_build():
     """
-    构建图（由定时任务调用）
+    构建图（由 jobs 的 graph_build 定时任务调用）
     """
 
     def enqueue_if_reach_threshold(user: IMemoryUser, un_fact_join_count: int):
@@ -54,7 +54,7 @@ async def graph_build():
 
 async def graph_build_daily_force():
     """
-    每日强制图化：将长期未达阈值的用户也入队
+    每日强制图化：将长期未达阈值的用户也入队（由 jobs 的 force_graph_build 调用）
     """
 
     def enqueue_if_cold_user(user: IMemoryUser, un_fact_join_count: int):
@@ -125,9 +125,9 @@ async def process_user_queue():
                     # 将记忆更新为已参与事实处理
                     await graph_ops.mark_memoires_to_fact_joined(list(un_fact_join_memories_ids), conn=db_session)
 
-                    logger.info(
-                        f"Finished processing user: {user.id}, processed memories: {len(un_fact_join_memories_ids)}, fact joined memories: {len(mem_ids)}, generated facts: {len(facts)}"
-                    )
+                    logger.info(f"Finished processing user: {user.id}, "
+                                f"processed memories: {len(un_fact_join_memories_ids)}, "
+                                f"fact joined memories: {len(mem_ids)}, generated facts: {len(facts)}")
 
         except Exception as e:
             logger.error(f"Error processing user: {user.id}, error: {e}")
