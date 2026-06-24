@@ -3,9 +3,9 @@ from fastapi import APIRouter
 from fastapi.params import Body
 from starlette import status
 
-from infra.db.repositories import user_repo
+from infra.db.repos import user_repo
 from shared.config.settings import env
-from infra.db.repositories.memory_repo import mem_ops
+from infra.db.repos.memory_repo import mem_ops
 from services.graph import graph_builder
 from domain.memory.models import IMemoryUserIdentity, IMemoryUser
 from services.profile.user_profile_builder import describe_user_profile

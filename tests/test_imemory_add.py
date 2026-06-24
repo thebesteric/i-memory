@@ -1,7 +1,7 @@
 import asyncio
 import unittest
 
-from infra.db.repositories import user_repo
+from infra.db.repos import user_repo
 from services.i_memory import IMemory
 from domain.memory.models import IMemoryConfig, IMemoryUserIdentity
 

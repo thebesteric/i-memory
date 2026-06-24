@@ -3,7 +3,7 @@ from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.prompts import PromptTemplate
 
 from services.memory.components import get_chat_model
-from infra.db.repositories.memory_repo import mem_ops
+from infra.db.repos.memory_repo import mem_ops
 from services.graph.semantic_spliter import Topic, Dialogue
 from domain.graph.models import Fact, EntityType, RelationType
 

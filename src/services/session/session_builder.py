@@ -3,10 +3,10 @@ import datetime
 
 from agile.utils import LogHelper
 
-from infra.db.repositories import user_repo
+from infra.db.repos import user_repo
 from shared.config.settings import env
 from infra.db.engine import get_session_factory
-from infra.db.repositories.memory_repo import mem_ops
+from infra.db.repos.memory_repo import mem_ops
 from domain.memory.models import IMemoryUser
 from services.session import session_ops
 from services.session.session_extractor import SessionExtractor

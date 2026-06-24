@@ -6,7 +6,7 @@ from sqlalchemy import desc, select
 
 from shared.config.settings import env
 from infra.db.engine import get_session_factory
-from infra.db.repositories import user_repo
+from infra.db.repos import user_repo
 from infra.db.orm_models import Memories
 from domain.memory.models import IMemoryUser
 from shared.utils.json_utils import coerce_json_field

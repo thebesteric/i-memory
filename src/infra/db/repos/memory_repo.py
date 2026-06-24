@@ -1,7 +1,7 @@
 import json
 from typing import Optional, Any, Dict, List, Literal, cast
 
-from agile.utils import singleton, timing
+from agile.utils import LogHelper, singleton, timing
 from sqlalchemy import and_, asc, delete, desc, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
@@ -21,7 +21,11 @@ from infra.db.orm_models import (
     Waypoints,
 )
 from domain.memory.models import IMemoryUser
+from infra.db.repos.user_repo import load_user_encryption_keys
+from services.commons.encrypt_service import encryption_enabled, encrypt_if_necessary, decrypt_if_necessary
 from shared.utils.json_utils import coerce_json_field
+
+logger = LogHelper.get_logger(title="[MEM_OPS]")
 
 
 @singleton
@@ -33,6 +37,29 @@ class MemOps:
     @staticmethod
     def _model_to_dict(model_obj) -> Dict[str, Any]:
         return {c.name: getattr(model_obj, c.name) for c in model_obj.__table__.columns}
+
+    @staticmethod
+    def _maybe_decrypt_memory_row(row: Dict[str, Any], user_encryption_key: dict[str, str]) -> Dict[str, Any]:
+        if not encryption_enabled() or not row:
+            return row
+
+        user_id = row.get("user_id")
+        mem_id = row.get("id")
+        if not user_id or not mem_id:
+            return row
+
+        key_b64 = user_encryption_key.get(str(user_id))
+        if not key_b64:
+            return row
+
+        aad = {"id": mem_id}
+        for field in ("content", "summary"):
+            value = row.get(field)
+            if not isinstance(value, str) or not value:
+                continue
+            row[field] = decrypt_if_necessary(value, key_b64=key_b64, aad=aad)
+
+        return row
 
     @staticmethod
     def _parse_order_item(order_item: str, default_model=Memories):
@@ -127,6 +154,7 @@ class MemOps:
             "user_id": k.get("user_id"),
             "segment": k.get("segment", 0),
             "content": k.get("content"),
+            "summary": k.get("summary"),
             "primary_sector": k.get("primary_sector"),
             "sectors": coerce_json_field(k.get("sectors"), []),
             "tags": coerce_json_field(k.get("tags"), []),
@@ -144,14 +172,20 @@ class MemOps:
             "qa_role": k.get("qa_role"),
             "qa_pair_id": k.get("qa_pair_id"),
         }
-
-        stmt = pg_insert(Memories).values(**payload)
-        stmt = stmt.on_conflict_do_update(
-            index_elements=[Memories.id],
-            set_={field: getattr(stmt.excluded, field) for field in payload.keys() if field != "id"},
-        )
         session_factory = self._session_factory()
         with session_factory() as session:
+            user_id = payload.get("user_id")
+            user_encryption_key = load_user_encryption_keys(session, [str(user_id)] if user_id else [])
+            key_b64 = user_encryption_key.get(str(user_id)) if user_id else None
+            if key_b64:
+                payload["content"] = encrypt_if_necessary(payload.get("content"), key_b64=key_b64, aad={"id": payload.get("id")})
+                payload["summary"] = encrypt_if_necessary(payload.get("summary"), key_b64=key_b64, aad={"id": payload.get("id")})
+
+            stmt = pg_insert(Memories).values(**payload)
+            stmt = stmt.on_conflict_do_update(
+                index_elements=[Memories.id],
+                set_={field: getattr(stmt.excluded, field) for field in payload.keys() if field != "id"},
+            )
             session.execute(stmt)
             session.commit()
         return 1
@@ -160,14 +194,21 @@ class MemOps:
         session_factory = self._session_factory()
         with session_factory() as session:
             mem = session.get(Memories, mid)
-            return self._model_to_dict(mem) if mem else None
+            if not mem:
+                return None
+            row = self._model_to_dict(mem)
+            key_cache = load_user_encryption_keys(session, [str(row.get("user_id"))] if row.get("user_id") else [])
+            return self._maybe_decrypt_memory_row(row, key_cache)
 
     def all_mem(self, limit=10, offset=0) -> List[Dict[str, Any]]:
         query = select(Memories).order_by(desc(Memories.created_at)).limit(limit).offset(offset)
         session_factory = self._session_factory()
         with session_factory() as session:
             rows = session.execute(query).scalars().all()
-            return [self._model_to_dict(r) for r in rows]
+            result = [self._model_to_dict(r) for r in rows]
+            user_ids = [str(r.get("user_id")) for r in result if r.get("user_id")]
+            key_cache = load_user_encryption_keys(session, list(set(user_ids)))
+            return [self._maybe_decrypt_memory_row(r, key_cache) for r in result]
 
     def ins_log(self, _id: str, user_id: str, mem_id: str, model: str, status: str, ts: int,
                 err: Optional[str] = None) -> int:
@@ -193,7 +234,10 @@ class MemOps:
         session_factory = self._session_factory()
         with session_factory() as session:
             rows = session.execute(query).scalars().all()
-            return [self._model_to_dict(r) for r in rows]
+            result = [self._model_to_dict(r) for r in rows]
+            user_ids = [str(r.get("user_id")) for r in result if r.get("user_id")]
+            key_cache = load_user_encryption_keys(session, list(set(user_ids)))
+            return [self._maybe_decrypt_memory_row(r, key_cache) for r in result]
 
     @timing
     def find_mem_by_user(self, user: IMemoryUser, order_by: List[str], limit=10, offset=0) -> List[Dict[str, Any]]:
@@ -216,8 +260,11 @@ class MemOps:
         with session_factory() as session:
             rows = session.execute(query).all()
             result = []
+            user_ids = [str(mem.user_id) for mem, _, _, _ in rows if getattr(mem, "user_id", None)]
+            user_encryption_key = load_user_encryption_keys(session, list(set(user_ids)))
             for mem, vec, sector, dim in rows:
                 item = self._model_to_dict(mem)
+                item = self._maybe_decrypt_memory_row(item, user_encryption_key)
                 # Keep backward-compatible payload shape for callers that json.loads(user_memory["v"]).
                 item["v"] = json.dumps(vec) if isinstance(vec, (list, tuple)) else vec
                 item["sector"] = sector
@@ -249,7 +296,10 @@ class MemOps:
         session_factory = self._session_factory()
         with session_factory() as session:
             rows = session.execute(query).scalars().all()
-            return [self._model_to_dict(r) for r in rows]
+            result = [self._model_to_dict(r) for r in rows]
+            user_ids = [str(r.get("user_id")) for r in result if r.get("user_id")]
+            key_cache = load_user_encryption_keys(session, list(set(user_ids)))
+            return [self._maybe_decrypt_memory_row(r, key_cache) for r in result]
 
     def all_mem_by_user(self,
                         user: IMemoryUser,
@@ -262,7 +312,9 @@ class MemOps:
         session_factory = self._session_factory()
         with session_factory() as session:
             rows = session.execute(query).scalars().all()
-            return [self._model_to_dict(r) for r in rows]
+            result = [self._model_to_dict(r) for r in rows]
+            key_cache = load_user_encryption_keys(session, [str(user.id)] if user.id else [])
+            return [self._maybe_decrypt_memory_row(r, key_cache) for r in result]
 
     def count_mem_by_user(self, user: IMemoryUser, conditions: list[str] | None = None) -> int:
         query = select(func.count(Memories.id)).where(Memories.user_id == user.id)

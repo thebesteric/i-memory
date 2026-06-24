@@ -6,8 +6,8 @@ from typing import Dict, Any
 
 from agile.utils import LogHelper
 
-from infra.db.repositories import user_repo
-from infra.db.repositories.memory_repo import mem_ops
+from infra.db.repos import user_repo
+from infra.db.repos.memory_repo import mem_ops
 from services.memory.waypoints import Waypoints
 from domain.common.exceptions import UserNotFoundError
 from services.memory.hsg import add_hsg_memory

@@ -1,6 +1,6 @@
 import json
 
-from infra.db.repositories.memory_repo import mem_ops
+from infra.db.repos.memory_repo import mem_ops
 from infra.db.orm_models import Memories
 from domain.memory.models import IMemoryUser
 
@@ -26,6 +26,7 @@ class _FakeSession:
         self._results = list(results or [])
         self.commit_called = False
         self.execute_count = 0
+        self.last_stmt = None
 
     def __enter__(self):
         return self
@@ -34,7 +35,7 @@ class _FakeSession:
         return False
 
     def execute(self, stmt):
-        _ = stmt
+        self.last_stmt = stmt
         self.execute_count += 1
         if self._results:
             return self._results.pop(0)
@@ -94,4 +95,23 @@ def test_del_mem_by_user_commits_and_returns_rowcount(monkeypatch):
     assert affected == 7
     assert fake_session.commit_called is True
     assert fake_session.execute_count == 12
+
+
+def test_ins_mem_upsert_contains_summary_column(monkeypatch):
+    fake_session = _FakeSession()
+    monkeypatch.setattr(mem_ops, "_session_factory", lambda: _SessionFactoryProvider(fake_session))
+
+    mem_ops.ins_mem(
+        id="m1",
+        user_id="u1",
+        content="cipher-content",
+        summary="cipher-summary",
+        primary_sector="semantic",
+    )
+
+    assert fake_session.commit_called is True
+    assert fake_session.last_stmt is not None
+    stmt_sql = str(fake_session.last_stmt)
+    assert "summary" in stmt_sql
+
 

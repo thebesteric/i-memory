@@ -3,7 +3,7 @@ from fastapi import APIRouter
 from fastapi.params import Body
 from starlette import status
 
-from infra.db.repositories import user_repo
+from infra.db.repos import user_repo
 from domain.memory.models import IMemoryUserIdentity, IMemoryUser
 from interfaces.api.schemas.web_models import AuthRegisterRequest
 

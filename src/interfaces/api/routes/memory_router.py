@@ -6,7 +6,7 @@ from fastapi import APIRouter
 from fastapi.params import Path, Body
 
 from services.i_memory import IMemory
-from infra.db.repositories import user_repo
+from infra.db.repos import user_repo
 from domain.common.exceptions import UserNotFoundError
 from services.graph import graph_ops
 from domain.memory.models import IMemoryUserIdentity, IMemorySearchResult

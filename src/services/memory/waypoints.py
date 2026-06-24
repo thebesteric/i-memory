@@ -7,9 +7,9 @@ from sqlalchemy import desc, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from domain.memory.waypoint_policy import Expansion
-from infra.db.repositories import user_repo
+from infra.db.repos import user_repo
 from infra.db.engine import get_session_factory
-from infra.db.repositories.memory_repo import mem_ops
+from infra.db.repos.memory_repo import mem_ops
 from domain.common.exceptions import UserNotFoundError
 from infra.db.orm_models import Waypoints as WaypointEntity
 from domain.memory.models import IMemoryUserIdentity, IMemoryUser

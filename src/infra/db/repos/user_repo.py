@@ -6,12 +6,23 @@ from agile.utils import LogHelper
 from sqlalchemy import asc, desc, select
 
 from services.memory.components import USER_IDENTITY_CACHE
+from services.commons.encrypt_service import encryption_enabled
 from infra.db.engine import get_session_factory
 from infra.db.orm_models import Users
 from domain.memory.models import IMemoryUserIdentity, IMemoryUser
 from shared.utils.encrypt_utils import EncryptionKeyTool
 
 logger = LogHelper.get_logger()
+
+
+def load_user_encryption_keys(session, user_ids: list[str]) -> dict[str, str]:
+    """批量加载用户加密密钥，供仓储层透明加解密复用。"""
+    if not encryption_enabled() or not user_ids:
+        return {}
+    rows = session.execute(
+        select(Users.id, Users.encryption_key).where(Users.id.in_(user_ids))
+    ).all()
+    return {str(uid): encryption_key for uid, encryption_key in rows if uid and encryption_key}
 
 
 def _to_memory_user(user_entity: Users) -> IMemoryUser:

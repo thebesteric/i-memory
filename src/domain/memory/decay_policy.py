@@ -12,7 +12,9 @@ from services.memory.components import get_vector_store
 from shared.config.settings import env
 from shared.config.constants import HYBRID_PARAMS
 from infra.db.engine import get_session_factory
-from infra.db.repositories.memory_repo import mem_ops
+from infra.db.repos.memory_repo import mem_ops
+from infra.db.repos.user_repo import load_user_encryption_keys
+from services.commons.encrypt_service import encrypt_if_necessary
 from services.memory.sector_classify import SECTOR_CONFIGS, SectorCfg
 from infra.vector_store.base import BaseVectorStore
 from infra.db.orm_models import Memories
@@ -343,6 +345,8 @@ class Decay:
                 rows = session.execute(
                     select(Memories).where(Memories.segment == seg)
                 ).scalars().all()
+                user_ids = [str(m.user_id) for m in rows if getattr(m, "user_id", None)]
+                user_key_map = load_user_encryption_keys(session, list(set(user_ids)))
 
                 # 衰减比例
                 decay_ratio = env.DECAY_RATIO or 0.03
@@ -410,8 +414,12 @@ class Decay:
                         fp = self.fingerprint_mem(dict_m)
                         # 更新向量表
                         await self.vector_store.store_vector(dict_m["id"], sector, fp["vector"], len(fp["vector"]))
-                        # 更新记忆摘要
-                        mem.summary = fp["summary"]
+                        # 写回前加密摘要，AAD 与现有规则保持一致（{"id": mem_id}）
+                        key_b64 = user_key_map.get(str(dict_m.get("user_id"))) if dict_m.get("user_id") else None
+                        mem.summary = (
+                            encrypt_if_necessary(fp["summary"], key_b64=key_b64, aad={"id": dict_m["id"]})
+                            if key_b64 else fp["summary"]
+                        )
                         # 指纹化次数 +1
                         tot_fp += 1
                         changed = True

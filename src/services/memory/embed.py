@@ -5,7 +5,7 @@ from typing import List, Dict, Optional, Any
 import numpy as np
 
 from services.memory.components import get_embed_model
-from infra.db.repositories.memory_repo import mem_ops
+from infra.db.repos.memory_repo import mem_ops
 from shared.utils.chunking import Chunk
 
 

@@ -2,58 +2,69 @@ from typing import Any, Mapping
 
 from agile.utils import LogHelper
 
-from domain.memory.models import IMemoryUser
 from shared.config.settings import env
 from shared.utils.encrypt_utils import EncryptionKeyTool
 
 logger = LogHelper.get_logger(title="[ENCRYPT]")
 
 
+def encryption_enabled() -> bool:
+    """
+    统一的加密开关判断
+    """
+    return bool(env.ENCRYPTION_ENABLE)
+
+
 def encrypt_if_necessary(
-        user: IMemoryUser,
-        plaintext: str,
+        value: Any,
         *,
-        aad: str | Mapping[str, Any] | list[Any] | tuple[Any, ...] | set[Any] | frozenset[Any] | None = None
-) -> str:
+        key_b64: str | None,
+        aad: str | Mapping[str, Any] | list[Any] | tuple[Any, ...] | set[Any] | frozenset[Any] | None = None,
+) -> Any:
     """
-    内容加密
-    :param user: 用户信息
-    :param plaintext: 原始数据
-    :param aad: 附加数据
-    :return: 加密后的数据或原始数据
+    通用加密入口（基于原始 key）。
+    - 仅在开启加密、且 value 为非空字符串时执行。
+    - 若 value 已经是可解密密文，直接返回，避免重复加密。
+    - 异常时降级返回原文，保证调用链可用。
     """
-    encryption_enable = env.ENCRYPTION_ENABLE or False
-    if encryption_enable:
-        if not user.encryption_key:
-            raise ValueError("Missing user encryption key while encryption is enabled")
-        return EncryptionKeyTool.encrypt(plaintext=plaintext, key_b64=user.encryption_key, aad=aad)
-    return plaintext
+    if not encryption_enabled() or not isinstance(value, str) or not value:
+        return value
+    if not key_b64:
+        return value
+
+    # 调用方可能已传入密文：先尝试解密，成功则视为“已加密”。
+    try:
+        EncryptionKeyTool.decrypt(encrypted_b64=value, key_b64=key_b64, aad=aad)
+        return value
+    except Exception as exc:
+        logger.debug("Value is not decryptable, will encrypt: %s", exc)
+        pass
+
+    try:
+        return EncryptionKeyTool.encrypt(plaintext=value, key_b64=key_b64, aad=aad)
+    except Exception as exc:
+        logger.warning("Encrypt text fallback to raw text: %s", exc)
+        return value
 
 
 def decrypt_if_necessary(
-        user: IMemoryUser,
-        ciphertext: str,
+        value: Any,
         *,
-        aad: str | Mapping[str, Any] | list[Any] | tuple[Any, ...] | set[Any] | frozenset[Any] | None = None
-) -> str:
+        key_b64: str | None,
+        aad: str | Mapping[str, Any] | list[Any] | tuple[Any, ...] | set[Any] | frozenset[Any] | None = None,
+) -> Any:
     """
-    内容解密
-    :param user: 用户信息
-    :param ciphertext: 密文或原始数据
-    :param aad: 附加数据
-    :return: 解密后的数据，若非密文则原样返回
+    通用解密入口（基于原始 key）。
+    - 仅在开启加密、且 value 为非空字符串时执行。
+    - 对历史明文或无效密文保持原样返回，避免读取流程中断。
     """
-    encryption_enable = env.ENCRYPTION_ENABLE or False
-    if not encryption_enable:
-        return ciphertext
-
-    if not user.encryption_key:
-        raise ValueError("Missing user encryption key while encryption is enabled")
+    if not encryption_enabled() or not isinstance(value, str) or not value:
+        return value
+    if not key_b64:
+        return value
 
     try:
-        return EncryptionKeyTool.decrypt(encrypted_b64=ciphertext, key_b64=user.encryption_key, aad=aad)
+        return EncryptionKeyTool.decrypt(encrypted_b64=value, key_b64=key_b64, aad=aad)
     except Exception as exc:
-        # 兼容历史明文数据，避免读取链路因解密失败中断。
-        logger.warning(f"decrypt_if_necessary fallback to raw text for user={user.id}: {exc}")
-        return ciphertext
-
+        logger.warning("Decrypt text fallback to raw text: %s", exc)
+        return value

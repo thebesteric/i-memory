@@ -8,15 +8,14 @@ from pymilvus import Collection
 
 from services.memory.ingest import ingest_document
 from infra.ai.embedding.registrars.openai_registrar import OpenAIRegistrar
-from infra.db.repositories import user_repo
+from infra.db.repos import user_repo
 from services.memory.components import get_milvus_manager
 from shared.config.settings import env
 from infra.db.engine import get_db
-from infra.db.repositories.memory_repo import mem_ops
+from infra.db.repos.memory_repo import mem_ops
 from domain.common.exceptions import UserNotFoundError
 from infra.db.orm_models import init_db_schema
 from services.memory.hsg import query_hsg_memories
-from services.commons.encrypt_service import decrypt_if_necessary
 from domain.memory.models import (
     IMemoryConfig,
     IMemoryFilters,
@@ -125,11 +124,6 @@ class IMemory:
         row = self.mem_ops.get_mem(memory_id)
         if not row:
             return None
-        user_id = row.get("user_id")
-        if user_id and isinstance(row.get("content"), str):
-            user = await user_repo.get_user_by_id(str(user_id))
-            if user:
-                row["content"] = decrypt_if_necessary(user, row["content"], aad={"id": row.get("id")})
         return row
 
     async def delete(self, memory_id: str) -> int:
@@ -171,9 +165,6 @@ class IMemory:
         total = self.mem_ops.count_mem_by_user(user)
         offset = (safe_current - 1) * safe_size
         rows = self.mem_ops.all_mem_by_user(user, safe_size, offset, sort_order)
-        for row in rows:
-            if isinstance(row.get("content"), str):
-                row["content"] = decrypt_if_necessary(user, row["content"], aad={"id": row.get("id")})
         return PagingResponse(
             records=[dict(r) for r in rows],
             total=total,

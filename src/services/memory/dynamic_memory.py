@@ -16,7 +16,7 @@ from typing import List, Dict
 
 from agile.utils import timing
 
-from infra.db.repositories.memory_repo import mem_ops
+from infra.db.repos.memory_repo import mem_ops
 from services.memory.sector_classify import SECTOR_KEY_INDEX_MAPPING
 
 # ======================== 学习率和衰减系数 ========================

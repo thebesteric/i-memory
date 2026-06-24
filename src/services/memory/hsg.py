@@ -11,12 +11,12 @@ from agile.search import BM25Searcher
 from agile.utils import LogHelper, timing
 from sqlalchemy import desc, func, select, update
 
-from infra.db.repositories import user_repo
+from infra.db.repos import user_repo
 from services.memory.components import get_sector_classifier, get_vector_store, MEMORIES_CACHE, get_embed_model
 from shared.config.settings import env
 from shared.config.constants import SECTOR_RELATIONSHIPS, HYBRID_PARAMS, get_dynamic_sector_weights
 from infra.db.engine import get_session_factory
-from infra.db.repositories.memory_repo import mem_ops
+from infra.db.repos.memory_repo import mem_ops
 from services.memory.extract_essence import ExtractEssence
 from domain.memory.scoring import compute_tag_match_score, compute_hybrid_score
 from services.memory.sector_classify import SECTOR_CONFIGS, ClassifyResult, SectorClassifier
@@ -33,7 +33,7 @@ from domain.memory.models import IMemoryFilters, IMemoryItemDebugInfo, IMemoryIt
 from services.memory.user_summary import update_user_summary
 from services.profile import user_profile_ops
 from services.session import session_ops
-from services.commons.encrypt_service import encrypt_if_necessary, decrypt_if_necessary
+from services.commons.encrypt_service import decrypt_if_necessary
 from domain.session.models import SessionCollection
 from services.memory.dynamic_memory import calc_cross_sector_resonance_score, apply_retrieval_trace_reinforcement_to_memory, \
     propagate_associative_reinforcement_to_linked_nodes
@@ -99,7 +99,13 @@ def _find_latest_assistant_by_pair_id(qa_pair_id: str, user: IMemoryUser | None 
         ).scalars().first()
         row = _memory_entity_to_dict(memory)
         if row and user and isinstance(row.get("content"), str):
-            row["content"] = decrypt_if_necessary(user, row["content"], aad={"id": row.get("id")})
+            row["content"] = decrypt_if_necessary(
+                row["content"], key_b64=user.encryption_key, aad={"id": row.get("id")}
+            )
+        if row and user and isinstance(row.get("summary"), str):
+            row["summary"] = decrypt_if_necessary(
+                row["summary"], key_b64=user.encryption_key, aad={"id": row.get("id")}
+            )
         return row
 
 
@@ -255,13 +261,12 @@ async def add_hsg_memory(user_identity: IMemoryUserIdentity,
 
         # 调用 mem_ops.ins_mem，将记忆内容、摘要、sector、标签、元数据等插入数据库
         mid = str(uuid.uuid4())
-        # 如果有必要进行数据加密
-        encrypted_essence = encrypt_if_necessary(user, essence, aad={"id": mid})
         mem_ops.ins_mem(
             id=mid,
             user_id=user.id,
             segment=cur_seg,
-            content=encrypted_essence,
+            content=essence,
+            summary=None,
             primary_sector=cls_ret.primary,
             sectors=json.dumps(all_secs or [], ensure_ascii=False),
             tags=json.dumps(tags or [], ensure_ascii=False),
@@ -444,9 +449,6 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
                 order_by=["t.created_at DESC"],
                 limit=2000
             )
-            for bm25_mem in bm25_memories:
-                if isinstance(bm25_mem.get("content"), str):
-                    bm25_mem["content"] = decrypt_if_necessary(user, bm25_mem["content"], aad={"id": bm25_mem.get("id")})
             bm25_search_timing_wrapped = timing(bm25_searcher.search)
             bm25_ids = set(bm25_search_timing_wrapped(query, docs=bm25_memories, top_k=top_k * 3))
 
@@ -523,9 +525,6 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
 
         # 获取候选记忆内容
         memories = mem_ops.find_mem_by_ids(list(ids))
-        for mem in memories:
-            if isinstance(mem.get("content"), str):
-                mem["content"] = decrypt_if_necessary(user, mem["content"], aad={"id": mem.get("id")})
 
         # 计算每个候选的关键词重叠分数
         kw_scores = {}

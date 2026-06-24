@@ -4,7 +4,7 @@ from agile.web import PagingResponse
 from agile.web.common_result import gen_response_model, R
 from fastapi import APIRouter
 
-from infra.db.repositories import user_repo
+from infra.db.repos import user_repo
 from domain.common.exceptions import UserNotFoundError
 from services.graph import graph_ops
 from shared.utils.json_utils import coerce_json_field
