@@ -6,7 +6,7 @@ from agile.utils import LogHelper
 from sqlalchemy import asc, desc, select
 
 from services.memory.components import USER_IDENTITY_CACHE
-from services.commons.encrypt_service import encryption_enabled
+from services.commons.encrypt_service import decrypt_if_necessary, encrypt_if_necessary, encryption_enabled
 from infra.db.engine import get_session_factory
 from infra.db.orm_models import Users
 from domain.memory.models import IMemoryUserIdentity, IMemoryUser
@@ -26,13 +26,18 @@ def load_user_encryption_keys(session, user_ids: list[str]) -> dict[str, str]:
 
 
 def _to_memory_user(user_entity: Users) -> IMemoryUser:
+    summary = decrypt_if_necessary(
+        user_entity.summary,
+        key_b64=user_entity.encryption_key,
+        aad={"id": user_entity.id},
+    )
     return IMemoryUser(
         id=user_entity.id,
         tenant_key=user_entity.tenant_key,
         project_key=user_entity.project_key,
         user_key=user_entity.user_key,
         encryption_key=user_entity.encryption_key,
-        summary=user_entity.summary,
+        summary=summary,
         reflection_count=user_entity.reflection_count or 0,
         created_at=user_entity.created_at,
         updated_at=user_entity.updated_at,
@@ -175,16 +180,20 @@ async def add_user(user_identity: IMemoryUserIdentity, summary: str | None = Non
         if existing_user:
             return _to_memory_user(existing_user)
 
-        user_entity = Users(  # type: ignore[arg-type]
+        user_entity = Users(
             id=str(uuid.uuid4()),
             tenant_key=cast(str, tenant_key),
             project_key=cast(str, project_key),
             user_key=user_key,
             encryption_key=EncryptionKeyTool.generate_aes_256_gcm_key(),
-            summary=summary,
             reflection_count=reflection_count,
             created_at=now,
             updated_at=now,
+        )
+        user_entity.summary = encrypt_if_necessary(
+            summary,
+            key_b64=user_entity.encryption_key,
+            aad={"id": user_entity.id},
         )
         session.add(user_entity)
         session.commit()
@@ -204,6 +213,12 @@ async def update_user_summary(_id: str, summary: str) -> None:
         user = session.get(Users, _id)
         if not user:
             return
-        user.summary = summary
+        user_key_b64 = getattr(user, "encryption_key", None)
+        user_id = getattr(user, "id", _id)
+        user.summary = encrypt_if_necessary(
+            summary,
+            key_b64=user_key_b64,
+            aad={"id": user_id},
+        )
         user.updated_at = now
         session.commit()
