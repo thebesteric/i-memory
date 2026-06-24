@@ -47,13 +47,14 @@ async def _process_session(user: IMemoryUser, yesterday_end: datetime.datetime, 
                 logger.info(f"No memory found for User ID: {user.id} at {yesterday_end.strftime("%Y-%m-%d %H:%M:%S")} or less than {memories_at_least}")
                 return False
 
-            sessions: SessionCollection = await session_extractor.invoke(memories=memories)
+            session_collection: SessionCollection = await session_extractor.invoke(memories=memories)
             with session_factory() as db_session:
                 with db_session.begin():
-                    sessions = await session_ops.insert_sessions(user, sessions, conn=db_session)
-                    affected_rows = await session_ops.mark_memoires_to_session_joined([m["id"] for m in memories],
-                                                                                      conn=db_session)
-                    logger.info(f"User session created, User ID: {user.id}, Associated memories: {affected_rows}")
+                    # 添加 session 到数据库
+                    await session_ops.insert_sessions(user, session_collection, conn=db_session)
+                    # 将对话标记为“已参与会话”
+                    affected_rows = await session_ops.mark_memoires_to_session_joined([m["id"] for m in memories], conn=db_session)
+                    logger.info(f"User session created, User ID: {user.id}, Associated memories: {affected_rows}, Sessions: {len(session_collection.sessions)}")
             return True
 
 
@@ -75,6 +76,7 @@ async def session_build():
         return
 
     semaphore = asyncio.Semaphore(concurrency)
+    # 分别处理用户的记忆，并抽去为 session 信息
     tasks = [_process_session(user, yesterday_end, semaphore) for user in users]
     results = await asyncio.gather(*tasks, return_exceptions=True)
 

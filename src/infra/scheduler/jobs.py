@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+import inspect
 from typing import Any, Callable, Literal
 
 from agile.utils import LogHelper, TimeUnit
@@ -107,6 +108,25 @@ def _build_job_definitions() -> list[JobDefinition]:
             enable=getattr(env, "USER_PROFILE_ENABLE", True),
         )
     ]
+
+
+def get_job_definitions() -> list[JobDefinition]:
+    return _build_job_definitions()
+
+
+def get_job_definition(job_id: str) -> JobDefinition | None:
+    return next((job for job in _build_job_definitions() if job.id == job_id), None)
+
+
+async def run_job(job_id: str) -> Any:
+    job = get_job_definition(job_id)
+    if not job:
+        raise ValueError(f"Unknown job id: {job_id}")
+
+    result = job.func(**job.kwargs)
+    if inspect.isawaitable(result):
+        return await result
+    return result
 
 
 def _scheduler_listener(event: JobExecutionEvent):
