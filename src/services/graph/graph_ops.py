@@ -85,6 +85,9 @@ async def add_topic(user: IMemoryUser, topic: Topic, conn=None):
                 updated_at=now,
             )
         )
+        # 若调用方持有会话，需立即刷新，确保主题数据行已存在；避免同一事务内后续查询触发自动刷新时，连带执行依赖的事实插入操作。
+        if external_session:
+            session.flush()
         if not external_session:
             session.commit()
     finally:
