@@ -120,7 +120,19 @@ class Users(Base):
 
 class UserProfiles(Base):
     __tablename__ = "user_profiles"
-    __table_args__ = ({"comment": "用户画像表"},)
+    __table_args__ = (
+        # 一个用户同一时刻只允许一条 active 画像
+        Index(
+            "uq_user_profiles_user_active_true",
+            "user_id",
+            unique=True,
+            postgresql_where=text("is_active = true AND user_id IS NOT NULL"),
+        ),
+        # 覆盖 get_user_profile 查询模式：按 user_id + active + updated_at 倒序取最新
+        Index("idx_user_profiles_user_active_updated", "user_id", "is_active", "updated_at"),
+        Index("idx_user_profiles_user_id", "user_id"),
+        {"comment": "用户画像表"},
+    )
 
     id = Column(String(64), primary_key=True, comment="主键")
     user_id = Column(String(64), ForeignKey("users.id"), nullable=True, comment="用户标识")

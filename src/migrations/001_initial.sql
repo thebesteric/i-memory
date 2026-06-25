@@ -450,6 +450,11 @@ CREATE INDEX IF NOT EXISTS idx_waypoints_src ON waypoints (src_id);
 CREATE INDEX IF NOT EXISTS idx_waypoints_dst ON waypoints (dst_id);
 CREATE INDEX IF NOT EXISTS idx_stats_ts ON stats (ts);
 CREATE INDEX IF NOT EXISTS idx_embed_logs_user ON embed_logs (user_id);
+CREATE INDEX IF NOT EXISTS idx_user_profiles_user_id ON user_profiles (user_id);
+CREATE INDEX IF NOT EXISTS idx_user_profiles_user_active_updated ON user_profiles (user_id, is_active, updated_at);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_user_profiles_user_active_true
+    ON user_profiles (user_id)
+    WHERE is_active = TRUE AND user_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_graph_topics_vector ON graph_topics USING hnsw (vector vector_cosine_ops);
 CREATE INDEX IF NOT EXISTS idx_graph_facts_created_at ON graph_facts (created_at);
 CREATE INDEX IF NOT EXISTS idx_graph_facts_fact_kind ON graph_facts (fact_kind);

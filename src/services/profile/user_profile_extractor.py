@@ -84,10 +84,21 @@ class UserProfileExtractor:
 
 ### 关于标签的提取
 - 标签设置规则
-    - 标签名称一定有代表性，能够准确的描述用户某些特征，如：科技控、时尚达人、万事通
+    - 标签名称必须是“可复用的稳定用户特征”，优先使用常见、可检索的人群画像词（如：科技爱好者、美食爱好者、职场新人、效率导向）
+    - 标签应描述用户长期偏好/身份/行为模式，不要描述一次性事件角色或场景状态
+    - 标签名称避免口号化、文学化、评价化表达（如“祝福文化践行者”“长期关系维护者”）
+    - 能映射到 habits 或 demographic 的信息，优先写入对应字段，避免重复塞进 tags
 - 标签来源判断
     - **explicit**: 用户明确说 "我喜欢XX"、"我是XX"、"我经常XX" 等
     - **implicit**: 从对话内容推断，如用户多次讨论某个话题，或从行为描述中推断
+
+### 标签过滤规则（必须遵守）
+1. 一次性事件、短时场景、地点参与信息（如“本地婚礼参与者”）默认不生成 tag。
+2. 仅当特征具有跨场景可复用性，且至少满足以下其一时可保留：
+   - 用户明确自我陈述（explicit）；
+   - 非显式推断但有 >=2 条独立证据（implicit）。
+3. 若标签与已有标签语义近似，合并为更通用且更高层的标签，不保留同义细粒度重复项。
+4. `sub_tags` 用于标准化短语，不应替代主标签语义。
 
 ### [重要]画像更新策略
 1. **新增**: 
@@ -117,8 +128,13 @@ class UserProfileExtractor:
 - `tags`: 最多输出 15 个最相关、权重最高的标签
 
 ## 关于 extra 字段
-- extra 字段为扩展字段，类型为字典类型，当某些特殊信息无法匹配到上述字段时，可以放在 extra 字段中，key 是字段名称，value 是字段值
-> 示例：如 Demographic 中的 extra 字段，当解析出用户的身高、体重，但是 Demographic 中并没有对应的字段，可将该信息储存到 Demographic 到 extra 字段中
+- extra 字段用于承接“无法映射到标准字段”的补充信息。
+- 必须按“实体归属”组织，禁止把不同实体属性平铺在同一层级。
+  - 推荐：`{{"friend": {{"name": "林晓", "relationship_with_user": "best friend", "friendship_duration_years": 8}}}}`
+  - 不推荐：`{{"name": "林晓", "relationship_with_bride": "...", "friendship_duration_years": 8}}`
+- 当同类实体有多个时，使用复数集合结构，如：`{{"friends": [{{...}}, {{...}}]}}`。
+- `extra` 的 key 使用稳定的 snake_case 语义名，避免临时措辞。
+- 若字段已可落到标准结构（demographic/location/preferences/tags），优先写入标准结构，不要放进 extra。
 
 ## 当前时间
 {current_time}
@@ -141,6 +157,7 @@ class UserProfileExtractor:
 5. 控制输出数量，避免输出过多低质量信息
 6. 如果对话内容过长，优先提取关键信息，忽略无关闲聊
 7. 所有时间字段必须使用 yyyy-MM-dd HH:mm:ss 格式
+8. 输出前做一次自检：`demographic.extra` 是否按实体分组、`tags` 是否均为稳定可复用特征
 
 begin!! 请开始分析并生成更新后的用户画像
 {dialogues}
@@ -176,9 +193,11 @@ begin!! 请开始分析并生成更新后的用户画像
     @timing
     async def invoke(self, user: IMemoryUser, memories: list[dict[str, Any]]) -> UserProfile:
         current_user_profile: UserProfile = await self.user_profile_ops.get_user_profile(user)
+        # 先按时间排序，降低模型在乱序输入时的抽取偏差。
+        sorted_memories = sorted(memories, key=lambda m: str(m.get("created_at") or ""))
         input_variables = {
             "current_user_profile": current_user_profile.model_dump() if current_user_profile else None,
-            "dialogues": [Dialogue.mem_to_dialogue(m) for m in memories]
+            "dialogues": [Dialogue.mem_to_dialogue(m) for m in sorted_memories]
         }
         chain = self.get_chain()
         output: UserProfile = await chain.ainvoke(input=input_variables)
