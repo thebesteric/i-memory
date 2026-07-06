@@ -19,7 +19,7 @@ module.exports = {
             log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
             autorestart: true,
             watch: false,
-            max_memory_restart: '512M',
+            max_memory_restart: '4G',
         },
     ],
 }
