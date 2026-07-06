@@ -61,6 +61,9 @@ def create_app() -> FastAPI:
                 await warmup_result
             logger.info("Vector store warmup completed")
 
+        await memory_router.mem.ensure_ready()
+        logger.info("Memory service initialization completed")
+
         # 启动相关任务
         app.state.scheduler = start_background_tasks()
 

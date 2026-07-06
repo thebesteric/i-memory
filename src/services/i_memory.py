@@ -37,8 +37,22 @@ class IMemory:
         self._openai = OpenAIRegistrar(self)
         self.db = get_db()
         self.milvus_manager: MilvusManager | None = None
-        # 预先准备资源，例如数据库连接、向量数据库集合等
-        asyncio.run(self._prepare_resource())
+        self._resource_ready = False
+        self._resource_init_lock: asyncio.Lock | None = None
+
+    async def ensure_ready(self):
+        """
+        确保基础资源已初始化。
+        """
+        if self._resource_ready:
+            return
+        if self._resource_init_lock is None:
+            self._resource_init_lock = asyncio.Lock()
+        async with self._resource_init_lock:
+            if self._resource_ready:
+                return
+            await self._prepare_resource()
+            self._resource_ready = True
 
     async def _prepare_resource(self):
         """
