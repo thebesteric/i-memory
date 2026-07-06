@@ -143,7 +143,7 @@ class EnvConfig:
         self.SESSION_BUILD_THREADS = env_helper.get("IM_SESSION_BUILD_THREADS", 5)
 
         # ================ 内容加密配置 ================
-        self.ENCRYPTION_ENABLE = env_helper.get("IM_ENCRYPTION_ENABLE", True)
+        self.ENCRYPTION_ENABLE = env_helper.get("IM_ENCRYPTION_ENABLE", False)
 
 
 def _load_env_file():
