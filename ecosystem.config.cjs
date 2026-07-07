@@ -9,7 +9,7 @@ module.exports = {
             name: 'i-memory-backend',
             cwd: projectRoot,
             script: path.join(projectRoot, '.venv/bin/python'),
-            args: '-m uvicorn interfaces.api.app:create_app --app-dir src --factory --host 0.0.0.0 --port 8000',
+            args: '-m uvicorn interfaces.api.app:create_app --app-dir src --factory --host 0.0.0.0 --port 18080',
             interpreter: 'none',
             env: {
                 PYTHONPATH: 'src',
@@ -19,7 +19,7 @@ module.exports = {
             log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
             autorestart: true,
             watch: false,
-            max_memory_restart: '4G',
+            max_memory_restart: '8G',
         },
     ],
 }
