@@ -83,6 +83,7 @@ def get_sector_classifier():
             )
             if not os.path.exists(checkpoint_path):
                 raise FileNotFoundError(f"Sector classifier checkpoint not found: {checkpoint_path}")
+            # 如果 Bert 模型不存在会自动下载相应的模型
             sector_classifier = SectorClassifier(checkpoint_path=checkpoint_path)
         else:
             sector_classifier = SectorClassifier()
