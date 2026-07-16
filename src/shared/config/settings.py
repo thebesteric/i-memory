@@ -142,7 +142,10 @@ class EnvConfig:
         # 会话总结并发线程数量
         self.SESSION_BUILD_THREADS = env_helper.get("IM_SESSION_BUILD_THREADS", 5)
 
-        # ================ 内容加密配置 ================
+        # ================ 应用相关配置 ================
+        # 用户注册配置
+        self.USER_REGISTER_FORCE = env_helper.get("IM_USER_REGISTER_FORCE", False)
+        # 内容加密配置
         self.ENCRYPTION_ENABLE = env_helper.get("IM_ENCRYPTION_ENABLE", False)
 
 

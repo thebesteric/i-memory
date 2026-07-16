@@ -8,14 +8,13 @@ from pymilvus import Collection
 
 from services.memory.ingest import ingest_document
 from infra.ai.embedding.registrars.openai_registrar import OpenAIRegistrar
-from infra.db.repos import user_repo
 from services.memory.components import get_milvus_manager
 from shared.config.settings import env
 from infra.db.engine import get_db
 from infra.db.repos.memory_repo import mem_ops
-from domain.common.exceptions import UserNotFoundError
 from infra.db.orm_models import init_db_schema
 from services.memory.hsg import query_hsg_memories
+from services.commons.user_access import get_user_for_access
 from domain.memory.models import (
     IMemoryConfig,
     IMemoryFilters,
@@ -189,7 +188,4 @@ class IMemory:
 
     @staticmethod
     async def _get_user_by_identity(user_identity: IMemoryUserIdentity) -> IMemoryUser:
-        user = await user_repo.get_user(user_identity)
-        if not user:
-            raise UserNotFoundError(user_identity)
-        return user
+        return await get_user_for_access(user_identity=user_identity)

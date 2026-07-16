@@ -6,11 +6,10 @@ from fastapi import APIRouter
 from fastapi.params import Path, Body
 
 from services.i_memory import IMemory
-from infra.db.repos import user_repo
-from domain.common.exceptions import UserNotFoundError
 from services.graph import graph_ops
 from domain.memory.models import IMemoryUserIdentity, IMemorySearchResult
 from services.profile import user_profile_ops
+from services.commons.user_access import get_user_for_access
 from domain.profile.models import UserProfile
 from shared.utils.json_utils import coerce_json_field
 from interfaces.api.schemas.web_models import AddMemoryRequest, SearchMemoryRequest, HistoryMemoryRequest, \
@@ -170,9 +169,7 @@ async def clear_memory(user_identity: IMemoryUserIdentity = Body(..., descriptio
     )
 )
 async def get_user_profile(user_identity: IMemoryUserIdentity = Body(..., description="用户身份")):
-    user = await user_repo.get_user(user_identity)
-    if not user:
-        raise UserNotFoundError(user_identity)
+    user = await get_user_for_access(user_identity=user_identity)
     # 查询用户画像
     user_profile: UserProfile = await user_profile_ops.get_user_profile(user, query_cache=True)
     return R.success(data=user_profile)
@@ -189,9 +186,7 @@ async def get_user_profile(user_identity: IMemoryUserIdentity = Body(..., descri
     description="根据用户身份与规范化实体 ID 查询该实体参与的双向关系边。"
 )
 async def canonical_relations(req: CanonicalRelationsRequest):
-    user = await user_repo.get_user(req.user_identity)
-    if not user:
-        raise UserNotFoundError(req.user_identity)
+    user = await get_user_for_access(user_identity=req.user_identity)
 
     rows = graph_ops.find_canonical_relations(user.id, req.canonical_id, req.limit or 100)
     return R.success(data={

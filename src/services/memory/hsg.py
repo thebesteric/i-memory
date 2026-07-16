@@ -11,7 +11,6 @@ from agile.search import BM25Searcher
 from agile.utils import LogHelper, timing
 from sqlalchemy import desc, func, select, update
 
-from infra.db.repos import user_repo
 from services.memory.components import get_sector_classifier, get_vector_store, MEMORIES_CACHE, get_embed_model
 from shared.config.settings import env
 from shared.config.constants import SECTOR_RELATIONSHIPS, HYBRID_PARAMS, get_dynamic_sector_weights
@@ -22,7 +21,7 @@ from domain.memory.scoring import compute_tag_match_score, compute_hybrid_score
 from services.memory.sector_classify import SECTOR_CONFIGS, ClassifyResult, SectorClassifier
 from infra.vector_store.base import VectorSearch, BaseVectorStore
 from services.memory.waypoints import Waypoints, Expansion
-from domain.common.exceptions import UserNotFoundError
+from services.commons.user_access import get_user_for_access
 from domain.memory.decay_policy import Decay
 from infra.db.orm_models import Memories, Segment
 from services.memory.embed import embed_multi_sector, calc_mean_vec, embed, embed_batch
@@ -166,9 +165,7 @@ async def add_hsg_memory(user_identity: IMemoryUserIdentity,
     user_identity.check_legality()
 
     # 获取用户，若不存在则创建一条新用户记录
-    user: IMemoryUser | None = await user_repo.get_user(user_identity=user_identity)
-    if not user:
-        raise UserNotFoundError(user_identity)
+    user: IMemoryUser = await get_user_for_access(user_identity=user_identity)
 
     # 角色合法性检查
     if qa_role and qa_role not in ("human", "assistant"):
@@ -409,9 +406,7 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
     # 用户合法性检查
     user_identity.check_legality()
 
-    user = await user_repo.get_user(user_identity=user_identity, using_cache=True)
-    if not user:
-        raise UserNotFoundError(user_identity)
+    user = await get_user_for_access(user_identity=user_identity, using_cache=True)
 
     try:
         # 检查 60 秒内的查询缓存，命中则直接返回

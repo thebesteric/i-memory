@@ -4,9 +4,8 @@ from agile.web import PagingResponse
 from agile.web.common_result import gen_response_model, R
 from fastapi import APIRouter
 
-from infra.db.repos import user_repo
-from domain.common.exceptions import UserNotFoundError
 from services.graph import graph_ops
+from services.commons.user_access import get_user_for_access
 from shared.utils.json_utils import coerce_json_field
 from interfaces.api.schemas.web_models import GraphFactsRequest, GraphFactEntitiesRequest, GraphEntityRelationsRequest, \
     GraphEntityTopicsRequest, GraphTopicMemoriesRequest, GraphExploreRequest, GraphFactsFilters
@@ -24,9 +23,7 @@ router = APIRouter(prefix="/graph", tags=["graph"])
     ),
 )
 async def facts(req: GraphFactsRequest):
-    user = await user_repo.get_user(req.user_identity, using_cache=True)
-    if not user:
-        raise UserNotFoundError(req.user_identity)
+    user = await get_user_for_access(user_identity=req.user_identity, using_cache=True)
 
     total, records = graph_ops.find_user_facts_page(
         user.id,
@@ -53,9 +50,7 @@ async def facts(req: GraphFactsRequest):
     ),
 )
 async def fact_entities(req: GraphFactEntitiesRequest):
-    user = await user_repo.get_user(req.user_identity, using_cache=True)
-    if not user:
-        raise UserNotFoundError(req.user_identity)
+    user = await get_user_for_access(user_identity=req.user_identity, using_cache=True)
 
     total, records = graph_ops.find_fact_canonical_entities_page(user.id, req.fact_id, req.current or 1, req.size or 20)
     return R.success(
@@ -78,9 +73,7 @@ async def fact_entities(req: GraphFactEntitiesRequest):
     ),
 )
 async def entity_relations(req: GraphEntityRelationsRequest):
-    user = await user_repo.get_user(req.user_identity, using_cache=True)
-    if not user:
-        raise UserNotFoundError(req.user_identity)
+    user = await get_user_for_access(user_identity=req.user_identity, using_cache=True)
 
     total, records = graph_ops.find_entity_relations_page(
         user.id,
@@ -114,9 +107,7 @@ async def entity_relations(req: GraphEntityRelationsRequest):
     ),
 )
 async def entity_topics(req: GraphEntityTopicsRequest):
-    user = await user_repo.get_user(req.user_identity, using_cache=True)
-    if not user:
-        raise UserNotFoundError(req.user_identity)
+    user = await get_user_for_access(user_identity=req.user_identity, using_cache=True)
 
     total, records = graph_ops.find_entity_topics_page(user.id, req.canonical_id, req.current or 1, req.size or 20)
 
@@ -148,9 +139,7 @@ async def entity_topics(req: GraphEntityTopicsRequest):
     ),
 )
 async def topic_memories(req: GraphTopicMemoriesRequest):
-    user = await user_repo.get_user(req.user_identity, using_cache=True)
-    if not user:
-        raise UserNotFoundError(req.user_identity)
+    user = await get_user_for_access(user_identity=req.user_identity, using_cache=True)
 
     total, records = graph_ops.find_topic_memories_page(user.id, req.topic_id, req.current or 1, req.size or 20)
     records = _normalize_memories(records)
@@ -174,9 +163,7 @@ async def topic_memories(req: GraphTopicMemoriesRequest):
     ),
 )
 async def explore(req: GraphExploreRequest):
-    user = await user_repo.get_user(req.user_identity, using_cache=True)
-    if not user:
-        raise UserNotFoundError(req.user_identity)
+    user = await get_user_for_access(user_identity=req.user_identity, using_cache=True)
 
     current = req.current or 1
     size = req.size or 20

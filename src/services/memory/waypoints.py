@@ -7,12 +7,11 @@ from sqlalchemy import desc, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from domain.memory.waypoint_policy import Expansion
-from infra.db.repos import user_repo
 from infra.db.engine import get_session_factory
 from infra.db.repos.memory_repo import mem_ops
-from domain.common.exceptions import UserNotFoundError
 from infra.db.orm_models import Waypoints as WaypointEntity
 from domain.memory.models import IMemoryUserIdentity, IMemoryUser
+from services.commons.user_access import get_user_for_access
 from shared.utils.vectors import buf_to_vec, cos_sim
 
 logger = LogHelper.get_logger(title="[WAYPOINTS]")
@@ -35,9 +34,7 @@ class Waypoints:
         :return: None
         """
         user_identity.check_legality()
-        user = await user_repo.get_user(user_identity)
-        if not user:
-            raise UserNotFoundError(user_identity)
+        user = await get_user_for_access(user_identity=user_identity)
 
         now = datetime.datetime.now()
         waypoint = WaypointEntity(

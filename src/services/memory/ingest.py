@@ -6,11 +6,10 @@ from typing import Dict, Any
 
 from agile.utils import LogHelper
 
-from infra.db.repos import user_repo
 from infra.db.repos.memory_repo import mem_ops
 from services.memory.waypoints import Waypoints
-from domain.common.exceptions import UserNotFoundError
 from services.memory.hsg import add_hsg_memory
+from services.commons.user_access import get_user_for_access
 from domain.memory.models import IMemoryConfig, IMemoryUserIdentity, QARole
 from services.memory.extract import extract_text
 
@@ -140,9 +139,7 @@ async def mk_root(user_identity: IMemoryUserIdentity,
     """
     # 获取当前用户
     user_identity.check_legality()
-    user = await user_repo.get_user(user_identity)
-    if not user:
-        raise UserNotFoundError(user_identity)
+    user = await get_user_for_access(user_identity=user_identity)
 
     metadata = ex_dict["metadata"]
     # 生成摘要作为根记忆的内容
