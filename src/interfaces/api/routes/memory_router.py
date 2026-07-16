@@ -27,23 +27,32 @@ mem = IMemory()
     summary="添加记忆内容",
     response_model=gen_response_model(
         "AddResponse",
-        data_type=dict[str, Any],
-        data_desc="新增记忆的详细信息",
+        data_type=list[dict[str, Any]],
+        data_desc="新增记忆的详细信息列表",
     ),
-    description="向记忆库添加一条新的记忆内容。支持附加标签和自定义元数据。"
+    description=(
+        "向记忆库添加记忆内容。content 支持单条 {role: text} 或多条 [{role: text}, ...]，"
+        "role 仅允许 human / assistant。每条消息独立存储，按顺序返回结果列表。"
+    )
 )
 async def add(req: AddMemoryRequest):
     """
-    添加记忆内容
+    添加记忆内容（支持成对批量添加）
     :param req: 添加记忆请求模型
-    :return: 添加记忆结果
+    :return: 各条记忆的添加结果列表
     """
-    result = await mem.add(req.content,
-                           user_identity=req.user_identity,
-                           meta=req.metadata or {},
-                           tags=req.tags or [],
-                           qa_role=req.qa_role)
-    return R.success(data=result)
+    results = []
+    for item in req.content:
+        for role, text in item.items():
+            result = await mem.add(
+                text,
+                user_identity=req.user_identity,
+                meta=req.metadata or {},
+                tags=req.tags or [],
+                role=role,
+            )
+            results.append(result)
+    return R.success(data=results)
 
 
 @router.post(

@@ -32,19 +32,19 @@ logger = LogHelper.get_logger(title="[DB_SCHEMA]")
 class Memories(Base):
     __tablename__ = "memories"
     __table_args__ = (
-        CheckConstraint("qa_role IS NULL OR qa_role IN ('human', 'assistant')", name="chk_memories_qa_role"),
+        CheckConstraint("role IS NULL OR role IN ('human', 'assistant')", name="chk_memories_role"),
         Index("idx_memories_sector", "primary_sector"),
         Index("idx_memories_ts", "last_seen_at"),
         Index("idx_memories_user", "user_id"),
-        Index("idx_memories_qa_pair_id", "qa_pair_id"),
+        Index("idx_memories_pair_id", "pair_id"),
         Index("idx_memories_fact_joined", "fact_joined", postgresql_where=text("fact_joined = false")),
         {"comment": "用户记忆及派生元数据"},
     )
 
     id = Column(String(64), primary_key=True, comment="记忆主标识")
     user_id = Column(String(64), nullable=False, server_default="anonymous", comment="用户标识")
-    qa_role = Column(String(16), nullable=True, comment="问答角色（human/assistant）")
-    qa_pair_id = Column(String(64), nullable=True, comment="问答对标识")
+    role = Column(String(16), nullable=True, comment="问答角色（human/assistant）")
+    pair_id = Column(String(64), nullable=True, comment="问答对标识")
     content = Column(Text, nullable=True, comment="原始记忆内容")
     summary = Column(Text, nullable=True, comment="记忆摘要")
     primary_sector = Column(String(128), nullable=True, comment="主扇区/主题标签")

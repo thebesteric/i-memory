@@ -76,7 +76,7 @@ class TestIMemoryAdd(unittest.TestCase):
                     cfg=IMemoryConfig(force_root=False),
                     meta={**self.meta, "talker": content[1]},
                     tags=self.tags,
-                    qa_role=content[1]
+                    role=content[1]
                 )
                 results.append(res)
                 print("Memory added:", res)

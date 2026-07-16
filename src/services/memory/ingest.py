@@ -121,7 +121,7 @@ async def mk_root(user_identity: IMemoryUserIdentity,
                   ex_dict: Dict,
                   sec_count: int,
                   meta: Dict[str, Any] = None,
-                  qa_role: QARole | None = None) -> str:
+                  role: QARole | None = None) -> str:
     """
     创建根记忆
     说明：根记忆包含文档摘要和元数据，作为子记忆的父节点
@@ -134,7 +134,7 @@ async def mk_root(user_identity: IMemoryUserIdentity,
     :param ex_dict: 扩展字典
     :param sec_count: 文本切分后的数量
     :param meta: 元数据
-    :param qa_role: QA 角色（human/assistant）
+    :param role: QA 角色（human/assistant）
     :return:
     """
     # 获取当前用户
@@ -176,7 +176,7 @@ async def mk_root(user_identity: IMemoryUserIdentity,
             decay_lambda=0.1,
             segment=1,
             feedback_score=0,
-            qa_role=qa_role,
+            role=role,
         )
         return mid
     except Exception as e:
@@ -189,7 +189,7 @@ async def mk_child(user_identity: IMemoryUserIdentity,
                    sec_size: int,
                    root_id: str,
                    meta: Dict = None,
-                   qa_role: QARole | None = None) -> str:
+                   role: QARole | None = None) -> str:
     """
     创建子记忆
     :param user_identity: 用户身份
@@ -198,7 +198,7 @@ async def mk_child(user_identity: IMemoryUserIdentity,
     :param sec_size: 部门内容长度
     :param root_id: 根 ID
     :param meta: 元数据
-    :param qa_role: QA 角色（human/assistant）
+    :param role: QA 角色（human/assistant）
     :return:
     """
     m = meta or {}
@@ -209,18 +209,20 @@ async def mk_child(user_identity: IMemoryUserIdentity,
         "total_sections": sec_size,
         "root_id": root_id
     })
-    r = await add_hsg_memory(user_identity, sec_txt, [], m, qa_role=qa_role)
+    r = await add_hsg_memory(user_identity, sec_txt, [], m, role=role)
     return r["id"]
 
 
-async def ingest_document(*,
-                          content_type: str,
-                          user_identity: IMemoryUserIdentity | None = None,
-                          data: Any,
-                          meta: Dict[str, Any] | None = None,
-                          cfg: IMemoryConfig | None = None,
-                          tags: list[str] | None = None,
-                          qa_role: QARole | None = None) -> Dict[str, Any]:
+async def ingest_document(
+        *,
+        content_type: str,
+        user_identity: IMemoryUserIdentity | None = None,
+        data: Any,
+        meta: Dict[str, Any] | None = None,
+        cfg: IMemoryConfig | None = None,
+        tags: list[str] | None = None,
+        role: QARole | None = None
+) -> Dict[str, Any]:
     # 使用默认配置（如果未提供）
     if not cfg:
         cfg = IMemoryConfig.create_default()
@@ -243,7 +245,7 @@ async def ingest_document(*,
         m.update(ex_meta)
         m.update({"ingestion_strategy": "single", "ingested_at": now.strftime("%Y-%m-%d %H:%M:%S")})
         # 将记忆写入数据库
-        r = await add_hsg_memory(user_identity, text, tags, m, qa_role=qa_role)
+        r = await add_hsg_memory(user_identity, text, tags, m, role=role)
         return {
             "root_memory_id": r["id"],
             "child_count": 0,
@@ -261,10 +263,10 @@ async def ingest_document(*,
         # 创建 Waypoints 实例
         waypoints = Waypoints()
         # 创建根记忆 (传入实际分段数)
-        root_id = await mk_root(user_identity, text, cfg, ex_dict, len(secs), meta, qa_role=qa_role)
+        root_id = await mk_root(user_identity, text, cfg, ex_dict, len(secs), meta, role=role)
         # 创建子记忆并建立链接
         for i, s in enumerate(secs):
-            child_id = await mk_child(user_identity, s, i, len(secs), root_id, meta, qa_role=qa_role)
+            child_id = await mk_child(user_identity, s, i, len(secs), root_id, meta, role=role)
             child_ids.append(child_id)
             await waypoints.link(user_identity, root_id, child_id, i)
 

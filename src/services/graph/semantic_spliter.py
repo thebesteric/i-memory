@@ -21,7 +21,7 @@ class Dialogue(BaseModel):
         return Dialogue(
             id=mem["id"],
             content=mem["content"],
-            role=mem.get("qa_role", "human") if mem.get("qa_role") else "human",
+            role=mem.get("role", "human") if mem.get("role") else "human",
             created_at=mem.get("created_at", "")
         )
 

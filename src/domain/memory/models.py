@@ -155,8 +155,8 @@ class IMemoryItemInfo(BaseModelEnhance):
     last_seen_at: datetime.datetime | None = Field(default=None, description="最近一次访问时间")
     created_at: datetime.datetime | None = Field(default=None, description="创建时间")
     tags: list[str] = Field(default_factory=list, description="标签列表")
-    qa_role: QARole | None = Field(default=None, description="QA 角色")
-    qa_pair_id: str | None = Field(default=None, exclude=True, description="内部问答对 ID")
+    role: QARole | None = Field(default=None, description="QA 角色")
+    pair_id: str | None = Field(default=None, exclude=True, description="内部问答对 ID")
     metadata: dict[str, Any] = Field(default_factory=dict, description="元数据")
     debug: IMemoryItemDebugInfo | None = Field(default=None, description="调试信息")
 

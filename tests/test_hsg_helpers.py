@@ -81,8 +81,8 @@ def test_promote_qa_assistant_answer_appends_missing_assistant(monkeypatch):
         last_seen_at=now,
         created_at=now,
         tags=["q"],
-        qa_role="human",
-        qa_pair_id="pair-123",
+        role="human",
+        pair_id="pair-123",
         metadata={},
     )
     monkeypatch.setattr(
@@ -95,8 +95,8 @@ def test_promote_qa_assistant_answer_appends_missing_assistant(monkeypatch):
             "salience": 0.5,
             "last_seen_at": now,
             "tags": "[\"a\"]",
-            "qa_role": "assistant",
-            "qa_pair_id": "pair-123",
+            "role": "assistant",
+            "pair_id": "pair-123",
             "meta": "{}",
         },
     )
@@ -106,6 +106,6 @@ def test_promote_qa_assistant_answer_appends_missing_assistant(monkeypatch):
     assert len(items) == 2
     appended = next(item for item in items if item.id == "a1")
     assert appended.score == pytest.approx(0.9)
-    assert appended.qa_role == "assistant"
+    assert appended.role == "assistant"
     assert appended.tags == ["a"]
 

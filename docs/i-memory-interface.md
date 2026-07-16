@@ -65,7 +65,7 @@ POST /memory/add
     "string"
   ],
   "metadata": {},
-  "qa_role": "string"
+  "role": "string"
 }
 ```
 
@@ -81,7 +81,7 @@ POST /memory/add
 |»» tenant_key|body|string| 否 |none|
 |» tags|body|[string]| 否 |none|
 |» metadata|body|object| 否 |none|
-|» qa_role|body|string| 是 |human/assistant/null|
+|» role|body|string| 是 |human/assistant/null|
 
 > 返回示例
 

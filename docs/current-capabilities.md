@@ -4,7 +4,7 @@
 
 ## 1. 记忆存储与检索能力
 
-- 记忆新增：支持文本内容入库，附带 `tags`、`metadata`、`qa_role`（human/assistant）等信息。  
+- 记忆新增：支持文本内容入库，附带 `tags`、`metadata`、`role`（human/assistant）等信息。  
   证据：`src/services/i_memory.py`、`src/interfaces/api/routes/memory_router.py`
 - 记忆搜索：支持按 query + filter 检索，返回结构化结果。  
   证据：`src/services/i_memory.py`、`src/services/memory/hsg.py`、`src/interfaces/api/routes/memory_router.py`

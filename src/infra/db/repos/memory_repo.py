@@ -169,8 +169,8 @@ class MemOps:
             "mean_vec": k.get("mean_vec"),
             "compressed_vec": k.get("compressed_vec"),
             "feedback_score": k.get("feedback_score", 0),
-            "qa_role": k.get("qa_role"),
-            "qa_pair_id": k.get("qa_pair_id"),
+            "role": k.get("role"),
+            "pair_id": k.get("pair_id"),
         }
         session_factory = self._session_factory()
         with session_factory() as session:

@@ -47,7 +47,7 @@ flowchart LR
 
 1. 校验用户身份
 2. 读取或创建用户
-3. 处理 QA 配对字段（`qa_role` / `qa_pair_id`）
+3. 处理 QA 配对字段（`role` / `pair_id`）
 4. 生成内容 embedding
 5. 计算相似记忆，若超过阈值则走去重强化
 6. 文本切分（长文本分块）

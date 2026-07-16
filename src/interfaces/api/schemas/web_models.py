@@ -1,9 +1,9 @@
 from typing import Optional, Dict, List, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from domain.graph.query_models import GraphFactsFilters, GraphEntityRelationFilters
-from domain.memory.models import IMemoryFilters, IMemoryUserIdentity, QARole
+from domain.memory.models import IMemoryFilters, IMemoryUserIdentity
 
 
 class AuthRegisterRequest(BaseModel):
@@ -22,15 +22,40 @@ class AuthRegisterRequest(BaseModel):
         )
 
 
+# 单条消息格式：{role: content}，role 为 "human" 或 "assistant"
+MemoryContentItem = Dict[str, str]
+
+
 class AddMemoryRequest(BaseModel):
     """
-    添加记忆请求模型
+    添加记忆请求模型。
+    content 支持两种格式：
+      - 单条：{"human": "你好"} 或 {"assistant": "你好"}
+      - 多条：[{"human": "你好"}, {"assistant": "好的"}]
+    每个 dict 的 key 为角色（human/assistant），value 为对应内容。
     """
-    content: str = Field(..., description="记忆内容文本")
+    content: List[MemoryContentItem] | MemoryContentItem = Field(
+        ...,
+        description="记忆内容，单条 {role: text} 或多条 [{role: text}, ...]，role 仅允许 human/assistant",
+    )
     user_identity: Optional[IMemoryUserIdentity] = Field(default=None, description="用户身份")
     tags: Optional[List[str]] = Field(default_factory=list, description="标签列表")
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="其他元数据")
-    qa_role: Optional[QARole] = Field(default=None, description="QA 角色，仅允许 human/assistant")
+
+    @model_validator(mode="after")
+    def normalize_and_validate_content(self) -> "AddMemoryRequest":
+        # 将单条 dict 统一转为 list
+        if isinstance(self.content, dict):
+            self.content = [self.content]
+        # 校验每个条目的 role 合法性
+        valid_roles = {"human", "assistant"}
+        for item in self.content:
+            if not item:
+                raise ValueError("content 中的条目不能为空 dict")
+            for role in item:
+                if role not in valid_roles:
+                    raise ValueError(f"非法角色 '{role}'，仅允许 human / assistant")
+        return self
 
 
 class SearchMemoryRequest(BaseModel):

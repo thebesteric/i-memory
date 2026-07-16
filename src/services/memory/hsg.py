@@ -88,11 +88,11 @@ def _get_or_rotate_segment() -> int:
         return cur_seg
 
 
-def _find_latest_assistant_by_pair_id(qa_pair_id: str, user: IMemoryUser | None = None) -> dict[str, Any] | None:
+def _find_latest_assistant_by_pair_id(pair_id: str, user: IMemoryUser | None = None) -> dict[str, Any] | None:
     with session_factory() as session:
         memory = session.execute(
             select(Memories)
-            .where(Memories.qa_pair_id == qa_pair_id, Memories.qa_role == "assistant")
+            .where(Memories.pair_id == pair_id, Memories.role == "assistant")
             .order_by(desc(Memories.created_at))
             .limit(1)
         ).scalars().first()
@@ -151,14 +151,14 @@ async def add_hsg_memory(user_identity: IMemoryUserIdentity,
                          content: str,
                          tags: List[str] | None = None,
                          metadata: Any = None,
-                         qa_role: QARole | None = None) -> Dict[str, Any]:
+                         role: QARole | None = None) -> Dict[str, Any]:
     """
     添加一条 Hierarchical Semantic Graph 记忆（数据库 + 向量存储、按扇区（sectors）分层组织记忆）
     :param content: 记忆内容
     :param tags: 标签
     :param metadata: 元数据
     :param user_identity: 用户身份
-    :param qa_role: QA 角色（human/assistant）
+    :param role: QA 角色（human/assistant）
     :return:
     """
     # 用户合法性检查
@@ -168,11 +168,11 @@ async def add_hsg_memory(user_identity: IMemoryUserIdentity,
     user: IMemoryUser = await get_user_for_access(user_identity=user_identity)
 
     # 角色合法性检查
-    if qa_role and qa_role not in ("human", "assistant"):
-        raise ValueError("qa_role must be one of: human, assistant")
+    if role and role not in ("human", "assistant"):
+        raise ValueError("role must be one of: human, assistant")
 
-    # 需传 qa_role，问答配对（尝试复用最近一条未配对 human 的 qa_pair_id）
-    qa_pair_id = _resolve_auto_qa_linking(user, qa_role)
+    # 需传 role，问答配对（尝试复用最近一条未配对 human 的 qa_pair_id）
+    qa_pair_id = _resolve_auto_qa_linking(user, role)
 
     # 生成内容的嵌入向量
     vec = await embed_model.embed(content)
@@ -278,8 +278,8 @@ async def add_hsg_memory(user_identity: IMemoryUserIdentity,
             mean_vec=None,
             compressed_vec=None,
             feedback_score=0,
-            qa_role=qa_role,
-            qa_pair_id=qa_pair_id
+            role=role,
+            pair_id=qa_pair_id
         )
 
         # 调用 embed_multi_sector，对内容进行多 sector 嵌入，生成向量
@@ -333,8 +333,8 @@ async def add_hsg_memory(user_identity: IMemoryUserIdentity,
             "sectors": all_secs,
             "chunks": len(chunks),
             "salience": init_sal,
-            "qa_role": qa_role,
-            "qa_pair_id": qa_pair_id
+            "role": role,
+            "pair_id": qa_pair_id
         }
     except Exception as e:
         raise e
@@ -641,8 +641,8 @@ async def query_hsg_memories(query: str, top_k: int = 10, filters: IMemoryFilter
                 last_seen_at=mem["last_seen_at"],
                 created_at=mem["created_at"],
                 tags=tags,
-                qa_role=mem.get("qa_role"),
-                qa_pair_id=mem.get("qa_pair_id"),
+                role=mem.get("role"),
+                pair_id=mem.get("pair_id"),
                 metadata=metadata
             )
             # 调试信息
@@ -828,7 +828,7 @@ def _promote_qa_assistant_answer(items: List[IMemoryItemInfo], query_sector: str
     # 从召回结果中找分数最高的 human 记忆
     best_human = next(
         (it for it in sorted(items, key=lambda x: x.score, reverse=True)
-         if it.qa_role == "human"),
+         if it.role == "human"),
         None
     )
     if not best_human:
@@ -836,12 +836,12 @@ def _promote_qa_assistant_answer(items: List[IMemoryItemInfo], query_sector: str
 
     # 尝试查找与该 human 记忆配对的 assistant 记忆
     pair_row = None
-    if best_human.qa_pair_id:
-        pair_row = _find_latest_assistant_by_pair_id(best_human.qa_pair_id, user)
+    if best_human.pair_id:
+        pair_row = _find_latest_assistant_by_pair_id(best_human.pair_id, user)
 
     if not pair_row:
         logger.info(
-            f"No paired assistant answer found for human memory {best_human.id} with qa_pair_id {best_human.qa_pair_id}"
+            f"No paired assistant answer found for human memory {best_human.id} with pair_id {best_human.pair_id}"
         )
         return items
 
@@ -873,23 +873,23 @@ def _promote_qa_assistant_answer(items: List[IMemoryItemInfo], query_sector: str
         salience=pair_row.get("salience") or 0.0,
         last_seen_at=pair_row.get("last_seen_at"),
         tags=pair_tags,
-        qa_role=pair_row.get("qa_role"),
-        qa_pair_id=pair_row.get("qa_pair_id"),
+        role=pair_row.get("role"),
+        pair_id=pair_row.get("pair_id"),
         metadata=pair_meta
     ))
     return items
 
 
-def _resolve_auto_qa_linking(user: IMemoryUser, qa_role: QARole | None) -> str | None:
+def _resolve_auto_qa_linking(user: IMemoryUser, role: QARole | None) -> str | None:
     """
     自动补齐 QA 配对字段：
-    - human：生成新的 qa_pair_id
-    - assistant：复用最近一条“未被 assistant 配对”的 human.qa_pair_id
+    - human：生成新的 pair_id
+    - assistant：复用最近一条"未被 assistant 配对"的 human.pair_id
     """
-    if qa_role not in ("human", "assistant"):
+    if role not in ("human", "assistant"):
         return None
 
-    if qa_role == "human":
+    if role == "human":
         return str(uuid.uuid4())
 
     # assistant 自动配对：匹配同身份下最近未配对的 human
@@ -897,21 +897,21 @@ def _resolve_auto_qa_linking(user: IMemoryUser, qa_role: QARole | None) -> str |
         assistant_pair_ids = {
             pair_id
             for pair_id in session.execute(
-                select(Memories.qa_pair_id)
+                select(Memories.pair_id)
                 .where(
-                    Memories.qa_role == "assistant",
+                    Memories.role == "assistant",
                     Memories.user_id == user.id,
-                    Memories.qa_pair_id.is_not(None),
+                    Memories.pair_id.is_not(None),
                 )
             ).scalars().all()
             if pair_id
         }
         human_pair_ids = session.execute(
-            select(Memories.qa_pair_id)
+            select(Memories.pair_id)
             .where(
-                Memories.qa_role == "human",
+                Memories.role == "human",
                 Memories.user_id == user.id,
-                Memories.qa_pair_id.is_not(None),
+                Memories.pair_id.is_not(None),
             )
             .order_by(desc(Memories.created_at))
         ).scalars().all()

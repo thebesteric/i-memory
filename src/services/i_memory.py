@@ -78,13 +78,15 @@ class IMemory:
     def openai(self):
         return self._openai
 
-    async def add(self,
-                  content: str,
-                  user_identity: IMemoryUserIdentity | None = None,
-                  cfg: IMemoryConfig | None = None,
-                  tags: List[str] | None = None,
-                  meta: Dict[str, Any] | None = None,
-                  qa_role: QARole | None = None) -> Dict[str, Any]:
+    async def add(
+            self,
+            content: str,
+            user_identity: IMemoryUserIdentity | None = None,
+            cfg: IMemoryConfig | None = None,
+            tags: List[str] | None = None,
+            meta: Dict[str, Any] | None = None,
+            role: QARole | None = None
+    ) -> Dict[str, Any]:
         """
         添加记忆内容
         :param content: 记忆内容文本
@@ -92,18 +94,20 @@ class IMemory:
         :param cfg: 记忆配置
         :param tags: 标签列表
         :param meta: 其他元数据
-        :param qa_role: QA 角色（human/assistant）
+        :param role: QA 角色（human/assistant）
         :return: 添加结果
         """
         user_identity = user_identity or self.default_user_identity
         # 处理文档，标记文档类型、文档内容，元数据、用户标识、标签
-        res = await ingest_document(content_type="text",
-                                    user_identity=user_identity,
-                                    data=content,
-                                    cfg=cfg,
-                                    meta=meta,
-                                    tags=tags,
-                                    qa_role=qa_role)
+        res = await ingest_document(
+            content_type="text",
+            user_identity=user_identity,
+            data=content,
+            cfg=cfg,
+            meta=meta,
+            tags=tags,
+            role=role
+        )
         if "root_memory_id" in res:
             res["id"] = res["root_memory_id"]
         return res

@@ -8,8 +8,8 @@ CREATE TABLE IF NOT EXISTS memories
 (
     id             TEXT PRIMARY KEY,
     user_id        TEXT             DEFAULT 'anonymous',
-    qa_role        TEXT,
-    qa_pair_id     TEXT,
+    role           TEXT,
+    pair_id        TEXT,
     content        TEXT,
     summary        TEXT,
     primary_sector TEXT,
@@ -30,15 +30,15 @@ CREATE TABLE IF NOT EXISTS memories
     mean_dim       INTEGER,
     mean_vec       BYTEA,
     feedback_score DOUBLE PRECISION DEFAULT 0,
-    CONSTRAINT chk_memories_qa_role
-        CHECK (qa_role IS NULL OR qa_role IN ('human', 'assistant'))
+    CONSTRAINT chk_memories_role
+        CHECK (role IS NULL OR role IN ('human', 'assistant'))
 );
 
 COMMENT ON TABLE memories IS '用户记忆及派生元数据';
 COMMENT ON COLUMN memories.id IS '记忆主标识';
 COMMENT ON COLUMN memories.user_id IS '用户标识';
-COMMENT ON COLUMN memories.qa_role IS '问答角色（human/assistant）';
-COMMENT ON COLUMN memories.qa_pair_id IS '问答对标识';
+COMMENT ON COLUMN memories.role IS '问答角色（human/assistant）';
+COMMENT ON COLUMN memories.pair_id IS '问答对标识';
 COMMENT ON COLUMN memories.content IS '原始记忆内容';
 COMMENT ON COLUMN memories.summary IS '记忆摘要';
 COMMENT ON COLUMN memories.primary_sector IS '主扇区/主题标签';
